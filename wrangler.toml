@@ -1,0 +1,14 @@
+name = "estoque-eletrica"
+main = "src/worker.js"
+compatibility_date = "2024-09-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "estoque-db"
+database_id = "ba514db4-66ed-46a8-9d7c-47c8ff02e623"
+
+[assets]
+directory = "public"
+binding = "ASSETS"
+
+# Defina o secret com: wrangler secret put RESEND_API_KEY

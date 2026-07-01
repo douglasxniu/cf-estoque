@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Item · NIU Estoque</title>
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg0:#0a0c10; --glass:rgba(255,255,255,.06); --glass-brd:rgba(255,255,255,.10);
+  --text:#eef0f4; --muted:#9aa3b2; --primary:#5b8cff; --primary2:#7c5cff;
+  --ok:#34d399; --warn:#fbbf24; --danger:#f87171; --radius:18px;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;min-height:100vh;font-family:'Source Sans 3',Arial,sans-serif;color:var(--text);font-size:15px;
+  background:radial-gradient(1000px 700px at 10% -10%,#1c2540,transparent 60%),
+             radial-gradient(900px 600px at 100% 0%,#2a1c40,transparent 55%), var(--bg0);
+  padding:20px 14px 40px;
+}
+.wrap{max-width:520px;margin:0 auto}
+.card{background:var(--glass);border:1px solid var(--glass-brd);border-radius:var(--radius);backdrop-filter:blur(16px);padding:20px 22px;margin-bottom:14px}
+.brand{display:flex;align-items:center;gap:8px;margin-bottom:18px;color:var(--muted);font-size:.72rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.brand .dot{width:8px;height:8px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--primary2))}
+h1{margin:0 0 4px;font-size:1.3rem;font-weight:800}
+.serial{color:var(--primary);font-weight:700;font-size:.85rem;margin-bottom:10px}
+.badge{display:inline-flex;align-items:center;font-weight:700;font-size:.72rem;padding:3px 10px;border-radius:20px;background:rgba(255,255,255,.08);margin-right:6px;margin-bottom:6px}
+.status-ok{color:var(--ok)}.status-warn{color:var(--warn)}
+.ot-banner{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.ot-banner .n{font-size:1.15rem;font-weight:800;color:var(--primary)}
+.small{color:var(--muted);font-size:.8rem}
+table{width:100%;border-collapse:collapse;font-size:.88rem;margin-top:10px}
+th,td{padding:9px 4px;border-bottom:1px solid rgba(255,255,255,.08);text-align:left}
+th{color:var(--muted);font-size:.66rem;text-transform:uppercase;letter-spacing:.03em;font-weight:700}
+.status-pend{color:var(--warn);font-weight:700}
+.status-aprov{color:var(--primary);font-weight:700}
+.status-dev{color:var(--ok);font-weight:700}
+.empty{color:var(--muted);text-align:center;padding:24px;font-size:.9rem}
+.footer{text-align:center;color:var(--muted);font-size:.68rem;margin-top:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand"><span class="dot"></span> NIU Experience Agency · Controle de Estoque</div>
+  <div id="app"><div class="card empty">Carregando...</div></div>
+  <div class="footer">Este item pertence a um empréstimo em andamento — certifique-se de devolver todos os itens listados.</div>
+</div>
+
+<script>
+const esc=s=>String(s??'').replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
+const statusLabel=s=>s==='devolvido'?'Devolvido':s==='aprovado'?'Entregue':'Pendente';
+const statusClass=s=>s==='devolvido'?'status-dev':s==='aprovado'?'status-aprov':'status-pend';
+
+(async function () {
+  const app = document.getElementById('app');
+  const uid = new URL(location.href).searchParams.get('uid');
+  if (!uid) { app.innerHTML = '<div class="card empty">Item não informado.</div>'; return; }
+
+  let u;
+  try {
+    u = await fetch(`/api/unidades/${uid}`).then(r => r.ok ? r.json() : null);
+  } catch (e) { u = null; }
+  if (!u) { app.innerHTML = '<div class="card empty">Item não encontrado.</div>'; return; }
+
+  let html = `<div class="card">
+    <h1>${esc(u.nome)}</h1>
+    <div class="serial">${esc(u.serial)}</div>
+    <div>
+      ${u.voltagem ? `<span class="badge">${esc(u.voltagem)}</span>` : ''}
+      ${u.modelo ? `<span class="badge">${esc(u.modelo)}</span>` : ''}
+      ${u.categoria ? `<span class="badge">${esc(u.categoria)}</span>` : ''}
+    </div>
+  </div>`;
+
+  if (u.status === 'disponivel' || !u.ot) {
+    html += `<div class="card"><span class="badge status-ok">● Disponível no estoque</span><div class="small" style="margin-top:6px">Este item não está emprestado no momento.</div></div>`;
+    app.innerHTML = html;
+    return;
+  }
+
+  html += `<div class="card">
+    <div class="small">EMPRESTADO NA</div>
+    <div class="ot-banner"><span class="n">OT ${esc(u.ot)}</span></div>
+    <div class="small" style="margin-top:4px">${esc(u.solicitante || '—')}${u.setor ? ' · ' + esc(u.setor) : ''}${u.local_uso ? ' · ' + esc(u.local_uso) : ''}</div>
+  </div>`;
+
+  let itens = [];
+  try {
+    itens = await fetch(`/api/ot/${encodeURIComponent(u.ot)}`).then(r => r.json());
+  } catch (e) { itens = []; }
+
+  if (Array.isArray(itens) && itens.length) {
+    const pendentes = itens.filter(i => i.status !== 'devolvido').length;
+    html += `<div class="card">
+      <div class="small" style="margin-bottom:2px">Todos os itens desta OT — ${pendentes} de ${itens.length} ainda não devolvido(s)</div>
+      <table><thead><tr><th>Item</th><th>Qtd.</th><th>Status</th></tr></thead><tbody>
+        ${itens.map(i => `
+          <tr>
+            <td>${esc(i.item_nome)}${i.local_uso ? `<div class="small">${esc(i.local_uso)}</div>` : ''}</td>
+            <td>${i.quantidade} ${esc(i.unidade || '')}</td>
+            <td class="${statusClass(i.status)}">${statusLabel(i.status)}</td>
+          </tr>`).join('')}
+      </tbody></table>
+    </div>`;
+  }
+
+  app.innerHTML = html;
+})();
+</script>
+</body>
+</html>

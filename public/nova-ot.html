@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>Nova OT · NIU Estoque</title>
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="/auth-gate.js"></script>
+<style>
+:root{
+  --bg:#0f1117;--surface:#1e2130;--surface2:#252839;--border:#313650;
+  --text:#eef0f4;--muted:#8890a4;--primary:#5b8cff;--ok:#34d399;--warn:#fbbf24;--danger:#f87171;--r:14px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Source Sans 3',Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:0 0 80px}
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 18px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:20}
+header a{text-decoration:none;display:flex;align-items:center;gap:10px}
+.page{max-width:700px;margin:0 auto;padding:20px 16px}
+.section-label{font-size:.68rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:22px 0 10px;display:flex;align-items:center;gap:8px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:18px;margin-bottom:14px}
+label{font-size:.74rem;font-weight:700;color:var(--muted);display:block;margin-bottom:5px}
+input,select,textarea{width:100%;padding:10px 13px;border:1px solid var(--border);border-radius:10px;background:var(--surface2);color:var(--text);font-size:.9rem;font-family:inherit}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary);background:#1a1e2e}
+input::placeholder,textarea::placeholder{color:#55607a}
+select option{background:var(--surface)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.btn{border:none;border-radius:10px;padding:11px 16px;font-weight:700;cursor:pointer;font-size:.88rem;font-family:inherit;transition:.15s}
+.btn:active{transform:scale(.97)}
+.btn-primary{background:linear-gradient(135deg,var(--primary),#4c6ef5);color:#fff;box-shadow:0 4px 16px rgba(91,140,255,.25)}
+.btn-primary:hover{filter:brightness(1.1)}
+.btn-ghost{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
+.btn-ghost:hover{background:var(--surface)}
+.item-row{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:12px;position:relative}
+.item-row.estoque-item{border-color:rgba(91,140,255,.4);background:linear-gradient(135deg,rgba(91,140,255,.04),var(--surface))}
+.item-row.extra-item{border-color:rgba(251,191,36,.3);background:linear-gradient(135deg,rgba(251,191,36,.04),var(--surface))}
+.item-row-header{display:flex;align-items:flex-start;gap:12px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)}
+.item-icon{width:40px;height:40px;border-radius:11px;background:rgba(91,140,255,.15);display:flex;align-items:center;justify-content:center;font-size:1.15rem;flex-shrink:0}
+.item-icon.extra{background:rgba(251,191,36,.12)}
+.item-nome-display{font-weight:800;font-size:.95rem;margin-bottom:3px}
+.item-badge{font-size:.68rem;color:var(--primary);font-weight:700}
+.remove-btn{position:absolute;top:14px;right:14px;background:var(--surface2);border:1px solid var(--border);color:var(--muted);cursor:pointer;font-size:.78rem;padding:4px 9px;border-radius:8px;transition:.15s}
+.remove-btn:hover{color:var(--danger);border-color:rgba(248,113,113,.4);background:rgba(248,113,113,.08)}
+.item-fields{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tag-estoque{display:inline-flex;align-items:center;background:rgba(91,140,255,.12);color:var(--primary);font-size:.62rem;font-weight:800;padding:2px 9px;border-radius:20px;margin-left:8px;vertical-align:middle;border:1px solid rgba(91,140,255,.2)}
+.tag-extra{display:inline-flex;align-items:center;background:rgba(251,191,36,.1);color:var(--warn);font-size:.62rem;font-weight:800;padding:2px 9px;border-radius:20px;margin-left:8px;vertical-align:middle;border:1px solid rgba(251,191,36,.2)}
+.search-wrap{position:relative;margin-bottom:10px}
+.search-results{background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-top:4px;max-height:220px;overflow-y:auto;display:none;position:absolute;width:100%;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,.4)}
+.search-result-item{padding:11px 14px;cursor:pointer;font-size:.88rem;border-bottom:1px solid var(--border)}
+.search-result-item:last-child{border-bottom:none}
+.search-result-item:hover{background:rgba(91,140,255,.1)}
+.search-result-qty{font-size:.74rem;color:var(--muted);margin-top:2px}
+.footer-actions{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);padding:14px 20px;display:flex;gap:10px;z-index:20;box-shadow:0 -4px 20px rgba(0,0,0,.3)}
+.counter{background:var(--primary);color:#fff;font-size:.7rem;font-weight:800;border-radius:20px;padding:1px 7px}
+.add-item-wrap{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:start}
+</style>
+</head>
+<body>
+
+<header>
+  <a href="/index.html">
+    <svg width="55" height="15" viewBox="0 0 36.4 10.22" fill="white">
+      <rect x="16.96" y="0" width="2.47" height="10.22"/>
+      <path d="M22.04,4.83V0h2.47v4.74c0,2.09.6,3.1,1.88,3.1s2.8-.77,4.53-2.03l2.98-2.06V0h2.5v10.22h-2.32c0-1.13,0-2.86.06-3.99-3.99,2.68-5.78,3.99-8.14,3.99-2.53,0-3.96-1.64-3.96-5.39"/>
+      <path d="M14.36,5.39v4.83h-2.47v-4.74c0-2.09-.6-3.1-1.88-3.1s-2.8.77-4.53,2.03l-2.98,2.06v3.76H0V0h2.32c0,1.13,0,2.86-.06,3.99C6.26,1.31,8.05,0,10.4,0c2.53,0,3.96,1.64,3.96,5.39"/>
+    </svg>
+    <div>
+      <div style="font-weight:800;color:white;font-size:.9rem">Nova Ordem de Trabalho</div>
+      <div style="font-size:.68rem;color:var(--muted)">NIU Experience Agency</div>
+    </div>
+  </a>
+</header>
+
+<div class="page">
+
+  <div class="section-label">Dados da OT</div>
+  <div class="card">
+    <div class="grid2" style="margin-bottom:12px">
+      <div>
+        <label>Número do Projeto (OT)</label>
+        <input id="otNum" placeholder="Reservando..." readonly style="opacity:.75">
+      </div>
+      <div>
+        <label>Data</label>
+        <input id="otData" type="date">
+      </div>
+    </div>
+    <div class="grid2" style="margin-bottom:12px">
+      <div>
+        <label>Solicitante *</label>
+        <input id="otSolic" placeholder="Nome completo">
+      </div>
+      <div>
+        <label>Setor</label>
+        <input id="otSetor" placeholder="Ex: Manutenção">
+      </div>
+    </div>
+    <div style="margin-bottom:12px">
+      <label>Local de uso / Obra</label>
+      <input id="otLocal" placeholder="Ex: Galpão 3 — Letreiro Fachada Principal">
+    </div>
+    <div class="grid2" style="margin-bottom:12px">
+      <div>
+        <label>Email para enviar a OT</label>
+        <input id="otEmail" type="email" placeholder="email@empresa.com">
+      </div>
+      <div style="display:flex;align-items:flex-end">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:0">
+          <input type="checkbox" id="enviarEmail" style="width:auto;margin:0"> Enviar por email ao gerar
+        </label>
+      </div>
+    </div>
+    <div>
+      <label>Observações gerais</label>
+      <textarea id="otObs" rows="2" placeholder="Notas adicionais sobre esta OT..."></textarea>
+    </div>
+  </div>
+
+  <div class="section-label">
+    Itens <span class="counter" id="counter">0</span>
+  </div>
+
+  <div class="card">
+    <label>Buscar no estoque</label>
+    <div class="add-item-wrap">
+      <div class="search-wrap">
+        <input id="busca" placeholder="Digite nome, categoria ou código..." autocomplete="off">
+        <div class="search-results" id="searchResults"></div>
+      </div>
+      <button class="btn btn-ghost" onclick="adicionarItemExtra()" style="white-space:nowrap;padding:10px 14px">+ Item livre</button>
+    </div>
+  </div>
+
+  <div id="itensList"></div>
+
+</div>
+
+<div class="footer-actions">
+  <button class="btn btn-ghost" style="flex:1" onclick="history.back()">Cancelar</button>
+  <button class="btn btn-ghost" style="flex:1" onclick="confirmar(true)" id="btnEmail">Enviar email</button>
+  <button class="btn btn-primary" style="flex:2" onclick="confirmar(false)">Gerar OT e PDF</button>
+</div>
+
+<script src="/vendor/qrcode.js"></script>
+<script src="/vendor/jspdf.umd.min.js"></script>
+<script src="/pdf-folha.js"></script>
+<script>
+const API='/api';
+const esc=s=>String(s??'').replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
+let itensEstoque=[], carrinho=[];
+
+// preencher data de hoje
+document.getElementById('otData').value=new Date().toISOString().slice(0,10);
+
+async function init(){
+  itensEstoque=await fetch(`${API}/itens`).then(r=>r.json()).catch(()=>[]);
+  // reserva um número de projeto novo e único no servidor (evita colisão entre usuários simultâneos)
+  const r=await fetch(`${API}/projetos`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})}).then(r=>r.json()).catch(()=>null);
+  if(r?.numero) document.getElementById('otNum').value=r.numero;
+  else document.getElementById('otNum').value='(erro ao reservar número — recarregue a página)';
+}
+init();
+
+// busca estoque
+const busca=document.getElementById('busca');
+const results=document.getElementById('searchResults');
+busca.addEventListener('input',()=>{
+  const t=busca.value.toLowerCase().trim();
+  if(!t){results.style.display='none';return;}
+  const found=itensEstoque.filter(i=>i.nome.toLowerCase().includes(t)).slice(0,8);
+  if(!found.length){results.style.display='none';return;}
+  results.style.display='block';
+  results.innerHTML=found.map(i=>`
+    <div class="search-result-item" onclick="adicionarDoEstoque(${i.id})">
+      <div>${esc(i.nome)}</div>
+      <div class="search-result-qty">${i.quantidade} ${esc(i.unidade)} disponível · ${esc(i.categoria)}</div>
+    </div>`).join('');
+});
+document.addEventListener('click',e=>{if(!e.target.closest('#busca')&&!e.target.closest('#searchResults'))results.style.display='none';});
+
+function adicionarDoEstoque(id){
+  results.style.display='none'; busca.value='';
+  const it=itensEstoque.find(i=>i.id==id);
+  if(!it) return;
+  if(carrinho.find(c=>c._id==id)){alert('Item já adicionado.');return;}
+  carrinho.push({_id:id,_estoque:true,nome:it.nome,qty:1,unidade:it.unidade,local:'',obs:'',maxQty:it.quantidade});
+  render();
+}
+
+function adicionarItemExtra(){
+  carrinho.push({_id:'x'+Date.now(),_estoque:false,nome:'',qty:1,unidade:'un',local:'',obs:''});
+  render();
+}
+
+function remover(idx){ carrinho.splice(idx,1); render(); }
+
+function render(){
+  document.getElementById('counter').textContent=carrinho.length;
+  const icons={led:'💡',transf:'⚡',cabo:'🔌',lamp:'🔆',reat:'🔋',ferr:'🔧'};
+  const iconFor=n=>{const l=n?.toLowerCase()||'';return l.includes('led')?'💡':l.includes('transf')?'⚡':l.includes('cabo')?'🔌':l.includes('lamp')||l.includes('t8')?'🔆':l.includes('reat')?'🔋':l.includes('ferr')?'🔧':'📦';};
+  document.getElementById('itensList').innerHTML = carrinho.length?carrinho.map((c,i)=>`
+    <div class="item-row ${c._estoque?'estoque-item':'extra-item'}">
+      <button class="remove-btn" onclick="remover(${i})">Remover</button>
+      <div class="item-row-header">
+        <div class="item-icon ${c._estoque?'':'extra'}">${iconFor(c.nome)}</div>
+        <div style="flex:1;min-width:0;padding-right:80px">
+          <div class="item-nome-display">${c.nome||'<span style="color:var(--muted);font-weight:400">Novo item</span>'}
+            ${c._estoque?'<span class="tag-estoque">Estoque</span>':'<span class="tag-extra">Item livre</span>'}
+          </div>
+          ${c._estoque?`<div class="item-badge">Disponível: ${c.maxQty} ${esc(c.unidade)}</div>`:''}
+        </div>
+      </div>
+      <div class="item-fields">
+        ${!c._estoque?`<div style="grid-column:1/-1">
+          <label>Nome do item *</label>
+          <input value="${esc(c.nome)}" oninput="carrinho[${i}].nome=this.value;renderNome(${i},this.value)" placeholder="Descreva o material">
+        </div>`:''}
+        <div>
+          <label>Quantidade</label>
+          <input type="number" min="0.1" step="0.1" ${c.maxQty?`max="${c.maxQty}"`:''}  value="${c.qty}" oninput="carrinho[${i}].qty=parseFloat(this.value)||1">
+        </div>
+        <div>
+          <label>Unidade</label>
+          <select onchange="carrinho[${i}].unidade=this.value">
+            ${['un','m','cx','rolo','pç','kg'].map(u=>`<option ${u===c.unidade?'selected':''}>${u}</option>`).join('')}
+          </select>
+        </div>
+        <div style="grid-column:1/-1">
+          <label>Local de uso específico</label>
+          <input value="${esc(c.local)}" oninput="carrinho[${i}].local=this.value" placeholder="Opcional — difere do local geral da OT">
+        </div>
+        <div style="grid-column:1/-1">
+          <label>Observação / detalhe do item</label>
+          <input value="${esc(c.obs)}" oninput="carrinho[${i}].obs=this.value" placeholder="Ex: cor, voltagem, modelo, comprimento específico...">
+        </div>
+      </div>
+    </div>`).join(''):'<div style="text-align:center;padding:24px;color:var(--muted);font-size:.9rem;background:var(--surface);border:1px dashed var(--border);border-radius:14px">Nenhum item adicionado. Use a busca acima ou adicione um item livre.</div>';
+}
+function renderNome(i,v){
+  const el=document.querySelector(`#itensList .item-row:nth-child(${i+1}) .item-nome-display`);
+  if(el) el.innerHTML=v||'<span style="color:var(--muted);font-weight:400">Novo item</span>'+'<span class="tag-extra">Item livre</span>';
+}
+render();
+
+async function confirmar(apenasEmail=false){
+  const ot=document.getElementById('otNum').value.trim();
+  const solic=document.getElementById('otSolic').value.trim();
+  const local=document.getElementById('otLocal').value.trim();
+  const email=document.getElementById('otEmail').value.trim();
+  if(!ot||!solic){alert('Preencha número da OT e solicitante.');return;}
+  if(!carrinho.length){alert('Adicione pelo menos um item.');return;}
+  if(carrinho.some(c=>!c.nome.trim())){alert('Preencha o nome de todos os itens.');return;}
+  if(apenasEmail&&!email){alert('Preencha o email de destino.');return;}
+
+  const setor=document.getElementById('otSetor').value.trim();
+  const obs=document.getElementById('otObs').value.trim();
+  const data=document.getElementById('otData').value;
+
+  fetch(`${API}/projetos/${encodeURIComponent(ot)}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({setor,nome:local})}).catch(()=>{});
+
+  // Registar no backend os itens do estoque
+  const doEstoque=carrinho.filter(c=>c._estoque);
+  if(doEstoque.length){
+    const r=await fetch(`${API}/solicitacoes/lote`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      ot,solicitante:solic,setor,
+      itens:doEstoque.map(c=>({itemId:c._id,quantidade:c.qty,localUso:c.local||local}))
+    })});
+    if(!r.ok){const e=await r.json().catch(()=>({}));alert('Erro: '+(e.error||'falha ao registar'));return;}
+  }
+
+  if(apenasEmail&&email){
+    // enviar por email via worker
+    const linhas=carrinho.map(c=>`<tr><td style="padding:6px;border-bottom:1px solid #eee">${c.nome}</td><td style="padding:6px;border-bottom:1px solid #eee">${c.qty} ${c.unidade}</td><td style="padding:6px;border-bottom:1px solid #eee">${c.local||local||'—'}</td></tr>`).join('');
+    const rEmail=await fetch(`/api/ot/email`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      to:email, ot, solic, setor, local, obs, data, linhas,
+      url:`${location.origin}/ot.html?ot=${encodeURIComponent(ot)}`
+    })});
+    if(rEmail.ok){
+      alert(`OT ${ot} enviada para ${email}`);
+    } else {
+      const e=await rEmail.json().catch(()=>({}));
+      alert('Erro ao enviar email: '+(e.error||'verifique a configuração do Resend no servidor.'));
+    }
+  } else {
+    gerarPDF({ot,solic,setor,local,obs,data});
+  }
+}
+
+function gerarPDF({ot,solic,setor,local,obs,data}){
+  gerarFolhaRequisicaoPDF({
+    ot, solicitante: solic, setor, local, data, obs,
+    itens: carrinho.map(c=>({ nome: c.nome, qtd: c.qty, unidade: c.unidade, local: c.local, obs: c.obs }))
+  });
+}
+</script>
+</body>
+</html>

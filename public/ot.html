@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OT · NIU Estoque</title>
+<style>
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0a0c10;color:#eef0f4;font-family:-apple-system,Helvetica,Arial,sans-serif}
+#msg{font-size:.9rem;color:#9aa3b2;text-align:center;padding:24px}
+</style>
+</head>
+<body>
+<div id="msg">Gerando folha de requisição...</div>
+<script src="/vendor/qrcode.js"></script>
+<script src="/vendor/jspdf.umd.min.js"></script>
+<script src="/pdf-folha.js"></script>
+<script>
+(async function () {
+  const msg = document.getElementById('msg');
+  const ot = new URL(location.href).searchParams.get('ot');
+  if (!ot) { msg.textContent = 'OT não informada.'; return; }
+  try {
+    const itens = await fetch(`/api/ot/${encodeURIComponent(ot)}`).then(r => r.json());
+    if (!Array.isArray(itens) || !itens.length) { msg.textContent = 'OT não encontrada.'; return; }
+    const primeiro = itens[0];
+    abrirFolhaRequisicaoPDF({
+      ot,
+      solicitante: primeiro.solicitante,
+      setor: primeiro.setor,
+      data: (primeiro.data || '').slice(0, 10),
+      itens: itens.map(it => ({ nome: it.item_nome, qtd: it.quantidade, unidade: it.unidade, local: it.local_uso }))
+    });
+  } catch (e) {
+    msg.textContent = 'Erro ao carregar a OT.';
+  }
+})();
+</script>
+</body>
+</html>

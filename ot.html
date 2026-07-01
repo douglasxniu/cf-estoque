@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>OT · NIU Estoque</title>
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0a0c10;--g:rgba(255,255,255,.06);--brd:rgba(255,255,255,.10);--text:#eef0f4;--muted:#9aa3b2;--primary:#5b8cff;--ok:#34d399;--warn:#fbbf24;--danger:#f87171;--r:16px}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Source Sans 3',Arial,sans-serif;background:radial-gradient(800px 600px at 10% -10%,#1c2540,transparent 60%),var(--bg);color:var(--text);min-height:100vh;padding:14px 14px 40px}
+.glass{background:var(--g);border:1px solid var(--brd);border-radius:var(--r);backdrop-filter:blur(16px)}
+header{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.hero{padding:24px 20px 20px;margin-bottom:14px;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(91,140,255,.12),rgba(124,92,255,.06));pointer-events:none}
+.hero-label{font-size:.65rem;letter-spacing:.1em;color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:6px}
+.hero-ot{font-size:2.2rem;font-weight:800;color:#fff;letter-spacing:-.02em;margin-bottom:6px}
+.hero-meta{font-size:.88rem;color:var(--muted);margin-bottom:3px}
+.hero-local{font-size:.92rem;color:var(--ok);font-weight:700;margin-top:6px;display:flex;align-items:center;gap:6px}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:5px 13px;border-radius:20px;font-size:.74rem;font-weight:800;margin-top:10px}
+.pill-pend{background:rgba(251,191,36,.12);color:var(--warn);border:1px solid rgba(251,191,36,.2)}
+.pill-aprov{background:rgba(91,140,255,.12);color:var(--primary);border:1px solid rgba(91,140,255,.2)}
+.pill-dev{background:rgba(52,211,153,.12);color:var(--ok);border:1px solid rgba(52,211,153,.2)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+.stat{padding:14px 10px;text-align:center}
+.stat-n{font-size:1.8rem;font-weight:800;line-height:1}
+.stat-l{font-size:.65rem;color:var(--muted);font-weight:700;text-transform:uppercase;margin-top:3px;letter-spacing:.03em}
+.section{font-size:.65rem;color:var(--muted);font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin:0 0 10px;padding:0 2px;display:flex;justify-content:space-between;align-items:center}
+.card{padding:16px;margin-bottom:12px}
+.item{display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+.item:last-child{border-bottom:none}
+.item-ico{width:40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0}
+.item-nome{font-weight:700;font-size:.9rem;margin-bottom:2px}
+.item-qty{font-size:.78rem;color:var(--muted)}
+.item-local{font-size:.76rem;color:var(--ok);font-weight:600;margin-top:3px}
+.item-obs{font-size:.74rem;color:var(--muted);margin-top:2px;font-style:italic}
+.s-pill{margin-left:auto;padding:3px 10px;border-radius:20px;font-size:.66rem;font-weight:800;flex-shrink:0;align-self:flex-start;margin-top:2px}
+.sp-pend{background:rgba(251,191,36,.12);color:var(--warn)}
+.sp-aprov{background:rgba(91,140,255,.12);color:var(--primary)}
+.sp-dev{background:rgba(52,211,153,.12);color:var(--ok)}
+.progress{height:6px;background:rgba(255,255,255,.08);border-radius:3px;margin:14px 0 4px;overflow:hidden}
+.progress-bar{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--primary),var(--ok));transition:width .6s}
+.prog-label{display:flex;justify-content:space-between;font-size:.7rem;color:var(--muted)}
+.empty{color:var(--muted);text-align:center;padding:24px;font-size:.88rem}
+.summary-row{display:flex;justify-content:space-between;font-size:.84rem;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+.summary-row:last-child{border-bottom:none}
+.summary-row b{color:var(--text)}
+</style>
+</head>
+<body>
+<header>
+  <a href="/index.html" style="text-decoration:none;display:flex;align-items:center;gap:8px">
+    <svg width="55" height="15" viewBox="0 0 36.4 10.22" fill="white">
+      <rect x="16.96" y="0" width="2.47" height="10.22"/>
+      <path d="M22.04,4.83V0h2.47v4.74c0,2.09.6,3.1,1.88,3.1s2.8-.77,4.53-2.03l2.98-2.06V0h2.5v10.22h-2.32c0-1.13,0-2.86.06-3.99-3.99,2.68-5.78,3.99-8.14,3.99-2.53,0-3.96-1.64-3.96-5.39"/>
+      <path d="M14.36,5.39v4.83h-2.47v-4.74c0-2.09-.6-3.1-1.88-3.1s-2.8.77-4.53,2.03l-2.98,2.06v3.76H0V0h2.32c0,1.13,0,2.86-.06,3.99C6.26,1.31,8.05,0,10.4,0c2.53,0,3.96,1.64,3.96,5.39"/>
+    </svg>
+    <span style="font-size:.8rem;font-weight:700;color:rgba(255,255,255,.6)">Estoque Elétrica</span>
+  </a>
+</header>
+<div id="app"><div class="empty">A carregar...</div></div>
+<script>
+const esc=s=>String(s??'').replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
+const fmt=s=>{if(!s)return'—';const d=new Date(s.replace(' ','T')+'Z');return d.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});};
+const ot=new URLSearchParams(location.search).get('ot');
+const icons={LED:'💡',Transformador:'⚡',Cabo:'🔌','Lâmpada T8':'🔆',Reator:'🔋',Ferramenta:'🔧',Outro:'📦'};
+const iconFor=nome=>{const l=nome?.toLowerCase()||'';return l.includes('led')?'💡':l.includes('transf')?'⚡':l.includes('cabo')?'🔌':l.includes('lamp')||l.includes('t8')?'🔆':l.includes('reat')?'🔋':l.includes('ferr')?'🔧':'📦';};
+const bgFor=nome=>{
+  const l=nome?.toLowerCase()||'';
+  if(l.includes('led')) return 'rgba(52,211,153,.12)';
+  if(l.includes('transf')) return 'rgba(91,140,255,.12)';
+  if(l.includes('cabo')) return 'rgba(192,132,252,.12)';
+  if(l.includes('lamp')||l.includes('t8')) return 'rgba(34,211,238,.12)';
+  return 'rgba(255,255,255,.06)';
+};
+
+async function load(){
+  if(!ot){document.getElementById('app').innerHTML='<div class="empty">OT não especificada.</div>';return;}
+  const items=await fetch(`/api/ot/${encodeURIComponent(ot)}`).then(r=>r.json()).catch(()=>[]);
+  if(!items.length){document.getElementById('app').innerHTML='<div class="empty">OT não encontrada.</div>';return;}
+
+  const first=items[0];
+  const total=items.length;
+  const devolvidos=items.filter(i=>i.status==='devolvido').length;
+  const aprovados=items.filter(i=>i.status==='aprovado').length;
+  const pendentes=items.filter(i=>i.status==='pendente').length;
+  const pct=Math.round((devolvidos/total)*100);
+  const statusGeral=devolvidos===total?'devolvido':pendentes>0?'pendente':'aprovado';
+  const locais=[...new Set(items.map(i=>i.local_uso).filter(Boolean))];
+  const localUso=locais.join(' · ')||'—';
+  const totalQtdGeral=items.reduce((s,i)=>s+(parseFloat(i.quantidade)||0),0);
+
+  document.getElementById('app').innerHTML=`
+    <div class="hero glass">
+      <div class="hero-label">Ordem de Trabalho</div>
+      <div class="hero-ot">${esc(ot)}</div>
+      <div class="hero-meta">${esc(first.solicitante||'—')}${first.setor?' · <b>'+esc(first.setor)+'</b>':''}</div>
+      <div class="hero-meta">${fmt(first.data)}</div>
+      <div class="hero-local">📍 ${esc(localUso)}</div>
+      <div class="pill ${statusGeral==='devolvido'?'pill-dev':statusGeral==='aprovado'?'pill-aprov':'pill-pend'}">
+        ${statusGeral==='devolvido'?'✓ Concluída':statusGeral==='aprovado'?'▶ Em curso':'◉ Pendente'}
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="glass stat"><div class="stat-n">${total}</div><div class="stat-l">Itens</div></div>
+      <div class="glass stat"><div class="stat-n" style="color:var(--primary)">${aprovados}</div><div class="stat-l">Entregues</div></div>
+      <div class="glass stat"><div class="stat-n" style="color:var(--ok)">${devolvidos}</div><div class="stat-l">Devolvidos</div></div>
+    </div>
+
+    <div class="card glass">
+      <div class="section">Resumo da solicitação</div>
+      <div class="summary-row"><span>Total de itens</span><b>${total}</b></div>
+      <div class="summary-row"><span>Quantidade total</span><b>${totalQtdGeral} un.</b></div>
+      <div class="summary-row"><span>Pendentes</span><b style="color:var(--warn)">${pendentes}</b></div>
+      <div class="summary-row"><span>Entregues</span><b style="color:var(--primary)">${aprovados}</b></div>
+      <div class="summary-row"><span>Devolvidos</span><b style="color:var(--ok)">${devolvidos}</b></div>
+      <div class="progress"><div class="progress-bar" style="width:${pct}%"></div></div>
+      <div class="prog-label"><span>${devolvidos} de ${total} devolvidos</span><span>${pct}%</span></div>
+    </div>
+
+    <div class="section" style="margin-top:4px">Material solicitado (${total})</div>
+    <div class="card glass">
+      ${items.map(i=>`
+        <div class="item">
+          <div class="item-ico" style="background:${bgFor(i.item_nome)}">${iconFor(i.item_nome)}</div>
+          <div style="flex:1;min-width:0">
+            <div class="item-nome">${esc(i.item_nome)}</div>
+            <div class="item-qty">${i.quantidade} ${esc(i.unidade||'')}</div>
+            ${i.local_uso?`<div class="item-local">📍 ${esc(i.local_uso)}</div>`:''}
+          </div>
+          <span class="s-pill ${i.status==='devolvido'?'sp-dev':i.status==='aprovado'?'sp-aprov':'sp-pend'}">
+            ${i.status==='devolvido'?'Devolvido':i.status==='aprovado'?'Entregue':'Pendente'}
+          </span>
+        </div>`).join('')}
+    </div>
+  `;
+}
+load();
+</script>
+</body>
+</html>

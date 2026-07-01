@@ -1,0 +1,2 @@
+ALTER TABLE itens ADD COLUMN modelo TEXT;
+ALTER TABLE itens ADD COLUMN voltagem TEXT;

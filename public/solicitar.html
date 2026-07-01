@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Solicitar Material | Estoque Elétrica</title>
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg0:#0a0c10; --glass:rgba(255,255,255,.055); --glass-brd:rgba(255,255,255,.10);
+  --text:#eef0f4; --muted:#9aa3b2; --primary:#5b8cff; --primary2:#7c5cff;
+  --led:#34d399; --transf:#5b8cff; --cabo:#c084fc; --t8:#22d3ee; --reator:#f472b6; --outro:#a3acc2;
+  --danger:#f87171; --radius:18px;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;font-family:'Source Sans 3',Arial,sans-serif;color:var(--text);font-size:14px;
+  background:radial-gradient(1200px 800px at 10% -10%, #1c2540 0%, transparent 60%),
+             radial-gradient(1000px 700px at 100% 0%, #2a1c40 0%, transparent 55%),
+             var(--bg0);
+  min-height:100vh;
+}
+.glass{background:var(--glass);border:1px solid var(--glass-brd);border-radius:var(--radius);backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%)}
+header{padding:20px 24px;margin:14px;display:flex;align-items:center;gap:10px}
+header .dot{width:9px;height:9px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--primary2));box-shadow:0 0 12px var(--primary)}
+header h1{margin:0;font-size:1.1rem;font-weight:800}
+header .sub{color:var(--muted);font-size:.78rem;margin-top:2px}
+main{max-width:1000px;margin:0 auto;padding:0 14px 60px}
+.search-row{display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;padding:18px 20px}
+input,select{padding:10px 12px;border:1px solid var(--glass-brd);border-radius:10px;background:rgba(255,255,255,.04);color:var(--text);font-size:.95rem;font-family:inherit}
+.search-row input{flex:2;min-width:200px}
+.search-row select{flex:1;min-width:160px}
+input::placeholder{color:#6b7280}
+input:focus,select:focus{outline:none;border-color:var(--primary);background:rgba(255,255,255,.07)}
+select option{background:#1a1d24;color:var(--text)}
+.cat-section{margin-bottom:22px}
+.cat-section h3{display:flex;align-items:center;gap:8px;font-size:.88rem;font-weight:700;margin:0 0 10px;padding:0 6px}
+.cat-section h3 .dot2{width:8px;height:8px;border-radius:50%}
+.subgroup-label{font-size:.72rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.03em;margin:4px 0 8px 4px}
+.item-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px}
+.item-card{padding:16px}
+.item-card .cat{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:.7rem;padding:3px 10px;border-radius:20px;background:rgba(255,255,255,.08)}
+.item-card .cat::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor}
+.item-card h3{margin:8px 0 4px;font-size:.95rem}
+.item-card .q{font-size:1.3rem;font-weight:800}
+.item-card .q.low{color:var(--danger)}
+.small{color:var(--muted);font-size:.76rem}
+.btn{background:linear-gradient(135deg,var(--primary),var(--primary2));border:none;padding:11px 20px;border-radius:11px;font-weight:700;cursor:pointer;color:#fff;font-size:.92rem;box-shadow:0 4px 16px rgba(91,140,255,.25);width:100%;margin-top:10px}
+.btn:disabled{opacity:.4;cursor:not-allowed;box-shadow:none}
+.btn.sec{background:rgba(255,255,255,.07);color:var(--text);border:1px solid var(--glass-brd);box-shadow:none;width:auto}
+.overlay{position:fixed;inset:0;background:rgba(5,6,10,.55);display:none;align-items:center;justify-content:center;z-index:50;backdrop-filter:blur(4px)}
+.overlay.show{display:flex}
+.modal{padding:30px;max-width:680px;width:94%;max-height:88vh}
+label{font-size:.82rem;color:var(--muted);display:block;margin-bottom:5px;font-weight:600;margin-top:10px}
+.empty{color:var(--muted);text-align:center;padding:30px;font-size:.9rem}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:rgba(20,22,30,.9);color:#fff;padding:11px 22px;border-radius:30px;font-weight:600;font-size:.84rem;opacity:0;transition:.25s;z-index:99;border:1px solid var(--glass-brd);backdrop-filter:blur(10px)}
+.toast.show{opacity:1}
+
+.item-card{position:relative}
+.qty-row{display:flex;align-items:center;gap:8px;margin-top:10px}
+.qty-row button{width:26px;height:26px;border-radius:8px;border:1px solid var(--glass-brd);background:rgba(255,255,255,.06);color:var(--text);cursor:pointer;font-weight:700}
+.qty-row input{width:50px;text-align:center;padding:6px}
+.in-cart{outline:1px solid var(--primary);box-shadow:0 0 0 3px rgba(91,140,255,.15)}
+.in-cart-tag{position:absolute;top:10px;right:10px;background:var(--primary);color:#fff;font-size:.65rem;font-weight:700;padding:2px 8px;border-radius:10px}
+
+.cart-bar{position:fixed;bottom:60px;left:0;right:0;margin:0;border-radius:0;display:none;align-items:center;justify-content:space-between;padding:14px 24px;z-index:45}
+.cart-bar.show{display:flex}
+.cart-info{font-size:.86rem;color:var(--muted)}
+.cart-info span{color:var(--text);font-weight:800;font-size:1rem}
+
+.cart-list{max-height:none;overflow-y:visible;margin-bottom:6px;display:flex;flex-direction:column;gap:10px}
+.cart-row{display:flex;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.08)}
+.cart-row .nm{font-size:1rem;font-weight:700;white-space:nowrap}
+.cart-row .meta{font-size:.82rem;color:var(--muted);font-weight:500}
+.cart-row .rm{background:none;border:none;color:var(--danger);cursor:pointer;font-size:.84rem}
+.cart-row .local-input{flex:1;font-size:.95rem;padding:10px 12px}
+
+.steps{display:flex;align-items:center;gap:10px;padding:14px 20px;margin-bottom:16px}
+.step{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:.8rem;font-weight:600}
+.step .n{width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;font-size:.74rem}
+.step.active{color:var(--text)}
+.step.active .n{background:var(--primary);color:#fff}
+.step.done .n{background:var(--ok);color:#fff}
+.step-sep{width:24px;height:1px;background:var(--glass-brd)}
+
+.intro-card{padding:26px 24px;margin-bottom:18px}
+.intro-card h2{margin:0 0 4px;font-size:1rem}
+.intro-card .desc{color:var(--muted);font-size:.8rem;margin-bottom:18px}
+.intro-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}
+.intro-grid label{margin-top:0}
+.locked{opacity:.4;filter:saturate(.4);pointer-events:none;transition:.25s}
+.unlock-msg{text-align:center;color:var(--muted);font-size:.85rem;padding:40px 20px}
+
+@keyframes bgDrift{0%{background-position:0% 0%, 100% 0%}50%{background-position:8% 6%, 92% 4%}100%{background-position:0% 0%, 100% 0%}}
+body{background-size:200% 200%;animation:bgDrift 22s ease-in-out infinite}
+::selection{background:rgba(91,140,255,.35)}
+
+.glass{transition:border-color .35s cubic-bezier(.16,1,.3,1), box-shadow .35s cubic-bezier(.16,1,.3,1), transform .35s cubic-bezier(.16,1,.3,1)}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px) scale(.99)}to{opacity:1;transform:translateY(0) scale(1)}}
+.glass{animation:fadeUp .5s cubic-bezier(.16,1,.3,1) both}
+
+.item-card{transition:transform .3s cubic-bezier(.16,1,.3,1), box-shadow .3s, border-color .3s}
+.item-card:hover{transform:translateY(-4px);box-shadow:0 14px 32px rgba(91,140,255,.16);border-color:rgba(91,140,255,.3)}
+.in-cart{transition:outline-color .3s, box-shadow .3s}
+
+.btn{position:relative;overflow:hidden;transition:transform .2s cubic-bezier(.34,1.56,.64,1), filter .2s, box-shadow .2s}
+.btn:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 6px 20px rgba(91,140,255,.35)}
+.btn:active{transform:scale(.96)}
+
+.qty-row button{transition:transform .2s cubic-bezier(.34,1.56,.64,1), background .2s}
+.qty-row button:hover{transform:scale(1.12);background:rgba(91,140,255,.18)}
+
+.cart-bar{animation:slideUp .35s cubic-bezier(.16,1,.3,1) both}
+@keyframes slideUp{from{opacity:0;transform:translateY(100%)}to{opacity:1;transform:translateY(0)}}
+
+.overlay.show .modal{animation:modalIn .35s cubic-bezier(.16,1,.3,1) both}
+@keyframes modalIn{from{opacity:0;transform:scale(.94) translateY(8px)}to{opacity:1;transform:scale(1) translateY(0)}}
+
+.toast{transition:opacity .3s cubic-bezier(.16,1,.3,1), transform .3s cubic-bezier(.16,1,.3,1);transform:translateX(-50%) translateY(8px)}
+.toast.show{transform:translateX(-50%) translateY(0)}
+
+.step{transition:color .3s}
+.step .n{transition:background .3s, transform .3s}
+.step.active .n{transform:scale(1.1)}
+</style>
+</head>
+<body>
+
+<header class="glass">
+  <svg width="130" height="36" viewBox="0 0 36.4 10.22" style="fill:white">
+    <rect x="16.96" y="0" width="2.47" height="10.22"/>
+    <path d="M22.04,4.83V0h2.47v4.74c0,2.09.6,3.1,1.88,3.1s2.8-.77,4.53-2.03l2.98-2.06V0h2.5v10.22h-2.32c0-1.13,0-2.86.06-3.99-3.99,2.68-5.78,3.99-8.14,3.99-2.53,0-3.96-1.64-3.96-5.39"/>
+    <path d="M14.36,5.39v4.83h-2.47v-4.74c0-2.09-.6-3.1-1.88-3.1s-2.8.77-4.53,2.03l-2.98,2.06v3.76H0V0h2.32c0,1.13,0,2.86-.06,3.99C6.26,1.31,8.05,0,10.4,0c2.53,0,3.96,1.64,3.96,5.39"/>
+  </svg>
+  <div><div class="sub">Solicitação de material — NIU Experience Agency</div></div>
+</header>
+
+<main>
+  <div class="steps glass">
+    <div class="step active" id="stepInfo"><span class="n">1</span> Dados da requisição</div>
+    <div class="step-sep"></div>
+    <div class="step" id="stepItens"><span class="n">2</span> Selecionar itens</div>
+    <div class="step-sep"></div>
+    <div class="step" id="stepFim"><span class="n">3</span> Confirmar</div>
+  </div>
+
+  <div class="intro-card glass">
+    <h2>Informe onde o material será utilizado</h2>
+    <div class="desc">Esses dados serão aplicados a todos os itens desta solicitação. Preencha para liberar o catálogo abaixo.</div>
+    <div class="intro-grid">
+      <div style="position:relative">
+        <label>Projeto (OT) *</label>
+        <input id="sOt" placeholder="Digite o número ou nome do projeto..." autocomplete="off">
+        <div id="sOtResultados" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:20;background:#1a1d24;border:1px solid var(--glass-brd);border-radius:10px;margin-top:4px;max-height:220px;overflow-y:auto"></div>
+        <div class="small" id="sOtAviso" style="color:var(--danger);margin-top:4px;display:none">Projeto não encontrado. Peça ao responsável pelo estoque para criá-lo antes.</div>
+      </div>
+      <div><label>Local padrão de uso</label><input id="sLocal" placeholder="Ex: Galpão 3 - Linha de produção"></div>
+      <div><label>Seu nome *</label><input id="sNome" placeholder="Nome completo"></div>
+      <div><label>Setor</label><input id="sSetor" placeholder="Opcional"></div>
+    </div>
+    <div class="desc" style="margin:10px 0 0">Você poderá indicar um local específico para cada item na etapa de revisão.</div>
+  </div>
+
+  <div class="search-row glass" id="searchRow">
+    <input id="busca" placeholder="Buscar item...">
+    <select id="filtroCat"><option value="">Todas as categorias</option></select>
+  </div>
+  <div id="lista"></div>
+</main>
+
+<div class="cart-bar glass" id="cartBar">
+  <div class="cart-info"><span id="cartCount">0</span> item(ns) selecionado(s)</div>
+  <button class="btn" id="cartOpen" style="width:auto">Revisar e enviar</button>
+</div>
+
+<div class="overlay" id="ov">
+  <div class="modal glass">
+    <h2 style="margin-top:0;font-size:1.3rem">Confirmar solicitação</h2>
+    <div style="margin-bottom:14px;font-size:.95rem;color:var(--muted)" id="ovResumo"></div>
+    <div id="cartList" class="cart-list"></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+      <button type="button" class="btn sec" id="ovCancel">Voltar</button>
+      <button type="button" class="btn" id="ovConfirm" style="width:auto">Confirmar envio</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = "/api";
+const esc=s=>String(s??'').replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
+const toast=m=>{const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);};
+const CAT_COLORS={LED:'#34d399',Transformador:'#5b8cff',Cabo:'#c084fc','Lâmpada T8':'#22d3ee',Reator:'#f472b6',Outro:'#a3acc2'};
+const colorFor=c=>CAT_COLORS[c]||'#7c5cff';
+
+let itens=[], projetos=[], carrinho={}; // carrinho: { itemId: {qtd, local} }
+let catalogoLiberado=false;
+
+function projetoValido(){
+  const v=document.getElementById('sOt').value.trim();
+  return v && projetos.some(p=>p.numero===v);
+}
+
+function dadosOk(){
+  return projetoValido() &&
+         document.getElementById('sNome').value.trim();
+}
+
+function checarLiberacao(){
+  const ok = dadosOk();
+  catalogoLiberado = ok;
+  const otPreenchido = document.getElementById('sOt').value.trim();
+  document.getElementById('sOtAviso').style.display = (otPreenchido && !projetoValido()) ? 'block' : 'none';
+  document.getElementById('searchRow').classList.toggle('locked', !ok);
+  document.getElementById('lista').classList.toggle('locked', !ok);
+  document.getElementById('stepInfo').classList.toggle('done', ok);
+  document.getElementById('stepInfo').classList.toggle('active', !ok);
+  document.getElementById('stepItens').classList.toggle('active', ok);
+  if(!ok){ carrinho={}; atualizarCartBar(); }
+  render();
+}
+['sOt','sLocal','sNome','sSetor'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', checarLiberacao);
+});
+
+document.getElementById('sOt').addEventListener('input', e=>{
+  const t=e.target.value.toLowerCase().trim();
+  const wrap=document.getElementById('sOtResultados');
+  if(!t){ wrap.style.display='none'; return; }
+  const encontrados=projetos.filter(p=>p.numero.toLowerCase().includes(t) || (p.nome||'').toLowerCase().includes(t)).slice(0,8);
+  if(!encontrados.length){ wrap.style.display='none'; return; }
+  wrap.style.display='block';
+  wrap.innerHTML=encontrados.map(p=>`
+    <div data-numero="${esc(p.numero)}" style="padding:10px 12px;cursor:pointer;border-bottom:1px solid var(--glass-brd);font-size:.85rem">
+      <div style="font-weight:700">${esc(p.numero)}</div>
+      ${p.nome?`<div class="small">${esc(p.nome)}</div>`:''}
+    </div>`).join('');
+});
+document.getElementById('sOtResultados').addEventListener('click', e=>{
+  const row=e.target.closest('[data-numero]'); if(!row) return;
+  document.getElementById('sOt').value=row.dataset.numero;
+  document.getElementById('sOtResultados').style.display='none';
+  checarLiberacao();
+});
+document.addEventListener('click', e=>{
+  if(!e.target.closest('#sOt') && !e.target.closest('#sOtResultados')){
+    document.getElementById('sOtResultados').style.display='none';
+  }
+});
+
+async function carregar(){
+  [itens, projetos] = await Promise.all([
+    fetch(`${API}/itens`).then(r=>r.json()),
+    fetch(`${API}/projetos`).then(r=>r.json())
+  ]);
+  const cats=[...new Set(itens.map(i=>i.categoria))].sort();
+  document.getElementById('filtroCat').innerHTML='<option value="">Todas as categorias</option>'+cats.map(c=>`<option>${esc(c)}</option>`).join('');
+  checarLiberacao();
+}
+
+function highlight(nome, termo){
+  if(!termo) return esc(nome);
+  const idx = nome.toLowerCase().indexOf(termo);
+  if(idx===-1) return esc(nome);
+  return esc(nome.slice(0,idx)) + '<mark style="background:rgba(91,140,255,.35);color:#fff;border-radius:3px;padding:0 2px">' + esc(nome.slice(idx,idx+termo.length)) + '</mark>' + esc(nome.slice(idx+termo.length));
+}
+
+function render(){
+  if(!catalogoLiberado){
+    document.getElementById('lista').innerHTML = '<div class="unlock-msg glass">Preencha os dados da requisição acima para visualizar o catálogo de itens.</div>';
+    return;
+  }
+  const termo=(document.getElementById('busca').value||'').toLowerCase().trim();
+  const catF=document.getElementById('filtroCat').value;
+  let filtrados=itens.filter(i=>(!catF||i.categoria===catF) && (!termo||i.nome.toLowerCase().includes(termo)));
+  filtrados.sort((a,b)=>{
+    if(termo){
+      const aStart=a.nome.toLowerCase().startsWith(termo)?0:1;
+      const bStart=b.nome.toLowerCase().startsWith(termo)?0:1;
+      if(aStart!==bStart) return aStart-bStart;
+    }
+    const aDisp=a.quantidade>0?0:1, bDisp=b.quantidade>0?0:1;
+    if(aDisp!==bDisp) return aDisp-bDisp;
+    return a.nome.localeCompare(b.nome);
+  });
+  const porCat={};
+  filtrados.forEach(i=>{ (porCat[i.categoria]=porCat[i.categoria]||[]).push(i); });
+  const cats=Object.keys(porCat).sort();
+  document.getElementById('lista').innerHTML = cats.length? cats.map(cat=>{
+    const subgrupos={};
+    porCat[cat].forEach(i=>{
+      const chave = [i.voltagem||'', i.modelo||''].filter(Boolean).join(' · ') || 'Sem especificação';
+      (subgrupos[chave]=subgrupos[chave]||[]).push(i);
+    });
+    const subKeys=Object.keys(subgrupos).sort();
+    return `
+    <div class="cat-section">
+      <h3><span class="dot2" style="background:${colorFor(cat)}"></span>${esc(cat)}</h3>
+      ${subKeys.map(sub=>`
+        <div class="subgroup-label">${esc(sub)}</div>
+        <div class="item-grid">
+          ${subgrupos[sub].map(i=>{
+            const noCarrinho = carrinho[i.id]?carrinho[i.id].qtd:0;
+            return `
+          <div class="item-card glass ${noCarrinho?'in-cart':''}" data-id="${i.id}">
+            ${noCarrinho?`<span class="in-cart-tag">${noCarrinho} no pedido</span>`:''}
+            <span class="cat" style="color:${colorFor(cat)}">${esc(cat)}</span>
+            <h3>${highlight(i.nome, termo)}</h3>
+            <div class="q ${i.quantidade<=5?'low':''}">${i.quantidade} <span class="small">${esc(i.unidade)} disponível</span></div>
+            ${i.quantidade<=0? '<button class="btn" disabled>Sem estoque</button>' : `
+            <div class="qty-row">
+              <button data-a="dec">−</button>
+              <input type="number" min="0" max="${i.quantidade}" value="${noCarrinho}" data-a="qtdInput">
+              <button data-a="inc">+</button>
+            </div>`}
+          </div>`;
+          }).join('')}
+        </div>`).join('')}
+    </div>`;
+  }).join('') : (termo
+    ? `<div class="empty glass">Nenhum item para "<b>${esc(termo)}</b>". Verifique a categoria ou fale com o responsável pelo estoque.</div>`
+    : '<div class="empty glass">Nenhum item encontrado</div>');
+  atualizarCartBar();
+}
+
+function setQtd(id, qtd, max){
+  qtd = Math.max(0, Math.min(qtd, max));
+  if(qtd<=0) delete carrinho[id];
+  else carrinho[id] = { qtd, local: (carrinho[id] && carrinho[id].local) || document.getElementById('sLocal').value.trim() };
+}
+
+document.getElementById('lista').addEventListener('click', e=>{
+  const card=e.target.closest('.item-card'); if(!card) return;
+  const id=card.dataset.id; const item=itens.find(i=>i.id==id);
+  const input=card.querySelector('[data-a="qtdInput"]'); if(!input) return;
+  let atual=parseInt(input.value)||0;
+  if(e.target.dataset.a==='inc') atual++;
+  else if(e.target.dataset.a==='dec') atual--;
+  else return;
+  setQtd(id, atual, item.quantidade);
+  input.value = carrinho[id]?carrinho[id].qtd:0;
+  card.classList.toggle('in-cart', !!carrinho[id]);
+  atualizarCartBar();
+});
+
+document.getElementById('lista').addEventListener('change', e=>{
+  if(e.target.dataset.a!=='qtdInput') return;
+  const card=e.target.closest('.item-card'); const id=card.dataset.id;
+  const item=itens.find(i=>i.id==id);
+  setQtd(id, parseInt(e.target.value)||0, item.quantidade);
+  e.target.value = carrinho[id]?carrinho[id].qtd:0;
+  card.classList.toggle('in-cart', !!carrinho[id]);
+  atualizarCartBar();
+});
+
+function atualizarCartBar(){
+  const ids=Object.keys(carrinho);
+  document.getElementById('cartCount').textContent = ids.length;
+  document.getElementById('cartBar').classList.toggle('show', ids.length>0);
+}
+
+document.getElementById('busca').addEventListener('input', render);
+document.getElementById('filtroCat').addEventListener('change', render);
+
+document.getElementById('cartOpen').addEventListener('click', ()=>{
+  const ids=Object.keys(carrinho);
+  if(!ids.length) return;
+  const ot=document.getElementById('sOt').value.trim();
+  const nome=document.getElementById('sNome').value.trim();
+  document.getElementById('ovResumo').innerHTML = `OT <b>${esc(ot)}</b> · Solicitante: <b>${esc(nome)}</b>`;
+  document.getElementById('cartList').innerHTML = ids.map(id=>{
+    const item=itens.find(i=>i.id==id);
+    return `<div class="cart-row" data-id="${id}">
+      <div class="nm">${esc(item.nome)}<br><span class="meta">${carrinho[id].qtd} ${esc(item.unidade)}</span></div>
+      <input class="local-input" data-local="${id}" placeholder="Onde este item será usado" value="${esc(carrinho[id].local||'')}">
+      <button class="rm" data-rm="${id}">remover</button>
+    </div>`;
+  }).join('');
+  document.getElementById('stepFim').classList.add('active');
+  document.getElementById('ov').classList.add('show');
+});
+document.getElementById('cartList').addEventListener('click', e=>{
+  const btn=e.target.closest('button[data-rm]'); if(!btn) return;
+  delete carrinho[btn.dataset.rm];
+  btn.closest('.cart-row').remove();
+  render();
+  if(!Object.keys(carrinho).length) document.getElementById('ov').classList.remove('show');
+});
+document.getElementById('cartList').addEventListener('input', e=>{
+  const id=e.target.dataset.local; if(!id) return;
+  if(carrinho[id]) carrinho[id].local = e.target.value;
+});
+document.getElementById('ovCancel').onclick=()=>{
+  document.getElementById('ov').classList.remove('show');
+  document.getElementById('stepFim').classList.remove('active');
+};
+
+document.getElementById('ovConfirm').addEventListener('click', async ()=>{
+  const ot=document.getElementById('sOt').value.trim();
+  const nome=document.getElementById('sNome').value.trim();
+  const setor=document.getElementById('sSetor').value.trim();
+  const ids=Object.keys(carrinho);
+  if(!ids.length){ alert('Adicione ao menos um item.'); return; }
+  const semLocal = ids.some(id=>!carrinho[id].local || !carrinho[id].local.trim());
+  if(semLocal){ alert('Informe o local de uso para todos os itens.'); return; }
+
+  const payload = {
+    ot, solicitante: nome, setor,
+    itens: ids.map(id=>({ itemId: parseInt(id), quantidade: carrinho[id].qtd, localUso: carrinho[id].local.trim() }))
+  };
+  const r = await fetch(`${API}/solicitacoes/lote`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  if(!r.ok){ const e=await r.json().catch(()=>({})); alert('Erro: ' + (e.error||'quantidade indisponível')); return; }
+  carrinho={};
+  document.getElementById('ov').classList.remove('show');
+  document.getElementById('stepFim').classList.remove('active');
+  ['sOt','sLocal','sNome','sSetor'].forEach(id=>document.getElementById(id).value='');
+  toast('Solicitação enviada com sucesso!');
+  checarLiberacao();
+});
+
+carregar();
+</script>
+<nav style="display:flex;position:fixed;bottom:0;left:0;right:0;z-index:50;background:rgba(13,15,20,.95);border-top:1px solid rgba(255,255,255,.1);backdrop-filter:blur(18px);padding:8px 0 12px">
+  <a href="/index.html" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--muted);font-size:.58rem;font-weight:700;text-decoration:none;text-transform:uppercase">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>Dashboard</a>
+  <a href="/solicitar.html" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--primary);font-size:.58rem;font-weight:700;text-decoration:none;text-transform:uppercase">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg>Solicitar</a>
+  <a href="/scan.html" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--muted);font-size:.58rem;font-weight:700;text-decoration:none;text-transform:uppercase">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h.01M14 18h.01M18 14h.01M18 18h.01"/></svg>Leitor QR</a>
+</nav>
+</body>
+</html>
