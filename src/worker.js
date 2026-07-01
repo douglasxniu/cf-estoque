@@ -175,8 +175,8 @@ export default {
     if (path === "/api/itens" && method === "POST") {
       const b = await request.json();
       const r = await env.DB.prepare(
-        "INSERT INTO itens (nome, categoria, quantidade, unidade, modelo, voltagem, codigo) VALUES (?, ?, ?, ?, ?, ?, ?)"
-      ).bind(b.nome, b.categoria || "Outro", b.quantidade || 0, b.unidade || "un", b.modelo || "", b.voltagem || "", b.codigo || "").run();
+        "INSERT INTO itens (nome, categoria, quantidade, unidade, modelo, voltagem, codigo, imagem) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+      ).bind(b.nome, b.categoria || "Outro", b.quantidade || 0, b.unidade || "un", b.modelo || "", b.voltagem || "", b.codigo || "", b.imagem || null).run();
       return json({ id: r.meta.last_row_id });
     }
 
@@ -189,10 +189,13 @@ export default {
           "UPDATE itens SET quantidade = quantidade + ? WHERE id = ? AND quantidade + ? >= 0"
         ).bind(b.delta, id, b.delta).run();
         if (upd.meta.changes === 0) return json({ error: "Quantidade insuficiente" }, 400);
+      } else if (b.imagem !== undefined && b.nome === undefined) {
+        // atualização leve: só a foto (usada pelo botão "trocar imagem" do card)
+        await env.DB.prepare("UPDATE itens SET imagem=? WHERE id=?").bind(b.imagem, id).run();
       } else {
         await env.DB.prepare(
-          "UPDATE itens SET nome=?, categoria=?, quantidade=?, unidade=?, modelo=?, voltagem=?, codigo=? WHERE id=?"
-        ).bind(b.nome, b.categoria, b.quantidade, b.unidade, b.modelo || "", b.voltagem || "", b.codigo || "", id).run();
+          "UPDATE itens SET nome=?, categoria=?, quantidade=?, unidade=?, modelo=?, voltagem=?, codigo=?, imagem=? WHERE id=?"
+        ).bind(b.nome, b.categoria, b.quantidade, b.unidade, b.modelo || "", b.voltagem || "", b.codigo || "", b.imagem ?? null, id).run();
       }
       return json({ ok: true });
     }

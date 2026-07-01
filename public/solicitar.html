@@ -305,6 +305,7 @@ function render(){
             return `
           <div class="item-card glass ${noCarrinho?'in-cart':''}" data-id="${i.id}">
             ${noCarrinho?`<span class="in-cart-tag">${noCarrinho} no pedido</span>`:''}
+            ${i.imagem?`<img src="${i.imagem}" alt="" style="width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:12px;margin-bottom:8px">`:''}
             <span class="cat" style="color:${colorFor(cat)}">${esc(cat)}</span>
             <h3>${highlight(i.nome, termo)}</h3>
             <div class="q ${i.quantidade<=5?'low':''}">${i.quantidade} <span class="small">${esc(i.unidade)} disponível</span></div>

@@ -6,6 +6,7 @@ CREATE TABLE itens (
   unidade TEXT NOT NULL DEFAULT 'un',
   modelo TEXT,
   voltagem TEXT,
+  imagem TEXT,
   criado_em TEXT DEFAULT (datetime('now'))
 );
 

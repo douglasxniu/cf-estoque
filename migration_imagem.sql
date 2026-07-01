@@ -1,0 +1,1 @@
+ALTER TABLE itens ADD COLUMN imagem TEXT;

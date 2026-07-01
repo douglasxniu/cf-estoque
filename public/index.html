@@ -98,6 +98,24 @@ tr:hover td{background:rgba(255,255,255,.03)}
 .subgroup{margin-bottom:12px;padding-left:6px;border-left:2px solid var(--glass-brd)}
 .subgroup-label{font-size:.74rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.03em;margin:6px 0 4px 10px}
 
+.estoque-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px;padding:0 0 6px 10px}
+.est-card{background:rgba(255,255,255,.04);border:1px solid var(--glass-brd);border-radius:14px;overflow:hidden;transition:.2s}
+.est-card:hover{border-color:rgba(91,140,255,.35);transform:translateY(-3px);box-shadow:0 10px 24px rgba(91,140,255,.14)}
+.est-img{position:relative;aspect-ratio:1/1;background:rgba(255,255,255,.03);display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden}
+.est-img img{width:100%;height:100%;object-fit:cover;display:block}
+.est-img-placeholder{font-size:2.2rem;opacity:.35}
+.est-img-edit{position:absolute;inset:auto 0 0 0;background:rgba(0,0,0,.6);color:#fff;font-size:.66rem;font-weight:700;text-align:center;padding:5px 4px;opacity:0;transition:.15s}
+.est-img:hover .est-img-edit{opacity:1}
+.est-body{padding:10px 12px 12px}
+.est-body h4{margin:0 0 2px;font-size:.83rem;font-weight:700;line-height:1.25;min-height:2.1em}
+.est-code{color:var(--primary);font-size:.68rem;font-weight:700;margin-bottom:4px}
+.est-qty-row{display:flex;align-items:center;gap:6px;margin-top:6px}
+.est-qty-row button{width:24px;height:24px;flex-shrink:0;border-radius:7px;border:1px solid var(--glass-brd);background:rgba(255,255,255,.05);color:var(--text);cursor:pointer;font-weight:700}
+.est-qty-row .qty{flex:1;text-align:center;font-weight:800;font-size:.8rem}
+.est-actions{display:flex;gap:4px;margin-top:8px;flex-wrap:wrap}
+.est-actions .btn{font-size:.64rem;padding:4px 6px}
+.est-actions .del{font-size:.68rem}
+
 .overlay{position:fixed;inset:0;background:rgba(5,6,10,.55);display:none;align-items:center;justify-content:center;z-index:50;backdrop-filter:blur(4px)}
 .overlay.show{display:flex}
 .modal{padding:22px;max-width:340px;width:90%}
@@ -373,6 +391,8 @@ tr:hover td{background:rgba(255,255,255,.045)}
             <div><label>Quantidade *</label><input id="iQtd" type="number" min="0" required></div>
             <div><label>Unidade</label>
               <select id="iUn"><option>un</option><option>m</option><option>cx</option><option>rolo</option></select></div>
+            <div><label>Foto do produto</label><input id="iImagem" type="file" accept="image/*"></div>
+            <div id="iImagemPreviewWrap" style="display:none"><img id="iImagemPreview" style="width:64px;height:64px;object-fit:cover;border-radius:10px;border:1px solid var(--glass-brd)"></div>
             <div><button class="btn" type="submit">+ Adicionar</button></div>
           </form>
         </div>
@@ -384,6 +404,7 @@ tr:hover td{background:rgba(255,255,255,.045)}
             <select id="filtroVolt"><option value="">Todas as voltagens</option><option>12V</option><option>24V</option><option>110V</option><option>220V</option><option>Bivolt</option></select>
           </div>
           <div id="estoquePorCategoria"></div>
+          <input type="file" id="estoqueImagemInput" accept="image/*" style="display:none">
         </div>
       </section>
 
@@ -681,24 +702,41 @@ function renderEstoque(){
       ${subKeys.map(sub=>`
         <div class="subgroup">
           <div class="subgroup-label">${esc(sub)}</div>
-          <table><tbody>
+          <div class="estoque-grid">
             ${subgrupos[sub].map(i=>`
-            <tr data-id="${i.id}">
-              <td style="width:40%">${esc(i.nome)}${i.codigo?`<div class="small" style="color:var(--primary)">${esc(i.codigo)}</div>`:''}</td>
-              <td><div class="actions">
-                <button data-a="menos">−</button><span class="qty ${i.quantidade<=5?'low':'ok'}">${i.quantidade}</span><button data-a="mais">+</button>
-                <span style="color:var(--muted);font-size:.78rem">${esc(i.unidade)}</span>
-              </div></td>
-              <td style="text-align:right;white-space:nowrap">
-                <button class="btn sec" data-a="unidades" style="font-size:.72rem;padding:5px 8px;margin-right:4px">Unidades</button>
-                <button class="btn sec" data-a="qr" style="font-size:.72rem;padding:5px 8px;margin-right:4px">QR</button>
-                <button class="del" data-a="excluir">remover</button>
-              </td>
-            </tr>`).join('')}
-          </tbody></table>
+            <div class="est-card" data-id="${i.id}">
+              <div class="est-img" data-a="trocar-imagem" title="Clique para trocar a foto">
+                ${i.imagem?`<img src="${i.imagem}" alt="${esc(i.nome)}">`:`<div class="est-img-placeholder">${categoriaIcone(cat)}</div>`}
+                <div class="est-img-edit">📷 trocar foto</div>
+              </div>
+              <div class="est-body">
+                <h4>${esc(i.nome)}</h4>
+                ${i.codigo?`<div class="est-code">${esc(i.codigo)}</div>`:''}
+                <div class="est-qty-row">
+                  <button data-a="menos">−</button>
+                  <span class="qty ${i.quantidade<=5?'low':'ok'}">${i.quantidade} ${esc(i.unidade)}</span>
+                  <button data-a="mais">+</button>
+                </div>
+                <div class="est-actions">
+                  <button class="btn sec" data-a="unidades">Unidades</button>
+                  <button class="btn sec" data-a="qr">QR</button>
+                  <button class="del" data-a="excluir">remover</button>
+                </div>
+              </div>
+            </div>`).join('')}
+          </div>
         </div>`).join('')}
     </div>`;
   }).join('') : '<div class="empty">Nenhum item encontrado</div>';
+}
+function categoriaIcone(cat){
+  const l=(cat||'').toLowerCase();
+  if(l.includes('led')) return '💡';
+  if(l.includes('transformador')) return '⚡';
+  if(l.includes('cabo')) return '🔌';
+  if(l.includes('lâmpada')||l.includes('t8')) return '🔆';
+  if(l.includes('reator')) return '🔋';
+  return '📦';
 }
 
 document.getElementById('filtroVolt').addEventListener('change', renderEstoque);
@@ -789,6 +827,34 @@ function gerarCodigo(nome, voltagem, modelo){
 });
 document.getElementById('iCodigo').addEventListener('input', e=>{ e.target.dataset.editado='1'; });
 
+// Redimensiona/comprime a imagem no navegador antes de enviar (evita gravar fotos gigantes no banco)
+function comprimirImagem(file, maxLado=640, qualidade=0.7){
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = ()=>{ img.onload = ()=>{
+      let {width:w, height:h} = img;
+      if(w>maxLado || h>maxLado){
+        if(w>h){ h=Math.round(h*maxLado/w); w=maxLado; } else { w=Math.round(w*maxLado/h); h=maxLado; }
+      }
+      const canvas=document.createElement('canvas');
+      canvas.width=w; canvas.height=h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      resolve(canvas.toDataURL('image/jpeg', qualidade));
+    }; img.onerror=reject; img.src=reader.result; };
+    reader.onerror=reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+let iImagemAtual=null;
+document.getElementById('iImagem').addEventListener('change', async e=>{
+  const file=e.target.files[0]; if(!file) return;
+  iImagemAtual = await comprimirImagem(file);
+  document.getElementById('iImagemPreview').src=iImagemAtual;
+  document.getElementById('iImagemPreviewWrap').style.display='block';
+});
+
 document.getElementById('fItem').addEventListener('submit', async e=>{
   e.preventDefault();
   let cat = document.getElementById('iCat').value;
@@ -803,22 +869,39 @@ document.getElementById('fItem').addEventListener('submit', async e=>{
     voltagem:document.getElementById('iVolt').value,
     codigo:document.getElementById('iCodigo').value.trim(),
     quantidade:parseInt(document.getElementById('iQtd').value)||0,
-    unidade:document.getElementById('iUn').value
+    unidade:document.getElementById('iUn').value,
+    imagem:iImagemAtual
   })});
   if(!r.ok){ const t=await r.text().catch(()=>''); alert('Erro ao cadastrar item: '+t); return; }
   e.target.reset(); document.getElementById('novaCatWrap').style.display='none';
   document.getElementById('iCodigo').dataset.editado='';
+  iImagemAtual=null; document.getElementById('iImagemPreviewWrap').style.display='none';
   toast('Item cadastrado!'); carregarTudo();
 });
 
+let estoqueImagemAlvoId=null;
 document.getElementById('estoquePorCategoria').addEventListener('click', async e=>{
+  const imgArea=e.target.closest('.est-img');
+  if(imgArea){
+    estoqueImagemAlvoId = imgArea.closest('.est-card').dataset.id;
+    document.getElementById('estoqueImagemInput').click();
+    return;
+  }
   const btn=e.target.closest('button'); if(!btn) return;
-  const tr=e.target.closest('tr'); const id=tr.dataset.id; const item=itens.find(i=>i.id==id);
+  const card=e.target.closest('.est-card'); const id=card.dataset.id; const item=itens.find(i=>i.id==id);
   if(btn.dataset.a==='mais'){ await fetch(`${API}/itens/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({delta:1})}); carregarTudo(); }
   else if(btn.dataset.a==='menos'){ if(item.quantidade>0){ await fetch(`${API}/itens/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({delta:-1})}); carregarTudo(); } }
   else if(btn.dataset.a==='excluir'){ if(confirm(`Excluir "${item.nome}"?`)){ await fetch(`${API}/itens/${id}`,{method:'DELETE'}); toast('Item excluído.'); carregarTudo(); } }
   else if(btn.dataset.a==='unidades'){ abrirModalUnidades(item); }
   else if(btn.dataset.a==='qr'){ abrirModalQR(item); }
+});
+document.getElementById('estoqueImagemInput').addEventListener('change', async e=>{
+  const file=e.target.files[0]; if(!file || !estoqueImagemAlvoId) return;
+  const dataUrl = await comprimirImagem(file);
+  await fetch(`${API}/itens/${estoqueImagemAlvoId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({imagem:dataUrl})});
+  e.target.value=''; estoqueImagemAlvoId=null;
+  toast('Foto atualizada!');
+  carregarTudo();
 });
 
 
