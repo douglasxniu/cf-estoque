@@ -333,7 +333,10 @@ export default {
 
     const delOtMatch = path.match(/^\/api\/solicitacoes\/ot\/([^/]+)$/);
     if (delOtMatch && method === "DELETE") {
-      await env.DB.prepare("DELETE FROM solicitacoes WHERE ot = ?").bind(decodeURIComponent(delOtMatch[1])).run();
+      const ot = decodeURIComponent(delOtMatch[1]);
+      const { results } = await env.DB.prepare("SELECT * FROM solicitacoes WHERE ot = ?").bind(ot).all();
+      for (const sol of results) await devolverSolicitacao(env, sol);
+      await env.DB.prepare("DELETE FROM solicitacoes WHERE ot = ?").bind(ot).run();
       return json({ ok: true });
     }
 
@@ -357,6 +360,8 @@ export default {
 
     const delSolMatch = path.match(/^\/api\/solicitacoes\/(\d+)$/);
     if (delSolMatch && method === "DELETE") {
+      const sol = await env.DB.prepare("SELECT * FROM solicitacoes WHERE id = ?").bind(delSolMatch[1]).first();
+      if (sol) await devolverSolicitacao(env, sol);
       await env.DB.prepare("DELETE FROM solicitacoes WHERE id = ?").bind(delSolMatch[1]).run();
       return json({ ok: true });
     }

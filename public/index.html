@@ -102,6 +102,13 @@ tr:hover td{background:rgba(255,255,255,.03)}
 .overlay.show{display:flex}
 .modal{padding:22px;max-width:340px;width:90%}
 .empty{color:var(--muted);text-align:center;padding:18px;font-size:.85rem}
+#listaOtsAbertas{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.ot-card{background:rgba(255,255,255,.04);border:1px solid var(--glass-brd);border-radius:12px;padding:12px 14px;cursor:pointer;transition:.18s}
+.ot-card:hover{background:rgba(91,140,255,.09);border-color:rgba(91,140,255,.35);transform:translateY(-2px)}
+.ot-card-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ot-num{font-weight:800;color:var(--primary);font-size:.88rem}
+.ot-nome{font-size:.78rem;color:var(--text);font-weight:600}
+.ot-card-meta{color:var(--muted);font-size:.72rem;margin-top:5px}
 .status-pend{color:var(--warn);font-weight:700}
 .status-aprov{color:var(--primary);font-weight:700}
 .status-dev{color:var(--ok);font-weight:700}
@@ -305,6 +312,12 @@ tr:hover td{background:rgba(255,255,255,.045)}
 
       <section id="t-dash" class="tab active">
         <div class="kpis" id="kpis"></div>
+        <div class="card glass" id="otsAbertasCard">
+          <h2>OTs em aberto</h2>
+          <div class="desc">Projetos com itens ainda não devolvidos — clique em uma OT para editar</div>
+          <input id="buscaOtAberta" placeholder="Buscar por número ou nome da OT..." style="margin-bottom:12px">
+          <div id="listaOtsAbertas"></div>
+        </div>
         <div class="row">
           <div class="card glass">
             <h2>Distribuição por categoria</h2>
@@ -404,7 +417,7 @@ const catClass=c=>(c||'Outro').replace(/\s/g,'-');
 const CAT_COLORS={LED:'#34d399',Transformador:'#5b8cff',Cabo:'#c084fc','Lâmpada T8':'#22d3ee',Reator:'#f472b6',Outro:'#a3acc2'};
 const colorFor=c=>CAT_COLORS[c]||'#7c5cff';
 
-let itens=[], solicitacoes=[], categorias=[];
+let itens=[], solicitacoes=[], categorias=[], projetos=[];
 let chCategoria=null, chTop=null, chTendencia=null;
 let categoriaRotAngle=0, categoriaRotRAF=null;
 let ultimoCheck=new Date(Date.now()-1000*60*60*24).toISOString().slice(0,19).replace('T',' ');
@@ -492,13 +505,14 @@ document.getElementById('linkPublico').value = location.origin + '/solicitar.htm
 function copiarLink(){ navigator.clipboard.writeText(document.getElementById('linkPublico').value); toast('Link copiado!'); }
 
 async function carregarTudo(){
-  [itens, solicitacoes] = await Promise.all([
+  [itens, solicitacoes, projetos] = await Promise.all([
     fetch(`${API}/itens`).then(r=>r.json()),
-    fetch(`${API}/solicitacoes`).then(r=>r.json())
+    fetch(`${API}/solicitacoes`).then(r=>r.json()),
+    fetch(`${API}/projetos`).then(r=>r.json())
   ]);
   categorias = [...new Set(itens.map(i=>i.categoria))];
   preencherSelects();
-  renderEstoque(); renderHist(); renderDash();
+  renderEstoque(); renderHist(); renderDash(); renderOtsAbertas();
 }
 
 function preencherSelects(){
@@ -750,7 +764,7 @@ document.getElementById('tbHist').addEventListener('click', async e=>{
   } else if(btn.dataset.a==='pdf-ot'){
     gerarPDF(ot);
   } else if(btn.dataset.a==='excluir-ot'){
-    if(confirm(`Excluir toda a OT ${ot}? Esta ação não devolve os itens ao estoque.`)){
+    if(confirm(`Excluir toda a OT ${ot}? Os itens ainda não devolvidos voltam ao estoque, e o histórico desta OT é removido.`)){
       await fetch(`${API}/solicitacoes/ot/${encodeURIComponent(ot)}`,{method:'DELETE'});
       toast('OT excluída.'); carregarTudo();
     }
@@ -940,6 +954,26 @@ function imprimirQR(){
   </div>
 </div>
 
+<!-- Modal Editar OT -->
+<div class="overlay" id="editOtOverlay">
+  <div class="modal glass" style="max-width:540px;width:94%;max-height:88vh;overflow-y:auto">
+    <h2 id="editOtTitulo" style="margin-top:0;font-size:1.05rem"></h2>
+    <div class="grid" style="margin-bottom:16px">
+      <div><label>Nome da OT</label><input id="editOtNome" placeholder="Ex: HNK NA"></div>
+      <div><label>Setor</label><input id="editOtSetor"></div>
+      <div><label>Status</label>
+        <select id="editOtStatus"><option value="aberto">Aberto</option><option value="encerrado">Encerrado</option></select>
+      </div>
+    </div>
+    <div style="font-size:.72rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.03em;margin-bottom:8px">Itens desta OT</div>
+    <div id="editOtItens"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn sec" id="editOtCancel">Fechar</button>
+      <button class="btn" id="editOtSalvar">Salvar alterações</button>
+    </div>
+  </div>
+</div>
+
 <script>
 document.getElementById('unidadesBody').addEventListener('click', e=>{
   const btn=e.target.closest('[data-a="imprimir-unidade"]'); if(!btn) return;
@@ -1103,6 +1137,76 @@ document.getElementById('addItensConfirmar').addEventListener('click', async ()=
   document.getElementById('addItensOverlay').classList.remove('show');
   toast(`Itens adicionados ao projeto ${addItensOt}!`);
   carregarTudo();
+});
+
+/* ===== OTs em aberto (dashboard) + Editar OT ===== */
+function renderOtsAbertas(){
+  const termo=(document.getElementById('buscaOtAberta').value||'').toLowerCase().trim();
+  const abertas=projetos.filter(p=>p.status==='aberto' && (!termo || p.numero.toLowerCase().includes(termo) || (p.nome||'').toLowerCase().includes(termo)));
+  const wrap=document.getElementById('listaOtsAbertas');
+  if(!abertas.length){ wrap.innerHTML=`<div class="empty">Nenhuma OT em aberto${termo?' para essa busca':''}.</div>`; return; }
+  wrap.innerHTML = abertas.map(p=>{
+    const itensOt=solicitacoes.filter(s=>s.ot===p.numero);
+    const naoDevolvidos=itensOt.filter(s=>s.status!=='devolvido').length;
+    return `
+    <div class="ot-card" data-numero="${esc(p.numero)}">
+      <div class="ot-card-top">
+        <span class="ot-num">${esc(p.numero)}</span>
+        ${p.nome?`<span class="ot-nome">${esc(p.nome)}</span>`:''}
+      </div>
+      <div class="ot-card-meta">${itensOt.length} item(ns) · ${naoDevolvidos} não devolvido(s)${p.setor?' · '+esc(p.setor):''}</div>
+    </div>`;
+  }).join('');
+}
+document.getElementById('buscaOtAberta').addEventListener('input', renderOtsAbertas);
+document.getElementById('listaOtsAbertas').addEventListener('click', e=>{
+  const card=e.target.closest('.ot-card'); if(!card) return;
+  abrirModalEditarOt(card.dataset.numero);
+});
+
+let editOtAtual=null;
+function abrirModalEditarOt(numero){
+  editOtAtual=numero;
+  const p=projetos.find(x=>x.numero===numero);
+  document.getElementById('editOtTitulo').textContent=`Editar OT ${numero}`;
+  document.getElementById('editOtNome').value=p?.nome||'';
+  document.getElementById('editOtSetor').value=p?.setor||'';
+  document.getElementById('editOtStatus').value=p?.status||'aberto';
+  renderEditOtItens();
+  document.getElementById('editOtOverlay').classList.add('show');
+}
+
+function renderEditOtItens(){
+  const itensOt=solicitacoes.filter(s=>s.ot===editOtAtual);
+  const wrap=document.getElementById('editOtItens');
+  wrap.innerHTML = itensOt.length ? itensOt.map(s=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--glass-brd)">
+      <div style="flex:1;font-size:.85rem">${esc(s.item_nome)}
+        <div class="small" style="color:var(--muted)">${s.quantidade} ${esc(s.unidade||'')} · ${s.status}${s.local_uso?' · '+esc(s.local_uso):''}</div>
+      </div>
+      <button data-id="${s.id}" class="del" data-a="rm-item">remover</button>
+    </div>`).join('') : '<div class="empty">Nenhum item nesta OT.</div>';
+}
+document.getElementById('editOtItens').addEventListener('click', async e=>{
+  const btn=e.target.closest('button[data-a="rm-item"]'); if(!btn) return;
+  if(!confirm('Remover este item da OT? A quantidade volta ao estoque.')) return;
+  await fetch(`${API}/solicitacoes/${btn.dataset.id}`,{method:'DELETE'});
+  await carregarTudo();
+  renderEditOtItens();
+});
+document.getElementById('editOtCancel').addEventListener('click', ()=>{
+  document.getElementById('editOtOverlay').classList.remove('show');
+});
+document.getElementById('editOtSalvar').addEventListener('click', async ()=>{
+  const nome=document.getElementById('editOtNome').value.trim();
+  const setor=document.getElementById('editOtSetor').value.trim();
+  const status=document.getElementById('editOtStatus').value;
+  const r=await fetch(`${API}/projetos/${encodeURIComponent(editOtAtual)}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome,setor,status})});
+  if(r.ok){
+    toast('OT atualizada!');
+    document.getElementById('editOtOverlay').classList.remove('show');
+    carregarTudo();
+  } else toast('Erro ao salvar.');
 });
 </script>
 <script src="/neural-bg.js"></script>
