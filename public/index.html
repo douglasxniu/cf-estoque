@@ -96,7 +96,7 @@ tr:hover td{background:rgba(255,255,255,.03)}
 .cat-section h3{display:flex;align-items:center;gap:8px;font-size:.84rem;font-weight:700;margin:0 0 8px;color:var(--text)}
 .cat-section h3 .dot{width:8px;height:8px;border-radius:50%}
 .subgroup{margin-bottom:12px;padding-left:6px;border-left:2px solid var(--glass-brd)}
-.subgroup-label{font-size:.74rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.03em;margin:6px 0 4px 10px}
+.subgroup-label{display:inline-flex;align-items:center;font-size:.85rem;color:#dbe4ff;font-weight:800;letter-spacing:.02em;margin:6px 0 10px 10px;padding:5px 12px;border-radius:9px;background:rgba(91,140,255,.16);border:1px solid rgba(91,140,255,.3)}
 
 .estoque-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px;padding:0 0 6px 10px}
 .est-card{background:rgba(255,255,255,.04);border:1px solid var(--glass-brd);border-radius:14px;overflow:hidden;transition:.2s}
@@ -109,6 +109,9 @@ tr:hover td{background:rgba(255,255,255,.03)}
 .est-body{padding:10px 12px 12px}
 .est-body h4{margin:0 0 2px;font-size:.83rem;font-weight:700;line-height:1.25;min-height:2.1em}
 .est-code{color:var(--primary);font-size:.68rem;font-weight:700;margin-bottom:4px}
+.est-specs{display:flex;gap:5px;flex-wrap:wrap;margin:6px 0}
+.est-spec-badge{font-size:.76rem;font-weight:800;padding:3px 9px;border-radius:7px;background:rgba(91,140,255,.18);color:#cfdcff;border:1px solid rgba(91,140,255,.32);letter-spacing:.01em}
+.est-spec-badge.volt{background:rgba(52,211,153,.16);color:#a7f3d4;border-color:rgba(52,211,153,.3)}
 .est-qty-row{display:flex;align-items:center;gap:6px;margin-top:6px}
 .est-qty-row button{width:24px;height:24px;flex-shrink:0;border-radius:7px;border:1px solid var(--glass-brd);background:rgba(255,255,255,.05);color:var(--text);cursor:pointer;font-weight:700}
 .est-qty-row .qty{flex:1;text-align:center;font-weight:800;font-size:.8rem}
@@ -712,6 +715,10 @@ function renderEstoque(){
               <div class="est-body">
                 <h4>${esc(i.nome)}</h4>
                 ${i.codigo?`<div class="est-code">${esc(i.codigo)}</div>`:''}
+                ${(i.voltagem||i.modelo)?`<div class="est-specs">
+                  ${i.voltagem?`<span class="est-spec-badge volt">${esc(i.voltagem)}</span>`:''}
+                  ${i.modelo?`<span class="est-spec-badge">${esc(i.modelo)}</span>`:''}
+                </div>`:''}
                 <div class="est-qty-row">
                   <button data-a="menos">−</button>
                   <span class="qty ${i.quantidade<=5?'low':'ok'}">${i.quantidade} ${esc(i.unidade)}</span>

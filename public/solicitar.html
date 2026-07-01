@@ -36,7 +36,7 @@ select option{background:#1a1d24;color:var(--text)}
 .cat-section{margin-bottom:22px}
 .cat-section h3{display:flex;align-items:center;gap:8px;font-size:.88rem;font-weight:700;margin:0 0 10px;padding:0 6px}
 .cat-section h3 .dot2{width:8px;height:8px;border-radius:50%}
-.subgroup-label{font-size:.72rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.03em;margin:4px 0 8px 4px}
+.subgroup-label{display:inline-flex;align-items:center;font-size:.85rem;color:#dbe4ff;font-weight:800;letter-spacing:.02em;margin:4px 0 10px 4px;padding:5px 12px;border-radius:9px;background:rgba(91,140,255,.16);border:1px solid rgba(91,140,255,.3)}
 .item-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px}
 .item-card{padding:16px}
 .item-card .cat{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:.7rem;padding:3px 10px;border-radius:20px;background:rgba(255,255,255,.08)}
@@ -45,6 +45,9 @@ select option{background:#1a1d24;color:var(--text)}
 .item-card .q{font-size:1.3rem;font-weight:800}
 .item-card .q.low{color:var(--danger)}
 .small{color:var(--muted);font-size:.76rem}
+.item-specs{display:flex;gap:5px;flex-wrap:wrap;margin:4px 0}
+.item-spec-badge{font-size:.78rem;font-weight:800;padding:3px 9px;border-radius:7px;background:rgba(91,140,255,.18);color:#cfdcff;border:1px solid rgba(91,140,255,.32);letter-spacing:.01em}
+.item-spec-badge.volt{background:rgba(52,211,153,.16);color:#a7f3d4;border-color:rgba(52,211,153,.3)}
 .btn{background:linear-gradient(135deg,var(--primary),var(--primary2));border:none;padding:11px 20px;border-radius:11px;font-weight:700;cursor:pointer;color:#fff;font-size:.92rem;box-shadow:0 4px 16px rgba(91,140,255,.25);width:100%;margin-top:10px}
 .btn:disabled{opacity:.4;cursor:not-allowed;box-shadow:none}
 .btn.sec{background:rgba(255,255,255,.07);color:var(--text);border:1px solid var(--glass-brd);box-shadow:none;width:auto}
@@ -308,6 +311,10 @@ function render(){
             ${i.imagem?`<img src="${i.imagem}" alt="" style="width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:12px;margin-bottom:8px">`:''}
             <span class="cat" style="color:${colorFor(cat)}">${esc(cat)}</span>
             <h3>${highlight(i.nome, termo)}</h3>
+            ${(i.voltagem||i.modelo)?`<div class="item-specs">
+              ${i.voltagem?`<span class="item-spec-badge volt">${esc(i.voltagem)}</span>`:''}
+              ${i.modelo?`<span class="item-spec-badge">${esc(i.modelo)}</span>`:''}
+            </div>`:''}
             <div class="q ${i.quantidade<=5?'low':''}">${i.quantidade} <span class="small">${esc(i.unidade)} disponível</span></div>
             ${i.quantidade<=0? '<button class="btn" disabled>Sem estoque</button>' : `
             <div class="qty-row">
