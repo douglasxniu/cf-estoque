@@ -28,7 +28,7 @@ body{
   min-height:100vh;
 }
 .glass{background:var(--glass);border:1px solid var(--glass-brd);border-radius:var(--radius);backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%)}
-.app{display:flex;min-height:100vh}
+.app{display:flex;min-height:100vh;position:relative;z-index:1}
 .sidebar{width:225px;flex-shrink:0;margin:14px 0 14px 14px;padding:20px 14px;display:flex;flex-direction:column}
 .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:1rem;margin-bottom:26px;padding:0 6px}
 .brand .dot{width:9px;height:9px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--primary2));box-shadow:0 0 12px var(--primary)}
@@ -196,6 +196,12 @@ tr:hover td{background:rgba(255,255,255,.045)}
 .chart-wrap{transition:opacity .3s, transform .4s cubic-bezier(.16,1,.3,1)}
 .card:hover .chart-wrap{transform:scale(1.01)}
 .chart-wrap canvas{animation:fadeUp .6s cubic-bezier(.16,1,.3,1) both}
+.chart-wrap::after{
+  content:'';position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(120deg, transparent 30%, rgba(255,255,255,.07) 50%, transparent 70%);
+  background-size:250% 100%;animation:chartShine 7s linear infinite;
+}
+@keyframes chartShine{0%{background-position:200% 0}100%{background-position:-200% 0}}
 .empty{animation:fadeUp .4s ease both}
 .live-dot{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok);animation:pulse 1.8s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
@@ -400,6 +406,7 @@ const colorFor=c=>CAT_COLORS[c]||'#7c5cff';
 
 let itens=[], solicitacoes=[], categorias=[];
 let chCategoria=null, chTop=null, chTendencia=null;
+let categoriaRotAngle=0, categoriaRotRAF=null;
 let ultimoCheck=new Date(Date.now()-1000*60*60*24).toISOString().slice(0,19).replace('T',' ');
 
 let notifs=[]; // {id, item_nome, quantidade, ot, solicitante, local_uso, data, lida}
@@ -581,14 +588,22 @@ function renderChartCategoria(){
   const labels=Object.keys(porCat), data=Object.values(porCat);
   const colors=labels.map(colorFor);
   if(chCategoria) chCategoria.destroy();
+  if(categoriaRotRAF) cancelAnimationFrame(categoriaRotRAF);
   chCategoria=new Chart(document.getElementById('chartCategoria'),{
     type:'doughnut',
     data:{ labels, datasets:[{ data, backgroundColor:colors, borderWidth:0, hoverOffset:10, borderRadius:6 }] },
     options:{ responsive:true, maintainAspectRatio:false,
+      rotation: categoriaRotAngle,
       animation:{ animateRotate:true, animateScale:true, duration:1100, easing:'easeOutQuart' },
       transitions:{ active:{ animation:{ duration:300, easing:'easeOutQuint' } } },
       plugins:{ legend:{ position:'bottom', labels:{ color:'#cdd2dd', boxWidth:10, font:{size:11} } } }, cutout:'62%' }
   });
+  // gira lentamente o gráfico de forma contínua, para dar sensação de "vivo"
+  (function girar(){
+    categoriaRotAngle=(categoriaRotAngle+0.12)%360;
+    if(chCategoria){ chCategoria.options.rotation=categoriaRotAngle; chCategoria.update('none'); }
+    categoriaRotRAF=requestAnimationFrame(girar);
+  })();
 }
 
 function renderChartTop(){
@@ -1090,5 +1105,6 @@ document.getElementById('addItensConfirmar').addEventListener('click', async ()=
   carregarTudo();
 });
 </script>
+<script src="/neural-bg.js"></script>
 </body>
 </html>

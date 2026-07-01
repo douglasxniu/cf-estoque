@@ -76,8 +76,14 @@ select option{background:var(--surface)}
   <div class="card">
     <div class="grid2" style="margin-bottom:12px">
       <div>
-        <label>Número do Projeto (OT)</label>
-        <input id="otNum" placeholder="Reservando..." readonly style="opacity:.75">
+        <label>Número e nome da OT</label>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span id="otPrefixo" style="color:var(--muted);font-weight:700;white-space:nowrap;font-size:.9rem"></span>
+          <input id="otDigitos" maxlength="4" inputmode="numeric" placeholder="0057" style="width:64px;text-align:center;flex:none" disabled>
+          <input id="otNome" placeholder="Ex: HNK NA" style="flex:1">
+        </div>
+        <div id="otNumMsg" style="color:var(--muted);font-size:.72rem;margin-top:4px"></div>
+        <input id="otNum" type="hidden">
       </div>
       <div>
         <label>Data</label>
@@ -151,14 +157,50 @@ let itensEstoque=[], carrinho=[];
 // preencher data de hoje
 document.getElementById('otData').value=new Date().toISOString().slice(0,10);
 
+const anoOt=new Date().getFullYear();
+document.getElementById('otPrefixo').textContent=`OT-${anoOt}-`;
+
 async function init(){
   itensEstoque=await fetch(`${API}/itens`).then(r=>r.json()).catch(()=>[]);
   // reserva um número de projeto novo e único no servidor (evita colisão entre usuários simultâneos)
   const r=await fetch(`${API}/projetos`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})}).then(r=>r.json()).catch(()=>null);
-  if(r?.numero) document.getElementById('otNum').value=r.numero;
-  else document.getElementById('otNum').value='(erro ao reservar número — recarregue a página)';
+  const digitos=document.getElementById('otDigitos');
+  if(r?.numero){
+    document.getElementById('otNum').value=r.numero;
+    digitos.value=r.numero.split('-').pop();
+    digitos.disabled=false;
+  } else {
+    document.getElementById('otNumMsg').textContent='Erro ao reservar número — recarregue a página.';
+  }
 }
 init();
+
+document.getElementById('otDigitos').addEventListener('change', async e=>{
+  const numAtual=document.getElementById('otNum').value;
+  const msg=document.getElementById('otNumMsg');
+  let v=e.target.value.trim();
+  if(!/^\d{1,4}$/.test(v)){
+    msg.textContent='Digite até 4 números.'; msg.style.color='var(--danger)';
+    e.target.value=numAtual.split('-').pop();
+    return;
+  }
+  v=v.padStart(4,'0');
+  const candidato=`OT-${anoOt}-${v}`;
+  e.target.value=v;
+  if(candidato===numAtual){ msg.textContent=''; return; }
+
+  msg.textContent='Verificando disponibilidade...'; msg.style.color='var(--muted)';
+  const nomeAtual=document.getElementById('otNome').value.trim();
+  const r=await fetch(`${API}/projetos`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({numero:candidato,nome:nomeAtual})});
+  if(r.ok){
+    document.getElementById('otNum').value=candidato;
+    msg.textContent=`Número definido: ${candidato}`; msg.style.color='var(--ok)';
+  } else {
+    const err=await r.json().catch(()=>({}));
+    msg.textContent=err.error||'Este número já está em uso.'; msg.style.color='var(--danger)';
+    e.target.value=numAtual.split('-').pop();
+  }
+});
 
 // busca estoque
 const busca=document.getElementById('busca');
@@ -254,8 +296,9 @@ async function confirmar(apenasEmail=false){
   const setor=document.getElementById('otSetor').value.trim();
   const obs=document.getElementById('otObs').value.trim();
   const data=document.getElementById('otData').value;
+  const nomeOt=document.getElementById('otNome').value.trim();
 
-  fetch(`${API}/projetos/${encodeURIComponent(ot)}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({setor,nome:local})}).catch(()=>{});
+  fetch(`${API}/projetos/${encodeURIComponent(ot)}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({setor,nome:nomeOt})}).catch(()=>{});
 
   // Registar no backend os itens do estoque
   const doEstoque=carrinho.filter(c=>c._estoque);
