@@ -194,6 +194,7 @@ tr:hover td{background:rgba(255,255,255,.045)}
 
 .overlay{transition:background .25s}
 .overlay.show .modal{animation:modalIn .35s cubic-bezier(.16,1,.3,1) both}
+#addItensOverlay{z-index:55}
 @keyframes modalIn{from{opacity:0;transform:scale(.94) translateY(8px)}to{opacity:1;transform:scale(1) translateY(0)}}
 
 .toast{transition:opacity .3s cubic-bezier(.16,1,.3,1), transform .3s cubic-bezier(.16,1,.3,1)}
@@ -965,7 +966,10 @@ function imprimirQR(){
         <select id="editOtStatus"><option value="aberto">Aberto</option><option value="encerrado">Encerrado</option></select>
       </div>
     </div>
-    <div style="font-size:.72rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.03em;margin-bottom:8px">Itens desta OT</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div style="font-size:.72rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.03em">Itens desta OT</div>
+      <button class="btn sec" id="editOtAddItens" style="font-size:.72rem;padding:6px 10px">+ Adicionar item do estoque</button>
+    </div>
     <div id="editOtItens"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
       <button class="btn sec" id="editOtCancel">Fechar</button>
@@ -1136,7 +1140,10 @@ document.getElementById('addItensConfirmar').addEventListener('click', async ()=
   if(!r.ok){ const e=await r.json().catch(()=>({})); toast('Erro: '+(e.error||'falha ao adicionar')); return; }
   document.getElementById('addItensOverlay').classList.remove('show');
   toast(`Itens adicionados ao projeto ${addItensOt}!`);
-  carregarTudo();
+  await carregarTudo();
+  if(document.getElementById('editOtOverlay').classList.contains('show') && editOtAtual===addItensOt){
+    renderEditOtItens();
+  }
 });
 
 /* ===== OTs em aberto (dashboard) + Editar OT ===== */
@@ -1193,6 +1200,9 @@ document.getElementById('editOtItens').addEventListener('click', async e=>{
   await fetch(`${API}/solicitacoes/${btn.dataset.id}`,{method:'DELETE'});
   await carregarTudo();
   renderEditOtItens();
+});
+document.getElementById('editOtAddItens').addEventListener('click', ()=>{
+  abrirModalAddItensOt(editOtAtual);
 });
 document.getElementById('editOtCancel').addEventListener('click', ()=>{
   document.getElementById('editOtOverlay').classList.remove('show');
