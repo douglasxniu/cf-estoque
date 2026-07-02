@@ -6,9 +6,12 @@ CREATE TABLE itens (
   unidade TEXT NOT NULL DEFAULT 'un',
   modelo TEXT,
   voltagem TEXT,
+  codigo TEXT,
   imagem TEXT,
   criado_em TEXT DEFAULT (datetime('now'))
 );
+CREATE UNIQUE INDEX idx_itens_codigo_unico
+  ON itens(codigo) WHERE codigo IS NOT NULL AND codigo != '';
 
 CREATE TABLE projetos (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

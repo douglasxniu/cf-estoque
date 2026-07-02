@@ -395,10 +395,15 @@ export default {
 
     if (path === "/api/itens" && method === "POST") {
       const b = await request.json();
-      const r = await env.DB.prepare(
-        "INSERT INTO itens (nome, categoria, quantidade, unidade, modelo, voltagem, codigo, imagem) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
-      ).bind(b.nome, b.categoria || "Outro", b.quantidade || 0, b.unidade || "un", b.modelo || "", b.voltagem || "", b.codigo || "", b.imagem || null).run();
-      return json({ id: r.meta.last_row_id });
+      try {
+        const r = await env.DB.prepare(
+          "INSERT INTO itens (nome, categoria, quantidade, unidade, modelo, voltagem, codigo, imagem) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        ).bind(b.nome, b.categoria || "Outro", b.quantidade || 0, b.unidade || "un", b.modelo || "", b.voltagem || "", b.codigo || "", b.imagem || null).run();
+        return json({ id: r.meta.last_row_id });
+      } catch (e) {
+        if (String(e.message || "").includes("UNIQUE")) return json({ error: "Já existe um item com esse código" }, 409);
+        throw e;
+      }
     }
 
     const itemMatch = path.match(/^\/api\/itens\/(\d+)$/);
@@ -420,14 +425,25 @@ export default {
         }
         // imagem só é sobrescrita se vier explicitamente no corpo — preserva a foto atual
         // quando o formulário de edição (que não lida com fotos) não a envia.
-        await env.DB.prepare(
-          "UPDATE itens SET nome=?, categoria=?, quantidade=?, unidade=?, modelo=?, voltagem=?, codigo=?, imagem=COALESCE(?, imagem) WHERE id=?"
-        ).bind(b.nome, b.categoria, b.quantidade, b.unidade, b.modelo || "", b.voltagem || "", b.codigo || "", b.imagem ?? null, id).run();
+        try {
+          await env.DB.prepare(
+            "UPDATE itens SET nome=?, categoria=?, quantidade=?, unidade=?, modelo=?, voltagem=?, codigo=?, imagem=COALESCE(?, imagem) WHERE id=?"
+          ).bind(b.nome, b.categoria, b.quantidade, b.unidade, b.modelo || "", b.voltagem || "", b.codigo || "", b.imagem ?? null, id).run();
+        } catch (e) {
+          if (String(e.message || "").includes("UNIQUE")) return json({ error: "Já existe um item com esse código" }, 409);
+          throw e;
+        }
       }
       return json({ ok: true });
     }
 
     if (itemMatch && method === "DELETE") {
+      // limpa vínculos/unidades órfãs desse item antes de excluí-lo (não há FK no schema)
+      const { results: unidadesDoItem } = await env.DB.prepare("SELECT id FROM unidades WHERE item_id = ?").bind(itemMatch[1]).all();
+      for (const u of unidadesDoItem) {
+        await env.DB.prepare("DELETE FROM solicitacao_unidades WHERE unidade_id = ?").bind(u.id).run();
+      }
+      await env.DB.prepare("DELETE FROM unidades WHERE item_id = ?").bind(itemMatch[1]).run();
       await env.DB.prepare("DELETE FROM itens WHERE id = ?").bind(itemMatch[1]).run();
       return json({ ok: true });
     }

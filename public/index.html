@@ -940,7 +940,7 @@ document.getElementById('fItem').addEventListener('submit', async e=>{
     unidade:document.getElementById('iUn').value,
     imagem:iImagemAtual
   })});
-  if(!r.ok){ const t=await r.text().catch(()=>''); alert('Erro ao cadastrar item: '+t); return; }
+  if(!r.ok){ const d=await r.json().catch(()=>({})); alert(d.error||'Erro ao cadastrar item.'); return; }
   e.target.reset(); document.getElementById('novaCatWrap').style.display='none';
   document.getElementById('iCodigo').dataset.editado='';
   iImagemAtual=null; document.getElementById('iImagemPreviewWrap').style.display='none';
@@ -1553,7 +1553,7 @@ document.getElementById('editItemSalvar').addEventListener('click', async ()=>{
     voltagem:document.getElementById('eiVolt').value,
     codigo:document.getElementById('eiCodigo').value.trim()
   })});
-  if(!r.ok){ const t=await r.text().catch(()=>''); alert('Erro ao salvar: '+t); return; }
+  if(!r.ok){ const d=await r.json().catch(()=>({})); alert(d.error||'Erro ao salvar.'); return; }
   document.getElementById('editItemOverlay').classList.remove('show');
   toast('Item atualizado!');
   carregarTudo();
