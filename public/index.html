@@ -357,7 +357,7 @@ tr:hover td{background:rgba(255,255,255,.045)}
     <div class="content">
 
       <section id="t-dash" class="tab active">
-        <div class="kpis" id="kpis"></div>
+        <div class="kpis" id="kpis"><div class="kpi glass skel skel-card"></div><div class="kpi glass skel skel-card"></div><div class="kpi glass skel skel-card"></div><div class="kpi glass skel skel-card"></div><div class="kpi glass skel skel-card"></div></div>
         <div class="card glass" id="otsAbertasCard">
           <h2>OTs em aberto</h2>
           <div class="desc">Projetos com itens ainda não devolvidos — clique em uma OT para editar</div>
@@ -384,20 +384,20 @@ tr:hover td{background:rgba(255,255,255,.045)}
         <div class="card glass">
           <h2>Itens com estoque baixo (≤ 5 unidades)</h2>
           <table><thead><tr><th>Item</th><th>Categoria</th><th>Qtd.</th></tr></thead>
-            <tbody id="tbAlertas"></tbody></table>
+            <tbody id="tbAlertas"><tr><td colspan="3"><span class="skel skel-row w60"></span></td></tr><tr><td colspan="3"><span class="skel skel-row w40"></span></td></tr></tbody></table>
         </div>
         <div class="row">
           <div class="card glass">
             <h2>Transformadores mais utilizados</h2>
             <div class="desc">Total solicitado por modelo</div>
             <table><thead><tr><th>Transformador</th><th>Qtd. solicitada</th></tr></thead>
-              <tbody id="tbTransf"></tbody></table>
+              <tbody id="tbTransf"><tr><td colspan="2"><span class="skel skel-row w60"></span></td></tr><tr><td colspan="2"><span class="skel skel-row w40"></span></td></tr></tbody></table>
           </div>
           <div class="card glass">
             <h2>Itens em aberto (não devolvidos)</h2>
             <div class="desc">Empréstimos pendentes ou aprovados</div>
             <table><thead><tr><th>Item</th><th>Qtd</th><th>OT</th><th>Solicitante</th><th>Status</th></tr></thead>
-              <tbody id="tbEmprestados"></tbody></table>
+              <tbody id="tbEmprestados"><tr><td colspan="5"><span class="skel skel-row w80"></span></td></tr><tr><td colspan="5"><span class="skel skel-row w60"></span></td></tr></tbody></table>
           </div>
         </div>
       </section>
@@ -433,7 +433,7 @@ tr:hover td{background:rgba(255,255,255,.045)}
             <select id="filtroCat"><option value="">Todas as categorias</option></select>
             <select id="filtroVolt"><option value="">Todas as voltagens</option><option>12V</option><option>24V</option><option>110V</option><option>220V</option><option>Bivolt</option></select>
           </div>
-          <div id="estoquePorCategoria"></div>
+          <div id="estoquePorCategoria"><div class="skel skel-row w40" style="height:20px;margin-bottom:14px"></div><div style="display:flex;gap:12px;flex-wrap:wrap"><div class="skel skel-card" style="flex:1;min-width:160px"></div><div class="skel skel-card" style="flex:1;min-width:160px"></div><div class="skel skel-card" style="flex:1;min-width:160px"></div></div></div>
           <input type="file" id="estoqueImagemInput" accept="image/*" style="display:none">
         </div>
       </section>
@@ -471,7 +471,7 @@ tr:hover td{background:rgba(255,255,255,.045)}
         <div class="card glass">
           <h2>Histórico completo</h2>
           <table><thead><tr><th>Data</th><th>OT / Itens</th><th>Qtd. total</th><th>Solicitante</th><th>Status</th><th></th></tr></thead>
-            <tbody id="tbHist"></tbody></table>
+            <tbody id="tbHist"><tr><td colspan="6"><span class="skel skel-row w80"></span></td></tr><tr><td colspan="6"><span class="skel skel-row w60"></span></td></tr><tr><td colspan="6"><span class="skel skel-row w40"></span></td></tr></tbody></table>
         </div>
       </section>
 
