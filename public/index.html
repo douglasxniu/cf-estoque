@@ -423,7 +423,10 @@ tr:hover td{background:rgba(255,255,255,.045)}
           </form>
         </div>
         <div class="card glass">
-          <h2>Itens cadastrados</h2>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+            <h2 style="margin:0">Itens cadastrados</h2>
+            <button class="btn sec" id="btnExportarCsv" style="font-size:.78rem">⬇ Exportar CSV</button>
+          </div>
           <div class="search-row">
             <input id="busca" placeholder="Buscar item...">
             <select id="filtroCat"><option value="">Todas as categorias</option></select>
@@ -810,6 +813,18 @@ function categoriaIcone(cat){
 document.getElementById('filtroVolt').addEventListener('change', renderEstoque);
 document.getElementById('busca').addEventListener('input', renderEstoque);
 document.getElementById('filtroCat').addEventListener('change', renderEstoque);
+document.getElementById('btnExportarCsv').addEventListener('click', ()=>{
+  const cols=['Nome','Categoria','Quantidade','Unidade','Modelo/Potência','Voltagem','Código'];
+  const linhas=itens.map(i=>[i.nome,i.categoria,i.quantidade,i.unidade,i.modelo||'',i.voltagem||'',i.codigo||'']);
+  const csvEsc=v=>{ const s=String(v??''); return /[",;\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; };
+  const csv='﻿'+[cols,...linhas].map(l=>l.map(csvEsc).join(';')).join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`estoque-niu-${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(a.href);
+});
 
 function renderHist(){
   const tb=document.getElementById('tbHist');
