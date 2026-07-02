@@ -208,6 +208,45 @@ async function devolverSolicitacao(env, sol) {
   }
 }
 
+// ---------- Backup automático (envia um dump JSON do banco por e-mail) ----------
+function toBase64Std(bytes) {
+  let bin = ""; bytes.forEach(b => bin += String.fromCharCode(b));
+  return btoa(bin);
+}
+async function gerarBackupJSON(env) {
+  const tabelas = ["itens", "projetos", "solicitacoes", "unidades", "solicitacao_unidades"];
+  const dump = {};
+  for (const t of tabelas) {
+    const { results } = await env.DB.prepare(`SELECT * FROM ${t}`).all();
+    dump[t] = results;
+  }
+  // usuarios sem o hash de senha — restauração de acesso é feita via bootstrap, não pelo backup
+  const { results: usuarios } = await env.DB.prepare("SELECT id, nome, email, papel, ativo, criado_em FROM usuarios").all();
+  dump.usuarios = usuarios;
+  dump.gerado_em = new Date().toISOString();
+  return JSON.stringify(dump, null, 2);
+}
+async function enviarBackupPorEmail(env) {
+  if (!env.RESEND_API_KEY) { console.log("Backup não enviado: RESEND_API_KEY não configurado"); return; }
+  const dataStr = new Date().toISOString().slice(0, 10);
+  try {
+    const jsonStr = await gerarBackupJSON(env);
+    const base64 = toBase64Std(new TextEncoder().encode(jsonStr));
+    const resp = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: env.EMAIL_REMETENTE || EMAIL_REMETENTE_PADRAO,
+        to: env.EMAIL_DESTINO || EMAIL_DESTINO_PADRAO,
+        subject: `📦 Backup automático — Estoque NIU (${dataStr})`,
+        html: `<div style="font-family:Arial,sans-serif;padding:16px"><p>Backup automático do banco de dados gerado em ${dataStr}.</p><p>Guarde este e-mail — o anexo em JSON contém todos os itens, projetos, solicitações e unidades do sistema nesta data.</p></div>`,
+        attachments: [{ filename: `backup-estoque-${dataStr}.json`, content: base64 }]
+      })
+    });
+    if (!resp.ok) console.log("Falha ao enviar backup:", resp.status, await resp.text().catch(() => ""));
+  } catch (e) { console.log("Falha ao gerar/enviar backup:", e); }
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -302,6 +341,13 @@ export default {
       }
       await env.DB.prepare("UPDATE usuarios SET nome=COALESCE(?,nome), papel=COALESCE(?,papel), ativo=COALESCE(?,ativo) WHERE id=?")
         .bind(b.nome ?? null, b.papel ?? null, b.ativo !== undefined ? (b.ativo ? 1 : 0) : null, usuarioMatch[1]).run();
+      return json({ ok: true });
+    }
+
+    // Dispara o backup manualmente (o automático roda todo dia via cron) — útil pra testar.
+    if (path === "/api/backup/enviar" && method === "POST") {
+      if (usuarioLogado.papel !== "admin") return json({ error: "Ação restrita a administradores" }, 403);
+      await enviarBackupPorEmail(env);
       return json({ ok: true });
     }
 
@@ -762,5 +808,10 @@ export default {
 
     // ---------- estático (frontend) ----------
     return env.ASSETS.fetch(request);
+  },
+
+  // Gatilho agendado (cron, ver [triggers] no wrangler.toml) — envia o backup por e-mail.
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(enviarBackupPorEmail(env));
   }
 };
