@@ -1056,6 +1056,16 @@ function imprimirQR(){
         <select id="editOtStatus"><option value="aberto">Aberto</option><option value="encerrado">Encerrado</option></select>
       </div>
     </div>
+
+    <div style="margin-bottom:16px;border-top:1px solid var(--glass-brd);padding-top:14px">
+      <button class="btn sec" id="editOtMesclarToggle" style="font-size:.72rem;padding:6px 10px">🔗 Mesclar outra OT nesta</button>
+      <div id="editOtMesclarBox" style="display:none;margin-top:10px;position:relative">
+        <div class="desc" style="margin-bottom:8px">Buscar a OT que será absorvida por esta (os itens dela passam pra cá e ela deixa de existir)</div>
+        <input id="editOtMesclarBusca" placeholder="Buscar por número ou nome..." autocomplete="off">
+        <div id="editOtMesclarResultados" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:10;background:#1a1d24;border:1px solid var(--glass-brd);border-radius:10px;margin-top:4px;max-height:200px;overflow-y:auto"></div>
+      </div>
+    </div>
+
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
       <div style="font-size:.72rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.03em">Itens desta OT</div>
       <button class="btn sec" id="editOtAddItens" style="font-size:.72rem;padding:6px 10px">+ Adicionar item do estoque</button>
@@ -1294,6 +1304,38 @@ document.getElementById('editOtItens').addEventListener('click', async e=>{
 document.getElementById('editOtAddItens').addEventListener('click', ()=>{
   abrirModalAddItensOt(editOtAtual);
 });
+
+document.getElementById('editOtMesclarToggle').addEventListener('click', ()=>{
+  const box=document.getElementById('editOtMesclarBox');
+  box.style.display = box.style.display==='none' ? 'block' : 'none';
+  document.getElementById('editOtMesclarBusca').value='';
+  document.getElementById('editOtMesclarResultados').style.display='none';
+});
+document.getElementById('editOtMesclarBusca').addEventListener('input', e=>{
+  const t=e.target.value.toLowerCase().trim();
+  const wrap=document.getElementById('editOtMesclarResultados');
+  if(!t){ wrap.style.display='none'; return; }
+  const encontrados=projetos.filter(p=>p.numero!==editOtAtual && (p.numero.toLowerCase().includes(t) || (p.nome||'').toLowerCase().includes(t))).slice(0,8);
+  if(!encontrados.length){ wrap.style.display='none'; return; }
+  wrap.style.display='block';
+  wrap.innerHTML=encontrados.map(p=>`
+    <div data-numero="${esc(p.numero)}" style="padding:10px 12px;cursor:pointer;border-bottom:1px solid var(--glass-brd);font-size:.85rem">
+      <div style="font-weight:700">${esc(p.numero)}${p.nome?' — '+esc(p.nome):''}</div>
+      <div class="small" style="color:var(--muted)">${p.status==='aberto'?'Aberto':'Encerrado'}</div>
+    </div>`).join('');
+});
+document.getElementById('editOtMesclarResultados').addEventListener('click', async e=>{
+  const row=e.target.closest('[data-numero]'); if(!row) return;
+  const origem=row.dataset.numero;
+  if(!confirm(`Mesclar a OT ${origem} dentro da OT ${editOtAtual}?\n\nTodos os itens de ${origem} passam a pertencer a ${editOtAtual}, e ${origem} deixa de existir. Essa ação não pode ser desfeita.`)) return;
+  const r=await fetch(`${API}/projetos/${encodeURIComponent(editOtAtual)}/mesclar`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({origem})});
+  if(!r.ok){ const e2=await r.json().catch(()=>({})); toast('Erro: '+(e2.error||'falha ao mesclar')); return; }
+  toast(`OT ${origem} mesclada em ${editOtAtual}!`);
+  document.getElementById('editOtMesclarBox').style.display='none';
+  await carregarTudo();
+  renderEditOtItens();
+});
+
 document.getElementById('editOtCancel').addEventListener('click', ()=>{
   document.getElementById('editOtOverlay').classList.remove('show');
 });

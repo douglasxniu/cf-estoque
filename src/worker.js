@@ -252,6 +252,28 @@ export default {
       return json({ ok: true });
     }
 
+    // Mescla outra OT (origem) dentro desta (:alvo, que prevalece). Os itens da origem passam
+    // a pertencer ao alvo, e a origem é removida.
+    const mesclarMatch = path.match(/^\/api\/projetos\/([^/]+)\/mesclar$/);
+    if (mesclarMatch && method === "POST") {
+      const alvoNumero = decodeURIComponent(mesclarMatch[1]);
+      const b = await request.json();
+      const origemNumero = b.origem;
+      if (!origemNumero) return json({ error: "Informe a OT de origem" }, 400);
+      if (origemNumero === alvoNumero) return json({ error: "Escolha duas OTs diferentes" }, 400);
+
+      const alvo = await env.DB.prepare("SELECT * FROM projetos WHERE numero = ?").bind(alvoNumero).first();
+      const origem = await env.DB.prepare("SELECT * FROM projetos WHERE numero = ?").bind(origemNumero).first();
+      if (!alvo || !origem) return json({ error: "OT não encontrada" }, 404);
+
+      await env.DB.prepare("UPDATE solicitacoes SET ot = ?, projeto_id = ? WHERE ot = ?")
+        .bind(alvoNumero, alvo.id, origemNumero).run();
+      await env.DB.prepare("DELETE FROM projetos WHERE numero = ?").bind(origemNumero).run();
+      await env.DB.prepare("UPDATE projetos SET status='aberto' WHERE numero = ?").bind(alvoNumero).run();
+
+      return json({ ok: true });
+    }
+
     // ---------- NOTIFICAÇÕES (para sino do painel) ----------
     if (path === "/api/notificacoes" && method === "GET") {
       const since = url.searchParams.get("since") || "1970-01-01";
