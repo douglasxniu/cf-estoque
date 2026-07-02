@@ -189,6 +189,39 @@ async function enviarEmailLote(env, { ot, solicitante, setor, itens }) {
   } catch (e) { console.log("Falha ao enviar e-mail:", e); }
 }
 
+// ---------- Alerta de estoque baixo ----------
+const ESTOQUE_LIMIAR_BAIXO = 5; // mesmo limite usado visualmente no dashboard (badge "low")
+async function enviarAlertaEstoqueBaixo(env, item, quantidadeAtual) {
+  if (!env.RESEND_API_KEY) return;
+  try {
+    await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: env.EMAIL_REMETENTE || EMAIL_REMETENTE_PADRAO,
+        to: env.EMAIL_DESTINO || EMAIL_DESTINO_PADRAO,
+        subject: `⚠️ Estoque baixo: ${item.nome}`,
+        html: `
+        <div style="background:#0f1115;padding:32px;font-family:-apple-system,Helvetica,Arial,sans-serif">
+          <div style="max-width:440px;margin:0 auto;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:18px;padding:26px;backdrop-filter:blur(10px)">
+            <div style="font-size:13px;color:#fbbf24;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">⚠ Estoque baixo</div>
+            <div style="font-size:21px;font-weight:700;color:#fff;margin-bottom:8px">${item.nome}</div>
+            <div style="font-size:15px;color:#e2e6ed">Restam apenas <strong>${quantidadeAtual} ${item.unidade || ""}</strong> no estoque.</div>
+          </div>
+        </div>`
+      })
+    });
+  } catch (e) { console.log("Falha ao enviar alerta de estoque baixo:", e); }
+}
+// Só dispara quando a quantidade CRUZA o limite (de acima pra baixo/igual) — evita reenviar
+// o alerta toda vez que o item se move enquanto já está baixo.
+async function verificarQuedaEstoqueBaixo(env, itemId, quantidadeAntes, quantidadeDepois) {
+  if (quantidadeAntes > ESTOQUE_LIMIAR_BAIXO && quantidadeDepois <= ESTOQUE_LIMIAR_BAIXO) {
+    const item = await env.DB.prepare("SELECT nome, unidade FROM itens WHERE id=?").bind(itemId).first();
+    if (item) await enviarAlertaEstoqueBaixo(env, item, quantidadeDepois);
+  }
+}
+
 // Fecha uma solicitação: libera de volta ao estoque só o que ainda não foi devolvido por leitura
 // individual de QR. Se a linha nunca teve unidades vinculadas por scan (item sem rastreio por
 // unidade), devolve a quantidade inteira de uma vez (comportamento legado).
@@ -419,10 +452,12 @@ export default {
       const id = itemMatch[1];
       const b = await request.json();
       if (b.delta !== undefined) {
+        const antes = await env.DB.prepare("SELECT quantidade FROM itens WHERE id=?").bind(id).first();
         const upd = await env.DB.prepare(
           "UPDATE itens SET quantidade = quantidade + ? WHERE id = ? AND quantidade + ? >= 0"
         ).bind(b.delta, id, b.delta).run();
         if (upd.meta.changes === 0) return json({ error: "Quantidade insuficiente" }, 400);
+        if (b.delta < 0 && antes) await verificarQuedaEstoqueBaixo(env, id, antes.quantidade, antes.quantidade + b.delta);
       } else if (b.imagem !== undefined && b.nome === undefined) {
         // atualização leve: só a foto (usada pelo botão "trocar imagem" do card)
         if (imagemMuitoGrande(b.imagem)) return json({ error: "Imagem muito grande (máx. ~1,5MB)" }, 413);
@@ -574,6 +609,7 @@ export default {
           "INSERT INTO solicitacoes (projeto_id, item_id, item_nome, unidade, quantidade, ot, solicitante, setor, local_uso) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
         ).bind(projeto.id, li.itemId, item.nome, item.unidade, li.quantidade, ot, solicitante, setor || "", li.localUso || "").run();
         resultado.push({ item: item.nome, quantidade: li.quantidade });
+        await verificarQuedaEstoqueBaixo(env, li.itemId, item.quantidade + li.quantidade, item.quantidade);
       }
       await env.DB.prepare("UPDATE projetos SET status='aberto' WHERE numero=?").bind(ot).run();
       await enviarEmailLote(env, { ot, solicitante, setor, itens: resultado });
@@ -605,6 +641,7 @@ export default {
         item: item.nome, quantidade: b.quantidade, unidade: item.unidade,
         ot: b.ot, solicitante: b.solicitante, setor: b.setor
       });
+      await verificarQuedaEstoqueBaixo(env, b.itemId, item.quantidade + b.quantidade, item.quantidade);
 
       return json({ ok: true });
     }
