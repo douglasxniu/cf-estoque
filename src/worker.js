@@ -4,6 +4,13 @@ const EMAIL_REMETENTE_PADRAO = "onboarding@resend.dev"; // troque após verifica
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const isValidEmail = e => typeof e === "string" && EMAIL_RE.test(e.trim());
 
+// Guarda contra upload de imagem gigante direto na API (a compressão no navegador é só
+// no cliente — alguém batendo direto na API poderia mandar qualquer tamanho).
+const IMAGEM_MAX_BYTES = 2 * 1024 * 1024; // ~2MB de base64 (~1.5MB decodificado), bem acima do que a compressão do cliente produz
+function imagemMuitoGrande(dataUrl) {
+  return typeof dataUrl === "string" && dataUrl.length > IMAGEM_MAX_BYTES;
+}
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -395,6 +402,7 @@ export default {
 
     if (path === "/api/itens" && method === "POST") {
       const b = await request.json();
+      if (imagemMuitoGrande(b.imagem)) return json({ error: "Imagem muito grande (máx. ~1,5MB)" }, 413);
       try {
         const r = await env.DB.prepare(
           "INSERT INTO itens (nome, categoria, quantidade, unidade, modelo, voltagem, codigo, imagem) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
@@ -417,9 +425,11 @@ export default {
         if (upd.meta.changes === 0) return json({ error: "Quantidade insuficiente" }, 400);
       } else if (b.imagem !== undefined && b.nome === undefined) {
         // atualização leve: só a foto (usada pelo botão "trocar imagem" do card)
+        if (imagemMuitoGrande(b.imagem)) return json({ error: "Imagem muito grande (máx. ~1,5MB)" }, 413);
         await env.DB.prepare("UPDATE itens SET imagem=? WHERE id=?").bind(b.imagem, id).run();
       } else {
         // edição completa do cadastro (nome/categoria/modelo/voltagem/código) — só admin
+        if (imagemMuitoGrande(b.imagem)) return json({ error: "Imagem muito grande (máx. ~1,5MB)" }, 413);
         if (usuarioLogado && usuarioLogado.papel !== "admin") {
           return json({ error: "Ação restrita a administradores" }, 403);
         }
