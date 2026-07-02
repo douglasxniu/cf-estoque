@@ -6,6 +6,7 @@
 <title>Nova OT · NIU Estoque</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="/theme.js"></script>
+<script src="/dialogs.js"></script>
 <link rel="stylesheet" href="/theme.css">
 <script src="/auth-gate.js"></script>
 <style>
@@ -224,11 +225,11 @@ busca.addEventListener('input',()=>{
 });
 document.addEventListener('click',e=>{if(!e.target.closest('#busca')&&!e.target.closest('#searchResults'))results.style.display='none';});
 
-function adicionarDoEstoque(id){
+async function adicionarDoEstoque(id){
   results.style.display='none'; busca.value='';
   const it=itensEstoque.find(i=>i.id==id);
   if(!it) return;
-  if(carrinho.find(c=>c._id==id)){alert('Item já adicionado.');return;}
+  if(carrinho.find(c=>c._id==id)){await niuAlert('Item já adicionado.');return;}
   carrinho.push({_id:id,_estoque:true,nome:it.nome,qty:1,unidade:it.unidade,local:'',obs:'',maxQty:it.quantidade});
   render();
 }
@@ -293,10 +294,10 @@ async function confirmar(apenasEmail=false){
   const solic=document.getElementById('otSolic').value.trim();
   const local=document.getElementById('otLocal').value.trim();
   const email=document.getElementById('otEmail').value.trim();
-  if(!ot||!solic){alert('Preencha número da OT e solicitante.');return;}
-  if(!carrinho.length){alert('Adicione pelo menos um item.');return;}
-  if(carrinho.some(c=>!c.nome.trim())){alert('Preencha o nome de todos os itens.');return;}
-  if(apenasEmail&&!email){alert('Preencha o email de destino.');return;}
+  if(!ot||!solic){await niuAlert('Preencha número da OT e solicitante.');return;}
+  if(!carrinho.length){await niuAlert('Adicione pelo menos um item.');return;}
+  if(carrinho.some(c=>!c.nome.trim())){await niuAlert('Preencha o nome de todos os itens.');return;}
+  if(apenasEmail&&!email){await niuAlert('Preencha o email de destino.');return;}
 
   const setor=document.getElementById('otSetor').value.trim();
   const obs=document.getElementById('otObs').value.trim();
@@ -312,7 +313,7 @@ async function confirmar(apenasEmail=false){
       ot,solicitante:solic,setor,
       itens:doEstoque.map(c=>({itemId:c._id,quantidade:c.qty,localUso:c.local||local}))
     })});
-    if(!r.ok){const e=await r.json().catch(()=>({}));alert('Erro: '+(e.error||'falha ao registar'));return;}
+    if(!r.ok){const e=await r.json().catch(()=>({}));await niuAlert('Erro: '+(e.error||'falha ao registar'));return;}
   }
 
   if(apenasEmail&&email){
@@ -323,10 +324,10 @@ async function confirmar(apenasEmail=false){
       url:`${location.origin}/ot.html?ot=${encodeURIComponent(ot)}`
     })});
     if(rEmail.ok){
-      alert(`OT ${ot} enviada para ${email}`);
+      await niuAlert(`OT ${ot} enviada para ${email}`);
     } else {
       const e=await rEmail.json().catch(()=>({}));
-      alert('Erro ao enviar email: '+(e.error||'verifique a configuração do Resend no servidor.'));
+      await niuAlert('Erro ao enviar email: '+(e.error||'verifique a configuração do Resend no servidor.'));
     }
   } else {
     gerarPDF({ot,solic,setor,local,obs,data});

@@ -6,6 +6,7 @@
 <title>Solicitar Material | Estoque Elétrica</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="/theme.js"></script>
+<script src="/dialogs.js"></script>
 <link rel="stylesheet" href="/theme.css">
 <style>
 :root{
@@ -410,16 +411,16 @@ document.getElementById('ovConfirm').addEventListener('click', async ()=>{
   const nome=document.getElementById('sNome').value.trim();
   const setor=document.getElementById('sSetor').value.trim();
   const ids=Object.keys(carrinho);
-  if(!ids.length){ alert('Adicione ao menos um item.'); return; }
+  if(!ids.length){ await niuAlert('Adicione ao menos um item.'); return; }
   const semLocal = ids.some(id=>!carrinho[id].local || !carrinho[id].local.trim());
-  if(semLocal){ alert('Informe o local de uso para todos os itens.'); return; }
+  if(semLocal){ await niuAlert('Informe o local de uso para todos os itens.'); return; }
 
   const payload = {
     ot, solicitante: nome, setor,
     itens: ids.map(id=>({ itemId: parseInt(id), quantidade: carrinho[id].qtd, localUso: carrinho[id].local.trim() }))
   };
   const r = await fetch(`${API}/solicitacoes/lote`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-  if(!r.ok){ const e=await r.json().catch(()=>({})); alert('Erro: ' + (e.error||'quantidade indisponível')); return; }
+  if(!r.ok){ const e=await r.json().catch(()=>({})); await niuAlert('Erro: ' + (e.error||'quantidade indisponível')); return; }
   carrinho={};
   document.getElementById('ov').classList.remove('show');
   document.getElementById('stepFim').classList.remove('active');

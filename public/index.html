@@ -6,6 +6,7 @@
 <title>Estoque Elétrica | Painel</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="/theme.js"></script>
+<script src="/dialogs.js"></script>
 <link rel="stylesheet" href="/theme.css">
 <script src="/auth-gate.js"></script>
 <script src="/vendor/chart.umd.js"></script>
@@ -886,7 +887,7 @@ document.getElementById('tbHist').addEventListener('click', async e=>{
   } else if(btn.dataset.a==='pdf-ot'){
     gerarPDF(ot);
   } else if(btn.dataset.a==='excluir-ot'){
-    if(confirm(`Excluir toda a OT ${ot}? Os itens ainda não devolvidos voltam ao estoque, e o histórico desta OT é removido.`)){
+    if(await niuConfirm(`Excluir toda a OT ${ot}? Os itens ainda não devolvidos voltam ao estoque, e o histórico desta OT é removido.`,{danger:true,confirmText:'Excluir'})){
       await fetch(`${API}/solicitacoes/ot/${encodeURIComponent(ot)}`,{method:'DELETE'});
       toast('OT excluída.'); carregarTudo();
     }
@@ -943,7 +944,7 @@ document.getElementById('fItem').addEventListener('submit', async e=>{
   let cat = document.getElementById('iCat').value;
   if(cat==='__nova__'){
     cat = document.getElementById('iCatNova').value.trim();
-    if(!cat){ alert('Informe o nome da nova categoria.'); return; }
+    if(!cat){ await niuAlert('Informe o nome da nova categoria.'); return; }
   }
   const r = await fetch(`${API}/itens`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
     nome:document.getElementById('iNome').value.trim(),
@@ -955,7 +956,7 @@ document.getElementById('fItem').addEventListener('submit', async e=>{
     unidade:document.getElementById('iUn').value,
     imagem:iImagemAtual
   })});
-  if(!r.ok){ const d=await r.json().catch(()=>({})); alert(d.error||'Erro ao cadastrar item.'); return; }
+  if(!r.ok){ const d=await r.json().catch(()=>({})); await niuAlert(d.error||'Erro ao cadastrar item.'); return; }
   e.target.reset(); document.getElementById('novaCatWrap').style.display='none';
   document.getElementById('iCodigo').dataset.editado='';
   iImagemAtual=null; document.getElementById('iImagemPreviewWrap').style.display='none';
@@ -974,7 +975,7 @@ document.getElementById('estoquePorCategoria').addEventListener('click', async e
   const card=e.target.closest('.est-card'); const id=card.dataset.id; const item=itens.find(i=>i.id==id);
   if(btn.dataset.a==='mais'){ await fetch(`${API}/itens/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({delta:1})}); carregarTudo(); }
   else if(btn.dataset.a==='menos'){ if(item.quantidade>0){ await fetch(`${API}/itens/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({delta:-1})}); carregarTudo(); } }
-  else if(btn.dataset.a==='excluir'){ if(confirm(`Excluir "${item.nome}"?`)){ await fetch(`${API}/itens/${id}`,{method:'DELETE'}); toast('Item excluído.'); carregarTudo(); } }
+  else if(btn.dataset.a==='excluir'){ if(await niuConfirm(`Excluir "${item.nome}"?`,{danger:true,confirmText:'Excluir'})){ await fetch(`${API}/itens/${id}`,{method:'DELETE'}); toast('Item excluído.'); carregarTudo(); } }
   else if(btn.dataset.a==='unidades'){ abrirModalUnidades(item); }
   else if(btn.dataset.a==='qr'){ abrirModalQR(item); }
   else if(btn.dataset.a==='editar'){ abrirModalEditarItem(item); }
@@ -1094,8 +1095,8 @@ function abrirModalQR(item){
   wrap.innerHTML = qr.createImgTag(5, 0);
   document.getElementById('qrOverlay').classList.add('show');
 }
-function imprimirQR(){
-  if(typeof window.jspdf==='undefined'){ alert('Gerador de PDF não carregou.'); return; }
+async function imprimirQR(){
+  if(typeof window.jspdf==='undefined'){ await niuAlert('Gerador de PDF não carregou.'); return; }
   const titulo = document.getElementById('qrTitulo').textContent;
   const codigo = document.getElementById('qrCodigo').textContent;
   const img = document.getElementById('qrCanvas').querySelector('img');
@@ -1344,8 +1345,8 @@ document.getElementById('qrImprimirSelecionadas').addEventListener('click', ()=>
   imprimirEtiquetasEmLote(labels, `etiquetas-${new Date().toISOString().slice(0,10)}.pdf`);
 });
 
-function imprimirUnidade(uid, serial, nome){
-  if(typeof window.jspdf==='undefined'){alert('PDF não carregou.');return;}
+async function imprimirUnidade(uid, serial, nome){
+  if(typeof window.jspdf==='undefined'){await niuAlert('PDF não carregou.');return;}
   const {jsPDF}=window.jspdf;
   const doc=new jsPDF({unit:'mm',format:[50,60]});
   const img=document.getElementById('qr-'+uid)?.querySelector('img');
@@ -1517,7 +1518,7 @@ function renderEditOtItens(){
 }
 document.getElementById('editOtItens').addEventListener('click', async e=>{
   const btn=e.target.closest('button[data-a="rm-item"]'); if(!btn) return;
-  if(!confirm('Remover este item da OT? A quantidade volta ao estoque.')) return;
+  if(!(await niuConfirm('Remover este item da OT? A quantidade volta ao estoque.',{danger:true,confirmText:'Remover'}))) return;
   await fetch(`${API}/solicitacoes/${btn.dataset.id}`,{method:'DELETE'});
   await carregarTudo();
   renderEditOtItens();
@@ -1548,7 +1549,7 @@ document.getElementById('editOtMesclarBusca').addEventListener('input', e=>{
 document.getElementById('editOtMesclarResultados').addEventListener('click', async e=>{
   const row=e.target.closest('[data-numero]'); if(!row) return;
   const origem=row.dataset.numero;
-  if(!confirm(`Mesclar a OT ${origem} dentro da OT ${editOtAtual}?\n\nTodos os itens de ${origem} passam a pertencer a ${editOtAtual}, e ${origem} deixa de existir. Essa ação não pode ser desfeita.`)) return;
+  if(!(await niuConfirm(`Mesclar a OT ${origem} dentro da OT ${editOtAtual}?\n\nTodos os itens de ${origem} passam a pertencer a ${editOtAtual}, e ${origem} deixa de existir. Essa ação não pode ser desfeita.`,{confirmText:'Mesclar'}))) return;
   const r=await fetch(`${API}/projetos/${encodeURIComponent(editOtAtual)}/mesclar`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({origem})});
   if(!r.ok){ const e2=await r.json().catch(()=>({})); toast('Erro: '+(e2.error||'falha ao mesclar')); return; }
   toast(`OT ${origem} mesclada em ${editOtAtual}!`);
@@ -1562,7 +1563,7 @@ document.getElementById('editItemCancel').addEventListener('click', ()=>{
 });
 document.getElementById('editItemSalvar').addEventListener('click', async ()=>{
   const nome=document.getElementById('eiNome').value.trim();
-  if(!nome){ alert('Informe o nome do item.'); return; }
+  if(!nome){ await niuAlert('Informe o nome do item.'); return; }
   const r=await fetch(`${API}/itens/${editItemAtual.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({
     nome,
     categoria:document.getElementById('eiCat').value,
@@ -1572,7 +1573,7 @@ document.getElementById('editItemSalvar').addEventListener('click', async ()=>{
     voltagem:document.getElementById('eiVolt').value,
     codigo:document.getElementById('eiCodigo').value.trim()
   })});
-  if(!r.ok){ const d=await r.json().catch(()=>({})); alert(d.error||'Erro ao salvar.'); return; }
+  if(!r.ok){ const d=await r.json().catch(()=>({})); await niuAlert(d.error||'Erro ao salvar.'); return; }
   document.getElementById('editItemOverlay').classList.remove('show');
   toast('Item atualizado!');
   carregarTudo();
@@ -1604,15 +1605,15 @@ async function inicializarUsuario(){
   document.getElementById('btnUsuarios').style.display = souAdmin() ? 'inline-block' : 'none';
   document.getElementById('btnBackup').style.display = souAdmin() ? 'inline-block' : 'none';
 }
-document.getElementById('btnLogout').addEventListener('click', ()=>{
-  if(confirm('Sair do painel?')) window.niuLogout();
+document.getElementById('btnLogout').addEventListener('click', async ()=>{
+  if(await niuConfirm('Sair do painel?',{confirmText:'Sair'})) window.niuLogout();
 });
 document.getElementById('btnUsuarios').addEventListener('click', ()=>{
   document.getElementById('usuariosOverlay').classList.add('show');
   carregarUsuarios();
 });
 document.getElementById('btnBackup').addEventListener('click', async ()=>{
-  if(!confirm('Enviar um backup do banco por email agora?')) return;
+  if(!(await niuConfirm('Enviar um backup do banco por email agora?',{confirmText:'Enviar'}))) return;
   const btn=document.getElementById('btnBackup');
   btn.disabled=true; btn.textContent='Enviando...';
   const r=await fetch(`${API}/backup/enviar`,{method:'POST'});
@@ -1647,7 +1648,7 @@ document.getElementById('fNovoUsuario').addEventListener('submit', async e=>{
     senha:document.getElementById('uSenha').value,
     papel:document.getElementById('uPapel').value
   })});
-  if(!r.ok){ const d=await r.json().catch(()=>({})); alert('Erro: '+(d.error||'falha ao criar usuário')); return; }
+  if(!r.ok){ const d=await r.json().catch(()=>({})); await niuAlert('Erro: '+(d.error||'falha ao criar usuário')); return; }
   e.target.reset();
   toast('Usuário criado!');
   carregarUsuarios();
