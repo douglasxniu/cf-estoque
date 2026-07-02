@@ -457,9 +457,21 @@ export default {
       // gera N unidades para um item
       const item = await env.DB.prepare("SELECT * FROM itens WHERE id=?").bind(b.itemId).first();
       if(!item) return json({error:"Item não encontrado"},404);
+      const prefix = (item.codigo || item.nome.slice(0,6).replace(/\s/g,'')).toUpperCase();
+
+      // continua a numeração a partir do maior serial já existente para este item, em vez de
+      // reiniciar em 001 (evita colisões e séries confusas como "-003-1")
+      const { results: existentes } = await env.DB.prepare("SELECT serial FROM unidades WHERE item_id=?").bind(b.itemId).all();
+      const prefixRe = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}-(\\d{3})(?:-\\d+)?$`);
+      let maxSeq = 0;
+      existentes.forEach(r => {
+        const m = r.serial.match(prefixRe);
+        if (m) { const n = parseInt(m[1], 10); if (n > maxSeq) maxSeq = n; }
+      });
+
       const serials = [];
       for(let i=1; i<=b.quantidade; i++){
-        const serial = `${(item.codigo||item.nome.slice(0,6).replace(/\s/g,'')).toUpperCase()}-${String(i).padStart(3,'0')}`;
+        const serial = `${prefix}-${String(maxSeq + i).padStart(3,'0')}`;
         // tenta inserir, incrementa se já existe
         let s = serial, attempt = 0;
         while(attempt<99){
@@ -470,6 +482,14 @@ export default {
         }
       }
       return json({ serials });
+    }
+
+    if (path === "/api/unidades/contagem" && method === "GET") {
+      const { results } = await env.DB.prepare(
+        "SELECT item_id, COUNT(*) as total, SUM(CASE WHEN status='disponivel' THEN 1 ELSE 0 END) as disponiveis " +
+        "FROM unidades GROUP BY item_id"
+      ).all();
+      return json(results);
     }
 
     if (path.match(/^\/api\/unidades\/item\/\d+$/) && method === "GET") {

@@ -9,6 +9,7 @@
 <script src="/vendor/chart.umd.js"></script>
 <script src="/vendor/qrcode.js"></script>
 <script src="/pdf-folha.js"></script>
+<script src="/etiquetas.js"></script>
 <script src="/vendor/jspdf.umd.min.js"></script>
 <style>
 :root{
@@ -118,6 +119,20 @@ tr:hover td{background:rgba(255,255,255,.03)}
 .est-actions{display:flex;gap:4px;margin-top:8px;flex-wrap:wrap}
 .est-actions .btn{font-size:.64rem;padding:4px 6px}
 .est-actions .del{font-size:.68rem}
+
+.qr-row{display:grid;grid-template-columns:24px 40px 1fr auto auto auto;align-items:center;gap:12px;padding:10px 6px;border-bottom:1px solid var(--glass-brd)}
+.qr-row:hover{background:rgba(255,255,255,.03)}
+.qr-row input[type=checkbox]{width:16px;height:16px}
+.qr-thumb{width:40px;height:40px;border-radius:8px;overflow:hidden;background:rgba(255,255,255,.05);display:flex;align-items:center;justify-content:center;font-size:1.1rem}
+.qr-thumb img{width:100%;height:100%;object-fit:cover}
+.qr-nome{font-weight:700;font-size:.86rem}
+.qr-code{color:var(--primary);font-size:.7rem;font-weight:700}
+.qr-qtd{font-size:.8rem;color:var(--muted);white-space:nowrap}
+.qr-badge{font-size:.72rem;font-weight:800;padding:4px 10px;border-radius:20px;white-space:nowrap}
+.qr-badge.zero{background:rgba(248,113,113,.15);color:var(--danger)}
+.qr-badge.parcial{background:rgba(251,191,36,.15);color:var(--warn)}
+.qr-badge.completo{background:rgba(52,211,153,.15);color:var(--ok)}
+@media (max-width:600px){ .qr-row{grid-template-columns:20px 34px 1fr;row-gap:4px} .qr-qtd,.qr-code{grid-column:3} }
 
 .overlay{position:fixed;inset:0;background:rgba(5,6,10,.55);display:none;align-items:center;justify-content:center;z-index:50;backdrop-filter:blur(4px)}
 .overlay.show{display:flex}
@@ -300,6 +315,7 @@ tr:hover td{background:rgba(255,255,255,.045)}
       <button class="nav-item active" data-t="dash"><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg></span> Dashboard</button>
       <button class="nav-item" data-t="estoque"><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg></span> Estoque</button>
       <button class="nav-item" data-t="hist"><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></span> Histórico</button>
+      <button class="nav-item" data-t="qrcodes"><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h.01M14 18h.01M18 14h.01M18 18h.01"/></svg></span> QR Codes</button>
       <button class="nav-item" data-t="notif" id="navNotif">
         <span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>
         Notificações
@@ -408,6 +424,27 @@ tr:hover td{background:rgba(255,255,255,.045)}
           </div>
           <div id="estoquePorCategoria"></div>
           <input type="file" id="estoqueImagemInput" accept="image/*" style="display:none">
+        </div>
+      </section>
+
+      <section id="t-qrcodes" class="tab">
+        <div class="card glass">
+          <h2>QR Codes por item</h2>
+          <div class="desc">Etiquetas de produto para colar nas prateleiras/caixas do estoque</div>
+          <div class="search-row">
+            <input id="qrBusca" placeholder="Buscar item...">
+            <select id="qrFiltroCat"><option value="">Todas as categorias</option></select>
+            <label style="display:flex;align-items:center;gap:6px;font-size:.78rem;color:var(--muted);white-space:nowrap;padding:0 8px">
+              <input type="checkbox" id="qrSoSemQR" style="width:auto"> Só sem QR gerado
+            </label>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin:6px 0 12px">
+            <label style="display:flex;align-items:center;gap:6px;font-size:.78rem;color:var(--muted)">
+              <input type="checkbox" id="qrSelecionarTudo" style="width:auto"> Selecionar todos
+            </label>
+            <button class="btn" id="qrImprimirSelecionadas" disabled>Imprimir etiquetas selecionadas (0)</button>
+          </div>
+          <div id="qrTabela"></div>
         </div>
       </section>
 
@@ -916,6 +953,7 @@ document.getElementById('estoqueImagemInput').addEventListener('change', async e
 const TITLES={ dash:['Dashboard','Visão geral do estoque em tempo real'],
   estoque:['Estoque','Cadastro e controle de itens'],
   hist:['Histórico','Todas as solicitações registradas'],
+  qrcodes:['QR Codes','Etiquetas e geração de QR por item'],
   notif:['Notificações','Solicitações recebidas em tempo real'] };
 
 document.querySelectorAll('.nav-item[data-t]').forEach(b=>b.onclick=()=>navTo(b.dataset.t));
@@ -935,6 +973,7 @@ function navTo(t){
   });
   if(t==='notif'){ notifs.forEach(n=>n.lida=true); renderNotifNav(); renderNotifList(); }
   if(t==='dash'){ [chCategoria,chTop,chTendencia].forEach(c=>{if(c)c.resize();}); }
+  if(t==='qrcodes'){ carregarContagensQR().then(renderQrCodes); }
 }
 
 const origRenderNotifNav = typeof renderNotifNav !== 'undefined' ? renderNotifNav : null;
@@ -1126,9 +1165,87 @@ async function abrirModalUnidades(item){
 async function gerarUnidades(itemId){
   const qtd=parseInt(document.getElementById('uQtd').value)||1;
   const r=await fetch('/api/unidades',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({itemId,quantidade:qtd})});
-  if(r.ok){ const item=itens.find(i=>i.id==itemId); toast('Unidades geradas!'); abrirModalUnidades(item); }
+  if(r.ok){
+    const item=itens.find(i=>i.id==itemId); toast('Unidades geradas!'); abrirModalUnidades(item);
+    if(Object.keys(qrContagens).length) await carregarContagensQR(); // mantém a aba QR Codes em dia
+  }
   else toast('Erro ao gerar','erro');
 }
+
+/* ===== Aba QR Codes ===== */
+let qrContagens={}, qrSelecionados=new Set();
+
+async function carregarContagensQR(){
+  const rows=await fetch(`${API}/unidades/contagem`).then(r=>r.json()).catch(()=>[]);
+  qrContagens={};
+  rows.forEach(r=>qrContagens[r.item_id]=r);
+}
+
+function itensQrFiltrados(){
+  const termo=(document.getElementById('qrBusca').value||'').toLowerCase();
+  const catF=document.getElementById('qrFiltroCat').value;
+  const soSem=document.getElementById('qrSoSemQR').checked;
+  return itens.filter(i=>{
+    if(!i.nome.toLowerCase().includes(termo)) return false;
+    if(catF && i.categoria!==catF) return false;
+    const gerado=qrContagens[i.id]?.total||0;
+    if(soSem && gerado>0) return false;
+    return true;
+  });
+}
+
+function renderQrCodes(){
+  document.getElementById('qrFiltroCat').innerHTML='<option value="">Todas as categorias</option>'+categorias.map(c=>`<option>${esc(c)}</option>`).join('');
+  const filtrados=itensQrFiltrados();
+  document.getElementById('qrTabela').innerHTML = filtrados.length ? filtrados.map(i=>{
+    const gerado=qrContagens[i.id]?.total||0;
+    const cls = gerado===0?'zero':(gerado<i.quantidade?'parcial':'completo');
+    return `<div class="qr-row" data-id="${i.id}">
+      <input type="checkbox" class="qr-check" data-id="${i.id}" ${qrSelecionados.has(i.id)?'checked':''}>
+      <div class="qr-thumb">${i.imagem?`<img src="${i.imagem}" alt="">`:categoriaIcone(i.categoria)}</div>
+      <div>
+        <div class="qr-nome">${esc(i.nome)}</div>
+        ${i.codigo?`<div class="qr-code">${esc(i.codigo)}</div>`:''}
+      </div>
+      <span class="cat ${catClass(i.categoria)}">${esc(i.categoria)}</span>
+      <div class="qr-qtd">${i.quantidade} ${esc(i.unidade)}</div>
+      <div class="qr-badge ${cls}">${gerado}/${i.quantidade} c/ QR</div>
+    </div>`;
+  }).join('') : '<div class="empty">Nenhum item encontrado.</div>';
+  atualizarBotaoImprimirQR();
+}
+
+function atualizarBotaoImprimirQR(){
+  const btn=document.getElementById('qrImprimirSelecionadas');
+  btn.textContent=`Imprimir etiquetas selecionadas (${qrSelecionados.size})`;
+  btn.disabled=qrSelecionados.size===0;
+}
+
+document.getElementById('qrTabela').addEventListener('change', e=>{
+  const cb=e.target.closest('.qr-check'); if(!cb) return;
+  const id=parseInt(cb.dataset.id);
+  if(cb.checked) qrSelecionados.add(id); else qrSelecionados.delete(id);
+  atualizarBotaoImprimirQR();
+});
+document.getElementById('qrBusca').addEventListener('input', renderQrCodes);
+document.getElementById('qrFiltroCat').addEventListener('change', renderQrCodes);
+document.getElementById('qrSoSemQR').addEventListener('change', renderQrCodes);
+document.getElementById('qrSelecionarTudo').addEventListener('change', e=>{
+  const ids=itensQrFiltrados().map(i=>i.id);
+  if(e.target.checked) ids.forEach(id=>qrSelecionados.add(id));
+  else ids.forEach(id=>qrSelecionados.delete(id));
+  renderQrCodes();
+});
+document.getElementById('qrImprimirSelecionadas').addEventListener('click', ()=>{
+  const selecionados=itens.filter(i=>qrSelecionados.has(i.id));
+  if(!selecionados.length) return;
+  const labels=selecionados.map(i=>({
+    url:`${location.origin}/scan.html?id=${i.id}&nome=${encodeURIComponent(i.nome)}`,
+    titulo:i.nome,
+    subtitulo:i.codigo||''
+  }));
+  imprimirEtiquetasEmLote(labels, `etiquetas-${new Date().toISOString().slice(0,10)}.pdf`);
+});
 
 function imprimirUnidade(uid, serial, nome){
   if(typeof window.jspdf==='undefined'){alert('PDF não carregou.');return;}
@@ -1143,14 +1260,19 @@ function imprimirUnidade(uid, serial, nome){
 }
 
 function imprimirTodasUnidades(itemId){
-  document.querySelectorAll(`[id^="qr-"]`).forEach((wrap,i)=>{
+  const item=itens.find(it=>it.id==itemId);
+  const labels=[];
+  document.querySelectorAll(`[id^="qr-"]`).forEach(wrap=>{
     const uid=wrap.id.replace('qr-','');
     const serialEl=wrap.nextElementSibling;
     const serial=serialEl?.textContent||uid;
-    const item=itens.find(it=>it.id==itemId);
-    setTimeout(()=>imprimirUnidade(parseInt(uid),serial,item?.nome||''),i*300);
+    labels.push({ url:`${location.origin}/unidade.html?uid=${uid}`, titulo:item?.nome||'', subtitulo:serial });
   });
-}function abrirQROT(ot){
+  if(!labels.length){ toast('Nenhuma unidade para imprimir'); return; }
+  imprimirEtiquetasEmLote(labels, `unidades-${(item?.nome||'item').replace(/\s+/g,'-')}.pdf`, {cols:3, rows:5});
+}
+
+function abrirQROT(ot){
   const url=`${location.origin}/ot.html?ot=${encodeURIComponent(ot)}`;
   document.getElementById('qrTitulo').textContent='OT '+ot;
   document.getElementById('qrCodigo').textContent='Ordem de Trabalho';
