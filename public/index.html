@@ -1007,7 +1007,7 @@ function navTo(t){
   if(tab) tab.classList.add('active');
   document.getElementById('pageTitle').textContent=TITLES[t]?.[0]||'';
   document.getElementById('pageSub').textContent=TITLES[t]?.[1]||'';
-  ['dash','estoque','hist','notif'].forEach(k=>{
+  ['dash','estoque','hist','notif','qrcodes'].forEach(k=>{
     const b=document.getElementById('bn-'+k);
     if(b) b.classList.toggle('active',k===t);
   });
@@ -1041,8 +1041,12 @@ renderNotifList();
     <span class="notif-badge" id="bnBadge" style="display:none">0</span>
     Alertas
   </button>
-  <a href="/scan.html" target="_blank" id="bn-qr">
+  <button onclick="navTo('qrcodes')" id="bn-qrcodes">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h.01M14 18h.01M18 14h.01M18 18h.01"/></svg>
+    Etiquetas
+  </button>
+  <a href="/scan.html" target="_blank" id="bn-qr">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="M14 14h6v6h-6z"/></svg>
     Leitor QR
   </a>
 </nav>
