@@ -1,0 +1,9 @@
+CREATE TABLE IF NOT EXISTS usuarios (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  nome TEXT NOT NULL,
+  email TEXT NOT NULL UNIQUE,
+  senha_hash TEXT NOT NULL,
+  papel TEXT NOT NULL DEFAULT 'operador',
+  ativo INTEGER NOT NULL DEFAULT 1,
+  criado_em TEXT DEFAULT (datetime('now'))
+);

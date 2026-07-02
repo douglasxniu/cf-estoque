@@ -51,3 +51,13 @@ CREATE TABLE solicitacao_unidades (
 );
 CREATE UNIQUE INDEX idx_solicitacao_unidades_ativo
   ON solicitacao_unidades(unidade_id) WHERE devolvido_em IS NULL;
+
+CREATE TABLE usuarios (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  nome TEXT NOT NULL,
+  email TEXT NOT NULL UNIQUE,
+  senha_hash TEXT NOT NULL,
+  papel TEXT NOT NULL DEFAULT 'operador',
+  ativo INTEGER NOT NULL DEFAULT 1,
+  criado_em TEXT DEFAULT (datetime('now'))
+);

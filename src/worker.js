@@ -15,7 +15,10 @@ const PUBLIC_ROUTES = [
   { method: "GET", path: "/api/itens" },
   { method: "GET", path: "/api/categorias" },
   { method: "GET", path: "/api/projetos" },
-  { method: "POST", path: "/api/solicitacoes/lote" }
+  { method: "POST", path: "/api/solicitacoes/lote" },
+  { method: "GET", path: "/api/auth/status" },
+  { method: "POST", path: "/api/auth/bootstrap" },
+  { method: "POST", path: "/api/auth/login" }
 ];
 // GET /api/ot/:ot e GET /api/unidades/:id precisam ser públicos: são acessados pelo QR
 // físico colado no item / link do email, sem que quem lê tenha o token de admin.
@@ -29,10 +32,87 @@ function isPublicRoute(path, method) {
   return PUBLIC_ROUTE_PATTERNS.some(r => r.method === method && r.pattern.test(path));
 }
 
-function isAuthorized(request, env) {
-  if (!env.ADMIN_TOKEN) return true; // sem secret configurado: não bloqueia (ambiente de dev)
-  const token = request.headers.get("X-Admin-Token");
-  return token === env.ADMIN_TOKEN;
+// Ações destrutivas/administrativas — exigem papel "admin" (não bastam apenas estar logado).
+const ADMIN_ONLY_PATTERNS = [
+  { method: "DELETE", pattern: /^\/api\/itens\/\d+$/ },
+  { method: "DELETE", pattern: /^\/api\/solicitacoes\/ot\/[^/]+$/ },
+  { method: "POST", pattern: /^\/api\/projetos\/[^/]+\/mesclar$/ },
+  { method: "GET", pattern: /^\/api\/usuarios$/ },
+  { method: "POST", pattern: /^\/api\/usuarios$/ },
+  { method: "PATCH", pattern: /^\/api\/usuarios\/\d+$/ }
+];
+function isAdminOnlyRoute(path, method) {
+  return ADMIN_ONLY_PATTERNS.some(r => r.method === method && r.pattern.test(path));
+}
+
+// ---------- Hash de senha (PBKDF2) e tokens de sessão assinados (HMAC) ----------
+const PBKDF2_ITER = 100000;
+const toHex = buf => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
+function fromHex(hex) {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+  return bytes;
+}
+function toBase64Url(buf) {
+  const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  let bin = ""; bytes.forEach(b => bin += String.fromCharCode(b));
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function fromBase64Url(str) {
+  str = str.replace(/-/g, "+").replace(/_/g, "/");
+  while (str.length % 4) str += "=";
+  const bin = atob(str);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+async function hashSenha(senha) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const keyMaterial = await crypto.subtle.importKey("raw", new TextEncoder().encode(senha), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", salt, iterations: PBKDF2_ITER, hash: "SHA-256" }, keyMaterial, 256);
+  return `${toHex(salt)}:${PBKDF2_ITER}:${toHex(bits)}`;
+}
+async function verificarSenha(senha, hashArmazenado) {
+  const [saltHex, iterStr, hashHex] = (hashArmazenado || "").split(":");
+  if (!saltHex || !iterStr || !hashHex) return false;
+  const keyMaterial = await crypto.subtle.importKey("raw", new TextEncoder().encode(senha), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", salt: fromHex(saltHex), iterations: parseInt(iterStr, 10), hash: "SHA-256" }, keyMaterial, 256);
+  return toHex(bits) === hashHex;
+}
+async function assinarToken(env, payload) {
+  const body = toBase64Url(new TextEncoder().encode(JSON.stringify(payload)));
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(env.AUTH_SECRET), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(body));
+  return `${body}.${toBase64Url(sig)}`;
+}
+async function verificarToken(env, token) {
+  if (!token || !env.AUTH_SECRET) return null;
+  const [body, sig] = token.split(".");
+  if (!body || !sig) return null;
+  try {
+    const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(env.AUTH_SECRET), { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
+    const valido = await crypto.subtle.verify("HMAC", key, fromBase64Url(sig), new TextEncoder().encode(body));
+    if (!valido) return null;
+    const payload = JSON.parse(new TextDecoder().decode(fromBase64Url(body)));
+    if (payload.exp && Date.now() > payload.exp) return null;
+    return payload;
+  } catch (e) { return null; }
+}
+// Resolve o usuário autenticado a partir do header Authorization: Bearer <token>.
+// Também aceita, por compatibilidade, o antigo header X-Admin-Token (concede papel "admin").
+async function usuarioAtual(request, env) {
+  const auth = request.headers.get("Authorization") || "";
+  const bearer = auth.startsWith("Bearer ") ? auth.slice(7) : null;
+  if (bearer) {
+    const payload = await verificarToken(env, bearer);
+    if (payload) return payload;
+  }
+  const legado = request.headers.get("X-Admin-Token");
+  if (env.ADMIN_TOKEN && legado === env.ADMIN_TOKEN) {
+    return { uid: 0, nome: "Admin", papel: "admin", legado: true };
+  }
+  return null;
 }
 
 async function enviarEmail(env, { item, quantidade, unidade, ot, solicitante, setor }) {
@@ -139,13 +219,90 @@ export default {
         headers: {
           "Access-Control-Allow-Origin": "*",
           "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type, X-Admin-Token"
+          "Access-Control-Allow-Headers": "Content-Type, X-Admin-Token, Authorization"
         }
       });
     }
 
-    if (path.startsWith("/api/") && !isPublicRoute(path, method) && !isAuthorized(request, env)) {
-      return json({ error: "Não autorizado" }, 401);
+    let usuarioLogado = null;
+    if (path.startsWith("/api/") && !isPublicRoute(path, method)) {
+      if (env.ADMIN_TOKEN || env.AUTH_SECRET) {
+        usuarioLogado = await usuarioAtual(request, env);
+        if (!usuarioLogado) return json({ error: "Não autorizado" }, 401);
+        if (isAdminOnlyRoute(path, method) && usuarioLogado.papel !== "admin") {
+          return json({ error: "Ação restrita a administradores" }, 403);
+        }
+      }
+    }
+
+    // ---------- AUTENTICAÇÃO E USUÁRIOS ----------
+    if (path === "/api/auth/status" && method === "GET") {
+      const { results } = await env.DB.prepare("SELECT id FROM usuarios LIMIT 1").all();
+      return json({ precisaBootstrap: results.length === 0 });
+    }
+
+    if (path === "/api/auth/bootstrap" && method === "POST") {
+      const b = await request.json();
+      if (!env.ADMIN_TOKEN || b.adminToken !== env.ADMIN_TOKEN) {
+        return json({ error: "Token de administrador inválido" }, 401);
+      }
+      const { results: existentes } = await env.DB.prepare("SELECT id FROM usuarios LIMIT 1").all();
+      if (existentes.length > 0) return json({ error: "Já existe usuário cadastrado. Use o login normal." }, 400);
+      if (!b.nome || !isValidEmail(b.email || "") || !b.senha || b.senha.length < 6) {
+        return json({ error: "Preencha nome, email válido e senha com pelo menos 6 caracteres" }, 400);
+      }
+      const hash = await hashSenha(b.senha);
+      const r = await env.DB.prepare("INSERT INTO usuarios (nome, email, senha_hash, papel) VALUES (?, ?, ?, 'admin')")
+        .bind(b.nome, b.email.trim().toLowerCase(), hash).run();
+      const token = await assinarToken(env, { uid: r.meta.last_row_id, nome: b.nome, papel: "admin", exp: Date.now() + 1000 * 60 * 60 * 24 * 30 });
+      return json({ token, nome: b.nome, papel: "admin" });
+    }
+
+    if (path === "/api/auth/login" && method === "POST") {
+      const b = await request.json();
+      const email = (b.email || "").trim().toLowerCase();
+      const usuario = await env.DB.prepare("SELECT * FROM usuarios WHERE email = ? AND ativo = 1").bind(email).first();
+      if (!usuario || !(await verificarSenha(b.senha || "", usuario.senha_hash))) {
+        return json({ error: "Email ou senha inválidos" }, 401);
+      }
+      const token = await assinarToken(env, { uid: usuario.id, nome: usuario.nome, papel: usuario.papel, exp: Date.now() + 1000 * 60 * 60 * 24 * 30 });
+      return json({ token, nome: usuario.nome, papel: usuario.papel });
+    }
+
+    if (path === "/api/auth/me" && method === "GET") {
+      return json({ nome: usuarioLogado.nome, papel: usuarioLogado.papel });
+    }
+
+    if (path === "/api/usuarios" && method === "GET") {
+      const { results } = await env.DB.prepare("SELECT id, nome, email, papel, ativo, criado_em FROM usuarios ORDER BY nome").all();
+      return json(results);
+    }
+
+    if (path === "/api/usuarios" && method === "POST") {
+      const b = await request.json();
+      if (!b.nome || !isValidEmail(b.email || "") || !b.senha || b.senha.length < 6) {
+        return json({ error: "Preencha nome, email válido e senha com pelo menos 6 caracteres" }, 400);
+      }
+      const hash = await hashSenha(b.senha);
+      try {
+        const r = await env.DB.prepare("INSERT INTO usuarios (nome, email, senha_hash, papel) VALUES (?, ?, ?, ?)")
+          .bind(b.nome, b.email.trim().toLowerCase(), hash, b.papel === "admin" ? "admin" : "operador").run();
+        return json({ id: r.meta.last_row_id });
+      } catch (e) {
+        return json({ error: "Já existe um usuário com esse email" }, 409);
+      }
+    }
+
+    const usuarioMatch = path.match(/^\/api\/usuarios\/(\d+)$/);
+    if (usuarioMatch && method === "PATCH") {
+      const b = await request.json();
+      if (b.senha) {
+        if (b.senha.length < 6) return json({ error: "Senha deve ter pelo menos 6 caracteres" }, 400);
+        await env.DB.prepare("UPDATE usuarios SET senha_hash=? WHERE id=?").bind(await hashSenha(b.senha), usuarioMatch[1]).run();
+      }
+      await env.DB.prepare("UPDATE usuarios SET nome=COALESCE(?,nome), papel=COALESCE(?,papel), ativo=COALESCE(?,ativo) WHERE id=?")
+        .bind(b.nome ?? null, b.papel ?? null, b.ativo !== undefined ? (b.ativo ? 1 : 0) : null, usuarioMatch[1]).run();
+      return json({ ok: true });
     }
 
     // ---------- ITENS ----------
@@ -193,6 +350,10 @@ export default {
         // atualização leve: só a foto (usada pelo botão "trocar imagem" do card)
         await env.DB.prepare("UPDATE itens SET imagem=? WHERE id=?").bind(b.imagem, id).run();
       } else {
+        // edição completa do cadastro (nome/categoria/modelo/voltagem/código) — só admin
+        if (usuarioLogado && usuarioLogado.papel !== "admin") {
+          return json({ error: "Ação restrita a administradores" }, 403);
+        }
         await env.DB.prepare(
           "UPDATE itens SET nome=?, categoria=?, quantidade=?, unidade=?, modelo=?, voltagem=?, codigo=?, imagem=? WHERE id=?"
         ).bind(b.nome, b.categoria, b.quantidade, b.unidade, b.modelo || "", b.voltagem || "", b.codigo || "", b.imagem ?? null, id).run();
