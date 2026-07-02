@@ -73,27 +73,28 @@ function construirFolhaRequisicaoPDF({ ot, solicitante, setor, local, data, obs,
     doc.setFontSize(5.3); doc.setFont('helvetica', 'normal'); doc.setTextColor(...C.muted);
     doc.text('Ver OT online', M + CW - qs / 2, T + 51, { align: 'center' });
 
+    // Bloco de informações compacto (2 linhas) — a data já aparece no topo do cabeçalho,
+    // então não se repete aqui, economizando espaço para mais itens por página.
     const infoW = CW - qs - 8;
-    let y = T + 22;
-    doc.setFontSize(6.6); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C.primary); doc.text('SOLICITANTE', M, y); y += 4;
-    doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C.text); doc.text(solicitante || '—', M, y, { maxWidth: infoW }); y += 7;
-    doc.setFontSize(6.6); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C.primary);
-    doc.text('SETOR', M, y); doc.text('DATA', M + 52, y); y += 4;
-    doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(...C.text);
-    doc.text(setor || '—', M, y, { maxWidth: 48 }); doc.text(dataFmt || '—', M + 52, y); y += 7;
-    doc.setFontSize(6.6); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C.primary); doc.text('LOCAL / OBRA', M, y); y += 4;
-    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C.text); doc.text(local || '—', M, y, { maxWidth: infoW }); y += 8;
+    let y = T + 23;
+    doc.setFontSize(6.4); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C.primary); doc.text('SOLICITANTE', M, y); y += 3.8;
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C.text); doc.text(solicitante || '—', M, y, { maxWidth: infoW }); y += 6;
+    doc.setFontSize(6.4); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C.primary);
+    doc.text('SETOR', M, y); doc.text('LOCAL / OBRA', M + 45, y); y += 3.8;
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...C.text);
+    doc.text(setor || '—', M, y, { maxWidth: 40 }); doc.setFont('helvetica', 'bold'); doc.text(local || '—', M + 45, y, { maxWidth: infoW - 45 }); y += 6;
 
-    doc.setDrawColor(...C.border); doc.setLineWidth(0.3); doc.line(M, y, W - M, y); y += 5;
+    doc.setDrawColor(...C.border); doc.setLineWidth(0.3); doc.line(M, y, W - M, y); y += 4.5;
 
     // ---- cabeçalho da tabela ----
-    doc.setFillColor(...C.sectionBg); doc.roundedRect(M, y - 3, CW, 7, 1, 1, 'F');
+    doc.setFillColor(...C.sectionBg); doc.roundedRect(M, y - 3, CW, 6.5, 1, 1, 'F');
     doc.setFontSize(6.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C.primary);
-    doc.text('MATERIAL / ITEM', M + 2, y + 1); doc.text('QTD.', M + 90, y + 1); doc.text('LOCAL ESPECÍFICO', M + 110, y + 1); doc.text('OBSERVAÇÕES', M + 158, y + 1);
-    y += 5; doc.setDrawColor(...C.border); doc.line(M, y, W - M, y); y += 3;
+    doc.text('MATERIAL / ITEM', M + 2, y + 0.8); doc.text('QTD.', M + 92, y + 0.8); doc.text('LOCAL ESPECÍFICO', M + 112, y + 0.8); doc.text('OBSERVAÇÕES', M + 160, y + 0.8);
+    y += 4.5; doc.setDrawColor(...C.border); doc.line(M, y, W - M, y); y += 3;
 
-    const rowH = 7.2;
-    const maxR = Math.floor((alturaVia - (y - T) - 20) / rowH);
+    const yObsAltura = obs ? 11 : 6;
+    const rowH = 5.8;
+    const maxR = Math.floor((alturaVia - (y - T) - yObsAltura) / rowH);
     const itensRenderizados = itensPagina.slice(0, maxR);
     itensRenderizados.forEach((it, i) => {
       const yy = y + i * rowH;
@@ -101,26 +102,30 @@ function construirFolhaRequisicaoPDF({ ot, solicitante, setor, local, data, obs,
       doc.setDrawColor(...C.border); doc.setLineWidth(0.1); doc.line(M, yy + rowH - 1.8, W - M, yy + rowH - 1.8);
 
       doc.setFontSize(7.3); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C.text);
-      doc.text(String(it.nome || '—'), M + 2, yy + 2.3, { maxWidth: 84 });
+      const nomeStr = String(it.nome || '—');
+      doc.text(nomeStr, M + 2, yy + 2.3, { maxWidth: 58 });
 
-      // badges de potência/voltagem — destaque visual pedido para transformadores e afins
-      let bx = M + 2;
-      const by = yy + 5.9;
+      // badges de potência/voltagem — destaque visual pedido para transformadores e afins,
+      // colocados na mesma linha do nome pra não gastar altura extra por item
+      let bx = M + 2 + Math.min(doc.getTextWidth(nomeStr), 58) + 2.5;
+      const by = yy + 2.3;
       if (it.modelo) bx += badge(bx, by, String(it.modelo), C.primary, C.primaryBg) + 1.3;
       if (it.voltagem) bx += badge(bx, by, String(it.voltagem), C.ok, C.okBg) + 1.3;
 
       doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...C.text);
-      doc.text(`${it.qtd} ${it.unidade || ''}`, M + 90, yy + 2.3);
-      doc.text(String(it.local || local || '—'), M + 110, yy + 2.3, { maxWidth: 45 });
+      doc.text(`${it.qtd} ${it.unidade || ''}`, M + 92, yy + 2.3);
+      doc.text(String(it.local || local || '—'), M + 112, yy + 2.3, { maxWidth: 45 });
       doc.setTextColor(...C.muted);
-      doc.text(String(it.obs || '—'), M + 158, yy + 2.3, { maxWidth: W - M - 160 });
+      doc.text(String(it.obs || '—'), M + 160, yy + 2.3, { maxWidth: W - M - 162 });
     });
 
-    const yObs = T + alturaVia - 20;
-    doc.setFillColor(...C.sectionBg); doc.roundedRect(M, yObs, CW, 16, 1.2, 1.2, 'F');
-    doc.setDrawColor(...C.border); doc.setLineWidth(0.2); doc.roundedRect(M, yObs, CW, 16, 1.2, 1.2);
-    doc.setFontSize(6.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C.primary); doc.text('OBSERVAÇÕES GERAIS', M + 2, yObs + 5);
-    if (obs) { doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...C.text); doc.text(obs, M + 2, yObs + 11, { maxWidth: CW - 4 }); }
+    if (obs) {
+      const yObs = T + alturaVia - yObsAltura;
+      doc.setFillColor(...C.sectionBg); doc.roundedRect(M, yObs, CW, yObsAltura, 1.2, 1.2, 'F');
+      doc.setDrawColor(...C.border); doc.setLineWidth(0.2); doc.roundedRect(M, yObs, CW, yObsAltura, 1.2, 1.2);
+      doc.setFontSize(6); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C.primary); doc.text('OBSERVAÇÕES GERAIS', M + 2, yObs + 3.6);
+      doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...C.text); doc.text(obs, M + 2, yObs + 8, { maxWidth: CW - 4 });
+    }
 
     return itensRenderizados.length;
   }
