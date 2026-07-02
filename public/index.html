@@ -855,6 +855,7 @@ function renderHist(){
         <button class="btn sec" data-a="add-itens-ot" data-ot="${esc(ot)}">+ Itens</button>
         <button class="btn sec" data-a="qr-ot" data-ot="${esc(ot)}">QR OT</button>
         <button class="btn sec" data-a="pdf-ot" data-ot="${esc(ot)}">PDF</button>
+        <button class="btn sec" data-a="email-ot" data-ot="${esc(ot)}">✉ Enviar</button>
         ${souAdmin()?`<button class="btn sec" data-a="excluir-ot" data-ot="${esc(ot)}" style="color:var(--danger)">Excluir</button>`:''}
       </div></td>
     </tr>`;
@@ -869,6 +870,22 @@ function gerarPDF(ot){
     ot, solicitante: primeiro.solicitante, setor: primeiro.setor, data: (primeiro.data||'').slice(0,10),
     itens: itensOt.map(it=>{ const item=itens.find(i=>i.id===it.item_id); return { nome: it.item_nome, qtd: it.quantidade, unidade: it.unidade, local: it.local_uso, modelo: item?.modelo, voltagem: item?.voltagem }; })
   });
+}
+
+async function enviarCopiaOt(ot){
+  const itensOt = solicitacoes.filter(s=>s.ot===ot);
+  if(!itensOt.length){ await niuAlert('OT sem itens.'); return; }
+  const destino = await niuPrompt(`Enviar uma cópia da OT ${ot} por email para:`,{placeholder:'email@exemplo.com',type:'email',confirmText:'Enviar'});
+  if(!destino) return;
+  const primeiro = itensOt[0];
+  const r = await fetch(`${API}/ot/email`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    to: destino, ot,
+    solic: primeiro.solicitante, setor: primeiro.setor, local: primeiro.local_uso,
+    itens: itensOt.map(it=>({ nome: it.item_nome, qty: it.quantidade, unidade: it.unidade, local: it.local_uso })),
+    url: `${location.origin}/ot.html?ot=${encodeURIComponent(ot)}`
+  })});
+  if(r.ok){ toast(`Enviado para ${destino}!`); }
+  else { const d=await r.json().catch(()=>({})); await niuAlert(d.error||'Erro ao enviar email.'); }
 }
 
 document.getElementById('tbHist').addEventListener('click', async e=>{
@@ -886,6 +903,8 @@ document.getElementById('tbHist').addEventListener('click', async e=>{
     abrirQROT(ot);
   } else if(btn.dataset.a==='pdf-ot'){
     gerarPDF(ot);
+  } else if(btn.dataset.a==='email-ot'){
+    enviarCopiaOt(ot);
   } else if(btn.dataset.a==='excluir-ot'){
     if(await niuConfirm(`Excluir toda a OT ${ot}? Os itens ainda não devolvidos voltam ao estoque, e o histórico desta OT é removido.`,{danger:true,confirmText:'Excluir'})){
       await fetch(`${API}/solicitacoes/ot/${encodeURIComponent(ot)}`,{method:'DELETE'});
@@ -1209,6 +1228,7 @@ async function imprimirQR(){
     </div>
     <div id="editOtItens"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn sec" id="editOtEnviarEmail" style="margin-right:auto">✉ Enviar cópia por email</button>
       <button class="btn sec" id="editOtCancel">Fechar</button>
       <button class="btn" id="editOtSalvar">Salvar alterações</button>
     </div>
@@ -1581,6 +1601,9 @@ document.getElementById('editItemSalvar').addEventListener('click', async ()=>{
 
 document.getElementById('editOtCancel').addEventListener('click', ()=>{
   document.getElementById('editOtOverlay').classList.remove('show');
+});
+document.getElementById('editOtEnviarEmail').addEventListener('click', ()=>{
+  enviarCopiaOt(editOtAtual);
 });
 document.getElementById('editOtSalvar').addEventListener('click', async ()=>{
   const nome=document.getElementById('editOtNome').value.trim();
