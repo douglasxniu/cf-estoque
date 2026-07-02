@@ -66,12 +66,12 @@ function construirFolhaRequisicaoPDF({ ot, solicitante, setor, local, data, obs,
     doc.setFontSize(6); doc.setFont('helvetica', 'normal'); doc.setTextColor(...C.headerSub);
     doc.text(dataFmt, M + CW - 2, T + 14, { align: 'right' });
 
-    const qs = 26;
+    const qs = 22;
     doc.setFillColor(...C.white); doc.setDrawColor(...C.border); doc.setLineWidth(0.25);
     doc.roundedRect(M + CW - qs - 1, T + 20, qs + 2, qs + 8, 1.2, 1.2, 'FD');
     doc.addImage(qrImg, 'PNG', M + CW - qs, T + 21, qs, qs);
     doc.setFontSize(5.3); doc.setFont('helvetica', 'normal'); doc.setTextColor(...C.muted);
-    doc.text('Ver OT online', M + CW - qs / 2, T + 51, { align: 'center' });
+    doc.text('Ver OT online', M + CW - qs / 2, T + 47, { align: 'center' });
 
     // Bloco de informações compacto (2 linhas) — a data já aparece no topo do cabeçalho,
     // então não se repete aqui, economizando espaço para mais itens por página.
@@ -83,6 +83,10 @@ function construirFolhaRequisicaoPDF({ ot, solicitante, setor, local, data, obs,
     doc.text('SETOR', M, y); doc.text('LOCAL / OBRA', M + 45, y); y += 3.8;
     doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...C.text);
     doc.text(setor || '—', M, y, { maxWidth: 40 }); doc.setFont('helvetica', 'bold'); doc.text(local || '—', M + 45, y, { maxWidth: infoW - 45 }); y += 6;
+
+    // O bloco de texto (esquerda) é mais baixo que o QR code (direita) — garante que a
+    // tabela só comece depois do QR terminar, senão as duas partes se sobrepõem.
+    y = Math.max(y, T + 20 + (qs + 8) + 3);
 
     doc.setDrawColor(...C.border); doc.setLineWidth(0.3); doc.line(M, y, W - M, y); y += 4.5;
 
