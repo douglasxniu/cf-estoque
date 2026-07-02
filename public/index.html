@@ -4,7 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Estoque Elétrica | Painel</title>
-<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="/theme.js"></script>
+<link rel="stylesheet" href="/theme.css">
 <script src="/auth-gate.js"></script>
 <script src="/vendor/chart.umd.js"></script>
 <script src="/vendor/qrcode.js"></script>
@@ -13,22 +15,14 @@
 <script src="/vendor/jspdf.umd.min.js"></script>
 <style>
 :root{
-  --bg0:#0a0c10; --bg1:#13161c; --glass:rgba(255,255,255,.055); --glass-brd:rgba(255,255,255,.10);
-  --glass-hi:rgba(255,255,255,.09);
-  --text:#eef0f4; --muted:#9aa3b2; --primary:#5b8cff; --primary2:#7c5cff;
-  --led:#34d399; --transf:#5b8cff; --cabo:#c084fc; --t8:#22d3ee; --reator:#f472b6; --outro:#a3acc2;
-  --danger:#f87171; --ok:#34d399; --warn:#fbbf24;
-  --radius:18px;
+  --glass:var(--surface); --glass-brd:var(--border); --glass-hi:var(--surface-hover);
+  --primary2:var(--primary-2);
+  --radius:16px;
 }
-*{box-sizing:border-box}
 body{
-  margin:0;font-family:'Source Sans 3',Arial,sans-serif;color:var(--text);font-size:14px;
-  background:radial-gradient(1200px 800px at 10% -10%, #1c2540 0%, transparent 60%),
-             radial-gradient(1000px 700px at 100% 0%, #2a1c40 0%, transparent 55%),
-             var(--bg0);
-  min-height:100vh;
+  margin:0;font-size:14.5px;min-height:100vh;
 }
-.glass{background:var(--glass);border:1px solid var(--glass-brd);border-radius:var(--radius);backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%)}
+.glass{background:var(--glass);border:1px solid var(--glass-brd);border-radius:var(--radius);backdrop-filter:blur(10px) saturate(130%);-webkit-backdrop-filter:blur(10px) saturate(130%);box-shadow:var(--shadow-card)}
 .app{display:flex;min-height:100vh;position:relative;z-index:1}
 .sidebar{width:225px;flex-shrink:0;margin:14px 0 14px 14px;padding:20px 14px;display:flex;flex-direction:column}
 .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:1rem;margin-bottom:26px;padding:0 6px}
@@ -66,13 +60,12 @@ body{
 
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;align-items:end}
 label{font-size:.72rem;color:var(--muted);display:block;margin-bottom:5px;font-weight:600}
-input,select{width:100%;padding:10px 12px;border:1px solid var(--glass-brd);border-radius:10px;background:rgba(255,255,255,.04);color:var(--text);font-size:.86rem;font-family:inherit}
-input::placeholder{color:#6b7280}
-input:focus,select:focus{outline:none;border-color:var(--primary);background:rgba(255,255,255,.07)}
-select option{background:#1a1d24;color:var(--text)}
-.btn{background:linear-gradient(135deg,var(--primary),var(--primary2));border:none;padding:10px 18px;border-radius:11px;font-weight:700;cursor:pointer;color:#fff;font-size:.84rem;box-shadow:0 4px 16px rgba(91,140,255,.25)}
+input,select{width:100%;padding:10px 12px;border:1px solid var(--glass-brd);border-radius:10px;background:var(--surface-2);color:var(--text);font-size:.86rem;font-family:inherit}
+input::placeholder{color:var(--muted-2)}
+input:focus,select:focus{outline:none;border-color:var(--primary)}
+.btn{background:linear-gradient(135deg,var(--primary),var(--primary2));border:none;padding:10px 18px;border-radius:11px;font-weight:700;cursor:pointer;color:var(--primary-contrast);font-size:.84rem;box-shadow:0 4px 16px rgba(91,140,255,.25)}
 .btn:hover{filter:brightness(1.08)}
-.btn.sec{background:rgba(255,255,255,.07);color:var(--text);border:1px solid var(--glass-brd);box-shadow:none}
+.btn.sec{background:var(--surface-hover);color:var(--text);border:1px solid var(--glass-brd);box-shadow:none}
 .btn:disabled{opacity:.4;cursor:not-allowed;box-shadow:none}
 .search-row{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap}
 .search-row input{flex:2;min-width:180px}
@@ -83,26 +76,26 @@ th,td{padding:10px 8px;border-bottom:1px solid rgba(255,255,255,.07);text-align:
 th{color:var(--muted);font-size:.68rem;text-transform:uppercase;letter-spacing:.03em;font-weight:700}
 tr:hover td{background:rgba(255,255,255,.03)}
 
-.cat{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:.72rem;padding:3px 10px;border-radius:20px;background:rgba(255,255,255,.08)}
+.cat{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:.72rem;padding:3px 10px;border-radius:20px;background:var(--surface-hover)}
 .cat::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor}
 .cat.LED{color:var(--led)} .cat.Transformador{color:var(--transf)} .cat.Cabo{color:var(--cabo)}
 .cat.Lâmpada-T8{color:var(--t8)} .cat.Reator{color:var(--reator)} .cat.Outro{color:var(--outro)}
 
 .qty{font-weight:800} .low{color:var(--danger)} .ok{color:var(--ok)}
 .actions{display:flex;align-items:center;gap:6px}
-.actions button{width:25px;height:25px;border-radius:8px;border:1px solid var(--glass-brd);background:rgba(255,255,255,.05);color:var(--text);cursor:pointer;font-weight:700}
+.actions button{width:25px;height:25px;border-radius:8px;border:1px solid var(--glass-brd);background:var(--surface-hover);color:var(--text);cursor:pointer;font-weight:700}
 .del{background:none;border:none;color:var(--danger);cursor:pointer;font-size:.85rem}
 
 .cat-section{margin-bottom:18px}
 .cat-section h3{display:flex;align-items:center;gap:8px;font-size:.84rem;font-weight:700;margin:0 0 8px;color:var(--text)}
 .cat-section h3 .dot{width:8px;height:8px;border-radius:50%}
 .subgroup{margin-bottom:12px;padding-left:6px;border-left:2px solid var(--glass-brd)}
-.subgroup-label{display:inline-flex;align-items:center;font-size:.85rem;color:#dbe4ff;font-weight:800;letter-spacing:.02em;margin:6px 0 10px 10px;padding:5px 12px;border-radius:9px;background:rgba(91,140,255,.16);border:1px solid rgba(91,140,255,.3)}
+.subgroup-label{display:inline-flex;align-items:center;font-size:.85rem;color:var(--primary);font-weight:800;letter-spacing:.02em;margin:6px 0 10px 10px;padding:5px 12px;border-radius:9px;background:rgba(91,140,255,.14);border:1px solid rgba(91,140,255,.3)}
 
 .estoque-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px;padding:0 0 6px 10px}
-.est-card{background:rgba(255,255,255,.04);border:1px solid var(--glass-brd);border-radius:14px;overflow:hidden;transition:.2s}
+.est-card{background:var(--surface);border:1px solid var(--glass-brd);border-radius:14px;overflow:hidden;transition:.2s;box-shadow:var(--shadow-card)}
 .est-card:hover{border-color:rgba(91,140,255,.35);transform:translateY(-3px);box-shadow:0 10px 24px rgba(91,140,255,.14)}
-.est-img{position:relative;aspect-ratio:1/1;background:rgba(255,255,255,.03);display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden}
+.est-img{position:relative;aspect-ratio:1/1;background:var(--surface-hover);display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden}
 .est-img img{width:100%;height:100%;object-fit:cover;display:block}
 .est-img-placeholder{font-size:2.2rem;opacity:.35}
 .est-img-edit{position:absolute;inset:auto 0 0 0;background:rgba(0,0,0,.6);color:#fff;font-size:.66rem;font-weight:700;text-align:center;padding:5px 4px;opacity:0;transition:.15s}
@@ -111,10 +104,10 @@ tr:hover td{background:rgba(255,255,255,.03)}
 .est-body h4{margin:0 0 2px;font-size:.83rem;font-weight:700;line-height:1.25;min-height:2.1em}
 .est-code{color:var(--primary);font-size:.68rem;font-weight:700;margin-bottom:4px}
 .est-specs{display:flex;gap:5px;flex-wrap:wrap;margin:6px 0}
-.est-spec-badge{font-size:.76rem;font-weight:800;padding:3px 9px;border-radius:7px;background:rgba(91,140,255,.18);color:#cfdcff;border:1px solid rgba(91,140,255,.32);letter-spacing:.01em}
-.est-spec-badge.volt{background:rgba(52,211,153,.16);color:#a7f3d4;border-color:rgba(52,211,153,.3)}
+.est-spec-badge{font-size:.76rem;font-weight:800;padding:3px 9px;border-radius:7px;background:rgba(91,140,255,.14);color:var(--primary);border:1px solid rgba(91,140,255,.32);letter-spacing:.01em}
+.est-spec-badge.volt{background:rgba(52,211,153,.14);color:var(--ok);border-color:rgba(52,211,153,.3)}
 .est-qty-row{display:flex;align-items:center;gap:6px;margin-top:6px}
-.est-qty-row button{width:24px;height:24px;flex-shrink:0;border-radius:7px;border:1px solid var(--glass-brd);background:rgba(255,255,255,.05);color:var(--text);cursor:pointer;font-weight:700}
+.est-qty-row button{width:24px;height:24px;flex-shrink:0;border-radius:7px;border:1px solid var(--glass-brd);background:var(--surface-hover);color:var(--text);cursor:pointer;font-weight:700}
 .est-qty-row .qty{flex:1;text-align:center;font-weight:800;font-size:.8rem}
 .est-actions{display:flex;gap:4px;margin-top:8px;flex-wrap:wrap}
 .est-actions .btn{font-size:.64rem;padding:4px 6px}
@@ -123,7 +116,7 @@ tr:hover td{background:rgba(255,255,255,.03)}
 .qr-row{display:grid;grid-template-columns:24px 40px 1fr auto auto auto;align-items:center;gap:12px;padding:10px 6px;border-bottom:1px solid var(--glass-brd)}
 .qr-row:hover{background:rgba(255,255,255,.03)}
 .qr-row input[type=checkbox]{width:16px;height:16px}
-.qr-thumb{width:40px;height:40px;border-radius:8px;overflow:hidden;background:rgba(255,255,255,.05);display:flex;align-items:center;justify-content:center;font-size:1.1rem}
+.qr-thumb{width:40px;height:40px;border-radius:8px;overflow:hidden;background:var(--surface-hover);display:flex;align-items:center;justify-content:center;font-size:1.1rem}
 .qr-thumb img{width:100%;height:100%;object-fit:cover}
 .qr-nome{font-weight:700;font-size:.86rem}
 .qr-code{color:var(--primary);font-size:.7rem;font-weight:700}
@@ -139,7 +132,7 @@ tr:hover td{background:rgba(255,255,255,.03)}
 .modal{padding:22px;max-width:340px;width:90%}
 .empty{color:var(--muted);text-align:center;padding:18px;font-size:.85rem}
 #listaOtsAbertas{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
-.ot-card{background:rgba(255,255,255,.04);border:1px solid var(--glass-brd);border-radius:12px;padding:12px 14px;cursor:pointer;transition:.18s}
+.ot-card{background:var(--surface);border:1px solid var(--glass-brd);border-radius:12px;padding:12px 14px;cursor:pointer;transition:.18s;box-shadow:var(--shadow-card)}
 .ot-card:hover{background:rgba(91,140,255,.09);border-color:rgba(91,140,255,.35);transform:translateY(-2px)}
 .ot-card-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .ot-num{font-weight:800;color:var(--primary);font-size:.88rem}
@@ -283,7 +276,7 @@ tr:hover td{background:rgba(255,255,255,.045)}
   /* bottom nav mobile */
   .bottom-nav{
     display:flex;position:fixed;bottom:0;left:0;right:0;z-index:50;
-    background:rgba(13,15,20,.92);border-top:1px solid rgba(255,255,255,.1);
+    background:var(--surface-2);border-top:1px solid var(--border);
     backdrop-filter:blur(18px);padding:8px 0 12px;
   }
   .bottom-nav a, .bottom-nav button{
@@ -304,7 +297,7 @@ tr:hover td{background:rgba(255,255,255,.045)}
 <div class="app">
   <aside class="sidebar glass">
     <div class="brand">
-      <svg width="120" height="34" viewBox="0 0 36.4 10.22" style="fill:white">
+      <svg width="120" height="34" viewBox="0 0 36.4 10.22" style="fill:var(--text)">
         <rect x="16.96" y="0" width="2.47" height="10.22"/>
         <path d="M22.04,4.83V0h2.47v4.74c0,2.09.6,3.1,1.88,3.1s2.8-.77,4.53-2.03l2.98-2.06V0h2.5v10.22h-2.32c0-1.13,0-2.86.06-3.99-3.99,2.68-5.78,3.99-8.14,3.99-2.53,0-3.96-1.64-3.96-5.39"/>
         <path d="M14.36,5.39v4.83h-2.47v-4.74c0-2.09-.6-3.1-1.88-3.1s-2.8.77-4.53,2.03l-2.98,2.06v3.76H0V0h2.32c0,1.13,0,2.86-.06,3.99C6.26,1.31,8.05,0,10.4,0c2.53,0,3.96,1.64,3.96,5.39"/>
@@ -342,6 +335,10 @@ tr:hover td{background:rgba(255,255,255,.045)}
       </div>
       <div class="topbar-right">
         <span class="live-label"><span class="live-dot"></span> Atualização automática</span>
+        <button class="theme-toggle" title="Alternar tema" aria-label="Alternar tema claro/escuro">
+          <svg class="ic-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          <svg class="ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+        </button>
         <a href="/solicitar.html" target="_blank" class="btn sec">Página pública</a>
       </div>
     </div>
@@ -657,8 +654,16 @@ function mostrarAvisoGraficos(){
   });
 }
 
+function corTema(varName){ return getComputedStyle(document.documentElement).getPropertyValue(varName).trim(); }
+function chartCores(){
+  const texto=corTema('--text'), muted=corTema('--muted');
+  const claro=document.documentElement.getAttribute('data-theme')==='light';
+  return { texto, muted, grid: claro?'rgba(15,23,42,.08)':'rgba(255,255,255,.06)' };
+}
+
 function renderChartCategoria(){
   if(typeof Chart==='undefined') return;
+  const cc=chartCores();
   const porCat={};
   itens.forEach(i=>{ porCat[i.categoria]=(porCat[i.categoria]||0)+i.quantidade; });
   const labels=Object.keys(porCat), data=Object.values(porCat);
@@ -672,7 +677,7 @@ function renderChartCategoria(){
       rotation: categoriaRotAngle,
       animation:{ animateRotate:true, animateScale:true, duration:1100, easing:'easeOutQuart' },
       transitions:{ active:{ animation:{ duration:300, easing:'easeOutQuint' } } },
-      plugins:{ legend:{ position:'bottom', labels:{ color:'#cdd2dd', boxWidth:10, font:{size:11} } } }, cutout:'62%' }
+      plugins:{ legend:{ position:'bottom', labels:{ color:cc.texto, boxWidth:10, font:{size:11} } } }, cutout:'62%' }
   });
   // gira lentamente o gráfico de forma contínua, para dar sensação de "vivo"
   (function girar(){
@@ -684,6 +689,7 @@ function renderChartCategoria(){
 
 function renderChartTop(){
   if(typeof Chart==='undefined') return;
+  const cc=chartCores();
   const porItem={};
   solicitacoes.forEach(s=>{ porItem[s.item_nome]=(porItem[s.item_nome]||0)+s.quantidade; });
   const ordenado=Object.entries(porItem).sort((a,b)=>b[1]-a[1]).slice(0,6);
@@ -695,12 +701,13 @@ function renderChartTop(){
       animation:{ duration:900, easing:'easeOutQuart', delay:(ctx)=> ctx.type==='data'? ctx.dataIndex*90 : 0 },
       transitions:{ active:{ animation:{ duration:250 } } },
       plugins:{ legend:{display:false} },
-      scales:{ x:{ grid:{color:'rgba(255,255,255,.06)'}, ticks:{color:'#9aa3b2'} }, y:{ grid:{display:false}, ticks:{color:'#cdd2dd'} } } }
+      scales:{ x:{ grid:{color:cc.grid}, ticks:{color:cc.muted} }, y:{ grid:{display:false}, ticks:{color:cc.texto} } } }
   });
 }
 
 function renderChartTendencia(){
   if(typeof Chart==='undefined') return;
+  const cc=chartCores();
   const dias=[]; const hoje=new Date();
   for(let i=13;i>=0;i--){ const d=new Date(hoje); d.setDate(d.getDate()-i); dias.push(d.toISOString().slice(0,10)); }
   const porDia={}; dias.forEach(d=>porDia[d]=0);
@@ -715,9 +722,13 @@ function renderChartTendencia(){
       transitions:{ active:{ animation:{ duration:200 } } },
       interaction:{ intersect:false, mode:'index' },
       plugins:{ legend:{display:false} },
-      scales:{ x:{ grid:{display:false}, ticks:{color:'#9aa3b2'} }, y:{ beginAtZero:true, grid:{color:'rgba(255,255,255,.06)'}, ticks:{color:'#9aa3b2'} } } }
+      scales:{ x:{ grid:{display:false}, ticks:{color:cc.muted} }, y:{ beginAtZero:true, grid:{color:cc.grid}, ticks:{color:cc.muted} } } }
   });
 }
+
+document.addEventListener('themechange', ()=>{
+  if(itens.length || solicitacoes.length){ renderChartCategoria(); renderChartTop(); renderChartTendencia(); }
+});
 
 function renderEstoque(){
   const termo=(document.getElementById('busca').value||'').toLowerCase();
@@ -1074,7 +1085,7 @@ function imprimirQR(){
     <div class="desc" style="margin-bottom:12px">Buscar item do estoque para adicionar a este projeto</div>
     <div style="position:relative;margin-bottom:10px">
       <input id="addItensBusca" placeholder="Digite o nome do item..." autocomplete="off">
-      <div id="addItensResultados" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:10;background:#1a1d24;border:1px solid var(--glass-brd);border-radius:10px;margin-top:4px;max-height:200px;overflow-y:auto"></div>
+      <div id="addItensResultados" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:10;background:var(--surface-2);border:1px solid var(--glass-brd);border-radius:10px;margin-top:4px;max-height:200px;overflow-y:auto;box-shadow:var(--shadow-float)"></div>
     </div>
     <div id="addItensCarrinho"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
@@ -1101,7 +1112,7 @@ function imprimirQR(){
       <div id="editOtMesclarBox" style="display:none;margin-top:10px;position:relative">
         <div class="desc" style="margin-bottom:8px">Buscar a OT que será absorvida por esta (os itens dela passam pra cá e ela deixa de existir)</div>
         <input id="editOtMesclarBusca" placeholder="Buscar por número ou nome..." autocomplete="off">
-        <div id="editOtMesclarResultados" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:10;background:#1a1d24;border:1px solid var(--glass-brd);border-radius:10px;margin-top:4px;max-height:200px;overflow-y:auto"></div>
+        <div id="editOtMesclarResultados" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:10;background:var(--surface-2);border:1px solid var(--glass-brd);border-radius:10px;margin-top:4px;max-height:200px;overflow-y:auto;box-shadow:var(--shadow-float)"></div>
       </div>
     </div>
 
@@ -1142,7 +1153,7 @@ async function abrirModalUnidades(item){
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px">
       ${unidades.map(u=>`
-        <div style="background:rgba(255,255,255,.04);border:1px solid var(--glass-brd);border-radius:10px;padding:10px;text-align:center">
+        <div style="background:var(--surface-hover);border:1px solid var(--glass-brd);border-radius:10px;padding:10px;text-align:center">
           <div id="qr-${u.id}"></div>
           <div style="font-size:.72rem;font-weight:700;margin-top:4px">${esc(u.serial)}</div>
           <div style="font-size:.65rem;color:${u.status==='disponivel'?'var(--ok)':'var(--warn)'}">
@@ -1334,9 +1345,9 @@ function renderAddItensCarrinho(){
   wrap.innerHTML = addItensCarrinho.length ? addItensCarrinho.map((c,i)=>`
     <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--glass-brd)">
       <div style="flex:1;font-size:.85rem">${esc(c.nome)}</div>
-      <button data-a="dec" data-i="${i}" style="width:26px;height:26px;border-radius:8px;border:1px solid var(--glass-brd);background:rgba(255,255,255,.05);color:var(--text);cursor:pointer">−</button>
+      <button data-a="dec" data-i="${i}" style="width:26px;height:26px;border-radius:8px;border:1px solid var(--glass-brd);background:var(--surface-hover);color:var(--text);cursor:pointer">−</button>
       <span style="min-width:26px;text-align:center;font-weight:700">${c.qtd}</span>
-      <button data-a="inc" data-i="${i}" style="width:26px;height:26px;border-radius:8px;border:1px solid var(--glass-brd);background:rgba(255,255,255,.05);color:var(--text);cursor:pointer">+</button>
+      <button data-a="inc" data-i="${i}" style="width:26px;height:26px;border-radius:8px;border:1px solid var(--glass-brd);background:var(--surface-hover);color:var(--text);cursor:pointer">+</button>
       <button data-a="rm" data-i="${i}" class="del">remover</button>
     </div>`).join('') : '<div class="empty">Busque um item acima para adicionar.</div>';
 }

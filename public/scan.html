@@ -4,25 +4,27 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <title>QR Scan · Estoque</title>
-<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="/theme.js"></script>
+<link rel="stylesheet" href="/theme.css">
 <script src="/auth-gate.js"></script>
 <style>
-:root{--bg:#0a0c10;--glass:rgba(255,255,255,.06);--brd:rgba(255,255,255,.10);--text:#eef0f4;--muted:#9aa3b2;--primary:#5b8cff;--ok:#34d399;--warn:#fbbf24;--danger:#f87171;--r:16px}
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Source Sans 3',Arial,sans-serif;background:radial-gradient(800px 600px at 10% -10%,#1c2540,transparent 60%),var(--bg);color:var(--text);min-height:100vh;padding:12px 12px 80px}
-.g{background:var(--glass);border:1px solid var(--brd);border-radius:var(--r);backdrop-filter:blur(16px)}
-header{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+:root{--brd:var(--border);--r:16px}
+*{margin:0;padding:0}
+body{font-size:14.5px;min-height:100vh;padding:12px 12px 80px}
+.g{background:var(--surface);border:1px solid var(--brd);border-radius:var(--r);backdrop-filter:blur(10px) saturate(130%);box-shadow:var(--shadow-card)}
+header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
 header a{text-decoration:none;display:flex;align-items:center;gap:10px}
 .sub{font-size:.75rem;color:var(--muted)}
 .tabs{display:flex;gap:6px;margin-bottom:12px}
-.tb{flex:1;padding:10px 6px;border-radius:10px;border:1px solid var(--brd);background:rgba(255,255,255,.04);color:var(--muted);cursor:pointer;font-weight:700;font-size:.78rem;font-family:inherit}
+.tb{flex:1;padding:10px 6px;border-radius:10px;border:1px solid var(--brd);background:var(--surface-hover);color:var(--muted);cursor:pointer;font-weight:700;font-size:.78rem;font-family:inherit}
 .tb.active{background:linear-gradient(135deg,rgba(91,140,255,.25),rgba(124,92,255,.2));color:#fff;border-color:rgba(91,140,255,.4)}
 .card{padding:14px;margin-bottom:10px}
 .btn{border:none;border-radius:12px;padding:13px;font-weight:700;cursor:pointer;font-size:.9rem;width:100%;font-family:inherit;margin-bottom:8px}
 .btn-cam{background:linear-gradient(135deg,#f5a623,#d6890a);color:#1f2937}
 .btn-ok{background:linear-gradient(135deg,var(--ok),#059669);color:#fff}
 .btn-dev{background:linear-gradient(135deg,var(--primary),#4c1d95);color:#fff}
-.btn-sec{background:rgba(255,255,255,.07);color:var(--text);border:1px solid var(--brd)}
+.btn-sec{background:var(--surface-hover);color:var(--text);border:1px solid var(--brd)}
 #camBox{display:none;position:relative;border-radius:var(--r);overflow:hidden;margin-bottom:10px;aspect-ratio:4/3;background:#000}
 #camBox video{width:100%;height:100%;object-fit:cover;display:block}
 #camBox canvas{display:none}
@@ -36,32 +38,36 @@ header a{text-decoration:none;display:flex;align-items:center;gap:10px}
 .sol-meta{font-size:.72rem;color:var(--muted)}
 .qty{font-size:2.4rem;font-weight:800;color:var(--ok);line-height:1;margin:10px 0 4px}
 .qty.low{color:var(--warn)}.qty.zero{color:var(--danger)}
-.badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:.7rem;font-weight:700;background:rgba(255,255,255,.08);margin-right:3px}
+.badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:.7rem;font-weight:700;background:var(--surface-hover);margin-right:3px}
 .empty{color:var(--muted);text-align:center;padding:20px;font-size:.85rem}
 .toast{position:fixed;bottom:70px;left:50%;transform:translateX(-50%) translateY(8px);background:rgba(20,22,30,.95);color:#fff;padding:11px 20px;border-radius:30px;font-weight:600;font-size:.82rem;opacity:0;transition:.25s;z-index:99;border:1px solid var(--brd);white-space:nowrap}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-.bnav{display:flex;position:fixed;bottom:0;left:0;right:0;background:rgba(13,15,20,.95);border-top:1px solid rgba(255,255,255,.1);backdrop-filter:blur(18px);padding:8px 0 10px;z-index:50}
+.bnav{display:flex;position:fixed;bottom:0;left:0;right:0;background:var(--surface-2);border-top:1px solid var(--border);backdrop-filter:blur(18px);padding:8px 0 10px;z-index:50}
 .bnav a{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--muted);font-size:.58rem;font-weight:700;text-decoration:none;text-transform:uppercase}
 .bnav a.active{color:var(--primary)}
 .bnav svg{width:20px;height:20px}
 label{font-size:.72rem;color:var(--muted);font-weight:700;display:block;margin-bottom:4px;margin-top:10px}
-input{width:100%;padding:11px 12px;border:1px solid var(--brd);border-radius:10px;background:rgba(255,255,255,.05);color:var(--text);font-size:.9rem;font-family:inherit}
+input{width:100%;padding:11px 12px;border:1px solid var(--brd);border-radius:10px;background:var(--surface-2);color:var(--text);font-size:.9rem;font-family:inherit}
 input:focus{outline:none;border-color:var(--primary)}
-input::placeholder{color:rgba(255,255,255,.2)}
-.citem{padding:10px;background:rgba(255,255,255,.04);border:1px solid var(--brd);border-radius:10px;margin-bottom:8px}
+input::placeholder{color:var(--muted-2)}
+.citem{padding:10px;background:var(--surface-hover);border:1px solid var(--brd);border-radius:10px;margin-bottom:8px}
 </style>
 </head>
 <body>
 
 <header>
-  <a href="/index.html">
-    <svg width="70" height="20" viewBox="0 0 36.4 10.22" fill="white">
+  <a href="/index.html" style="text-decoration:none;display:flex;align-items:center;gap:10px">
+    <svg width="70" height="20" viewBox="0 0 36.4 10.22" fill="currentColor" style="color:var(--text)">
       <rect x="16.96" y="0" width="2.47" height="10.22"/>
       <path d="M22.04,4.83V0h2.47v4.74c0,2.09.6,3.1,1.88,3.1s2.8-.77,4.53-2.03l2.98-2.06V0h2.5v10.22h-2.32c0-1.13,0-2.86.06-3.99-3.99,2.68-5.78,3.99-8.14,3.99-2.53,0-3.96-1.64-3.96-5.39"/>
       <path d="M14.36,5.39v4.83h-2.47v-4.74c0-2.09-.6-3.1-1.88-3.1s-2.8.77-4.53,2.03l-2.98,2.06v3.76H0V0h2.32c0,1.13,0,2.86-.06,3.99C6.26,1.31,8.05,0,10.4,0c2.53,0,3.96,1.64,3.96,5.39"/>
     </svg>
-    <div><div style="font-weight:800;color:white;font-size:.95rem">Estoque Elétrica</div><div class="sub">Leitor QR</div></div>
+    <div><div style="font-weight:800;color:var(--text);font-size:.95rem">Estoque Elétrica</div><div class="sub">Leitor QR</div></div>
   </a>
+  <button class="theme-toggle" title="Alternar tema" aria-label="Alternar tema claro/escuro">
+    <svg class="ic-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    <svg class="ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+  </button>
 </header>
 
 <div class="tabs">
@@ -84,9 +90,9 @@ input::placeholder{color:rgba(255,255,255,.2)}
 <div class="toast" id="toast"></div>
 
 <div id="otModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(5,6,10,.7);z-index:90;align-items:center;justify-content:center;padding:16px">
-  <div style="background:#0f1117;border:1px solid var(--brd,rgba(255,255,255,.1));border-radius:18px;max-width:420px;width:100%;max-height:85vh;overflow-y:auto;padding:20px">
+  <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:18px;max-width:420px;width:100%;max-height:85vh;overflow-y:auto;padding:20px;box-shadow:var(--shadow-float)">
     <div id="otModalBody"><div class="empty">A carregar...</div></div>
-    <button onclick="document.getElementById('otModalOverlay').style.display='none'" style="width:100%;margin-top:14px;padding:11px;border:none;border-radius:10px;background:rgba(255,255,255,.08);color:#fff;font-weight:700;cursor:pointer;font-family:inherit">Fechar</button>
+    <button onclick="document.getElementById('otModalOverlay').style.display='none'" style="width:100%;margin-top:14px;padding:11px;border:none;border-radius:10px;background:var(--surface-hover);color:var(--text);font-weight:700;cursor:pointer;font-family:inherit">Fechar</button>
   </div>
 </div>
 
@@ -219,9 +225,9 @@ async function mostrarOTModal(ot){
     <div style="font-size:1.5rem;font-weight:800;color:var(--primary);margin:2px 0 8px">${ot}</div>
     <div style="font-size:.85rem;color:var(--muted);margin-bottom:2px">${first.solicitante||'—'}${first.setor?' · '+first.setor:''}</div>
     <div style="font-size:.78rem;color:var(--muted);margin-bottom:14px">${devolvidos}/${items.length} devolvidos</div>
-    <div style="border-top:1px solid rgba(255,255,255,.1);padding-top:10px">
+    <div style="border-top:1px solid var(--border);padding-top:10px">
       ${items.map(i=>`
-        <div style="display:flex;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.06)">
+        <div style="display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
           <span style="font-size:1.1rem">${iconFor(i.item_nome)}</span>
           <div style="flex:1">
             <div style="font-weight:700;font-size:.86rem">${i.item_nome}</div>
@@ -364,9 +370,9 @@ function renderCarrinho(){
           <button onclick="carrinho=carrinho.filter(x=>x.id!=${c.id});renderCarrinho();" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:.9rem">✕</button>
         </div>
         <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
-          <button onclick="carrinho.find(x=>x.id==${c.id}).qtd=Math.max(1,${c.qtd}-1);renderCarrinho();" style="width:32px;height:32px;border-radius:8px;border:1px solid var(--brd);background:rgba(255,255,255,.05);color:var(--text);font-size:1rem;cursor:pointer">−</button>
+          <button onclick="carrinho.find(x=>x.id==${c.id}).qtd=Math.max(1,${c.qtd}-1);renderCarrinho();" style="width:32px;height:32px;border-radius:8px;border:1px solid var(--brd);background:var(--surface-hover);color:var(--text);font-size:1rem;cursor:pointer">−</button>
           <span style="flex:1;text-align:center;font-weight:800;font-size:1.1rem">${c.qtd} ${esc(c.unidade)}</span>
-          <button onclick="carrinho.find(x=>x.id==${c.id}).qtd=Math.min(${c.maxQtd},${c.qtd}+1);renderCarrinho();" style="width:32px;height:32px;border-radius:8px;border:1px solid var(--brd);background:rgba(255,255,255,.05);color:var(--text);font-size:1rem;cursor:pointer">+</button>
+          <button onclick="carrinho.find(x=>x.id==${c.id}).qtd=Math.min(${c.maxQtd},${c.qtd}+1);renderCarrinho();" style="width:32px;height:32px;border-radius:8px;border:1px solid var(--brd);background:var(--surface-hover);color:var(--text);font-size:1rem;cursor:pointer">+</button>
         </div>
       </div>`;
     });
