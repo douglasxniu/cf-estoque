@@ -579,6 +579,7 @@ function preencherSelects(){
   const todas=[...new Set([...base, ...categorias])];
   document.getElementById('iCat').innerHTML = todas.map(c=>`<option>${esc(c)}</option>`).join('') + '<option value="__nova__">+ Criar nova categoria...</option>';
   document.getElementById('filtroCat').innerHTML = '<option value="">Todas as categorias</option>' + todas.map(c=>`<option>${esc(c)}</option>`).join('');
+  document.getElementById('eiCat').innerHTML = todas.map(c=>`<option>${esc(c)}</option>`).join('');
 }
 
 document.getElementById('iCat').addEventListener('change', e=>{
@@ -773,6 +774,7 @@ function renderEstoque(){
                   <button data-a="mais">+</button>
                 </div>
                 <div class="est-actions">
+                  <button class="btn sec" data-a="editar">Editar</button>
                   <button class="btn sec" data-a="unidades">Unidades</button>
                   <button class="btn sec" data-a="qr">QR</button>
                   <button class="del" data-a="excluir">remover</button>
@@ -949,6 +951,7 @@ document.getElementById('estoquePorCategoria').addEventListener('click', async e
   else if(btn.dataset.a==='excluir'){ if(confirm(`Excluir "${item.nome}"?`)){ await fetch(`${API}/itens/${id}`,{method:'DELETE'}); toast('Item excluído.'); carregarTudo(); } }
   else if(btn.dataset.a==='unidades'){ abrirModalUnidades(item); }
   else if(btn.dataset.a==='qr'){ abrirModalQR(item); }
+  else if(btn.dataset.a==='editar'){ abrirModalEditarItem(item); }
 });
 document.getElementById('estoqueImagemInput').addEventListener('change', async e=>{
   const file=e.target.files[0]; if(!file || !estoqueImagemAlvoId) return;
@@ -1036,6 +1039,39 @@ renderNotifList();
 </div>
 
 <script>
+let editItemAtual=null;
+function abrirModalEditarItem(item){
+  editItemAtual=item;
+  document.getElementById('eiNome').value=item.nome||'';
+  document.getElementById('eiCodigo').value=item.codigo||'';
+  document.getElementById('eiCat').value=item.categoria||'Outro';
+  document.getElementById('eiModelo').value=item.modelo||'';
+  document.getElementById('eiVolt').value=item.voltagem||'';
+  document.getElementById('eiUn').value=item.unidade||'un';
+  document.getElementById('editItemOverlay').classList.add('show');
+}
+document.getElementById('editItemCancel').addEventListener('click', ()=>{
+  document.getElementById('editItemOverlay').classList.remove('show');
+});
+document.getElementById('editItemSalvar').addEventListener('click', async ()=>{
+  const nome=document.getElementById('eiNome').value.trim();
+  if(!nome){ alert('Informe o nome do item.'); return; }
+  const r=await fetch(`${API}/itens/${editItemAtual.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    nome,
+    categoria:document.getElementById('eiCat').value,
+    quantidade:editItemAtual.quantidade,
+    unidade:document.getElementById('eiUn').value,
+    modelo:document.getElementById('eiModelo').value.trim(),
+    voltagem:document.getElementById('eiVolt').value,
+    codigo:document.getElementById('eiCodigo').value.trim(),
+    imagem:editItemAtual.imagem||null
+  })});
+  if(!r.ok){ const t=await r.text().catch(()=>''); alert('Erro ao salvar: '+t); return; }
+  document.getElementById('editItemOverlay').classList.remove('show');
+  toast('Item atualizado!');
+  carregarTudo();
+});
+
 function abrirModalQR(item){
   const url = `${location.origin}/scan.html?id=${item.id}&nome=${encodeURIComponent(item.nome)}`;
   document.getElementById('qrTitulo').textContent = item.nome;
@@ -1091,6 +1127,27 @@ function imprimirQR(){
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
       <button class="btn sec" id="addItensCancel">Cancelar</button>
       <button class="btn" id="addItensConfirmar">Adicionar ao projeto</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Editar Item do Estoque -->
+<div class="overlay" id="editItemOverlay">
+  <div class="modal glass" style="max-width:480px;width:94%;max-height:88vh;overflow-y:auto">
+    <h2 style="margin-top:0;font-size:1.05rem">Editar item</h2>
+    <form id="fEditItem" class="grid">
+      <div><label>Nome *</label><input id="eiNome" required></div>
+      <div><label>Código</label><input id="eiCodigo"></div>
+      <div><label>Categoria</label><select id="eiCat"></select></div>
+      <div><label>Modelo / Potência</label><input id="eiModelo" placeholder="Ex: 100W, 150W"></div>
+      <div><label>Voltagem</label>
+        <select id="eiVolt"><option value="">—</option><option>12V</option><option>24V</option><option>110V</option><option>220V</option><option>Bivolt</option></select></div>
+      <div><label>Unidade</label>
+        <select id="eiUn"><option>un</option><option>m</option><option>cx</option><option>rolo</option></select></div>
+    </form>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn sec" id="editItemCancel" type="button">Cancelar</button>
+      <button class="btn" id="editItemSalvar" type="button">Salvar alterações</button>
     </div>
   </div>
 </div>
