@@ -769,7 +769,7 @@ function renderEstoque(){
             ${subgrupos[sub].map(i=>`
             <div class="est-card" data-id="${i.id}">
               <div class="est-img" data-a="trocar-imagem" title="Clique para trocar a foto">
-                ${i.imagem?`<img src="${i.imagem}" alt="${esc(i.nome)}">`:`<div class="est-img-placeholder">${categoriaIcone(cat)}</div>`}
+                ${i.tem_imagem?`<img src="${API}/itens/${i.id}/imagem" alt="${esc(i.nome)}" loading="lazy">`:`<div class="est-img-placeholder">${categoriaIcone(cat)}</div>`}
                 <div class="est-img-edit">📷 trocar foto</div>
               </div>
               <div class="est-body">
@@ -1280,7 +1280,7 @@ function renderQrCodes(){
     const cls = gerado===0?'zero':(gerado<i.quantidade?'parcial':'completo');
     return `<div class="qr-row" data-id="${i.id}">
       <input type="checkbox" class="qr-check" data-id="${i.id}" ${qrSelecionados.has(i.id)?'checked':''}>
-      <div class="qr-thumb">${i.imagem?`<img src="${i.imagem}" alt="">`:categoriaIcone(i.categoria)}</div>
+      <div class="qr-thumb">${i.tem_imagem?`<img src="${API}/itens/${i.id}/imagem" alt="" loading="lazy">`:categoriaIcone(i.categoria)}</div>
       <div>
         <div class="qr-nome">${esc(i.nome)}</div>
         ${i.codigo?`<div class="qr-code">${esc(i.codigo)}</div>`:''}
@@ -1551,8 +1551,7 @@ document.getElementById('editItemSalvar').addEventListener('click', async ()=>{
     unidade:document.getElementById('eiUn').value,
     modelo:document.getElementById('eiModelo').value.trim(),
     voltagem:document.getElementById('eiVolt').value,
-    codigo:document.getElementById('eiCodigo').value.trim(),
-    imagem:editItemAtual.imagem||null
+    codigo:document.getElementById('eiCodigo').value.trim()
   })});
   if(!r.ok){ const t=await r.text().catch(()=>''); alert('Erro ao salvar: '+t); return; }
   document.getElementById('editItemOverlay').classList.remove('show');

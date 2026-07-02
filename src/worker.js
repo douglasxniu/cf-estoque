@@ -24,7 +24,8 @@ const PUBLIC_ROUTES = [
 // físico colado no item / link do email, sem que quem lê tenha o token de admin.
 const PUBLIC_ROUTE_PATTERNS = [
   { method: "GET", pattern: /^\/api\/ot\/[^/]+$/ },
-  { method: "GET", pattern: /^\/api\/unidades\/\d+$/ }
+  { method: "GET", pattern: /^\/api\/unidades\/\d+$/ },
+  { method: "GET", pattern: /^\/api\/itens\/\d+\/imagem$/ }
 ];
 
 function isPublicRoute(path, method) {
@@ -352,15 +353,32 @@ export default {
     }
 
     // ---------- ITENS ----------
+    // Sem a coluna "imagem" (base64) — evita baixar todas as fotos toda vez que a lista carrega.
+    // A foto de cada item é servida sob demanda por GET /api/itens/:id/imagem (com cache HTTP).
     if (path === "/api/itens" && method === "GET") {
-      const { results } = await env.DB.prepare("SELECT * FROM itens ORDER BY nome").all();
+      const { results } = await env.DB.prepare(
+        "SELECT id, nome, categoria, quantidade, unidade, modelo, voltagem, codigo, criado_em, (imagem IS NOT NULL) as tem_imagem FROM itens ORDER BY nome"
+      ).all();
       return json(results);
     }
 
     const itemGetMatch = path.match(/^\/api\/itens\/(\d+)$/);
     if (itemGetMatch && method === "GET") {
-      const item = await env.DB.prepare("SELECT * FROM itens WHERE id = ?").bind(itemGetMatch[1]).first();
+      const item = await env.DB.prepare(
+        "SELECT id, nome, categoria, quantidade, unidade, modelo, voltagem, codigo, criado_em, (imagem IS NOT NULL) as tem_imagem FROM itens WHERE id = ?"
+      ).bind(itemGetMatch[1]).first();
       return item ? json(item) : json({ error: "Not found" }, 404);
+    }
+
+    const itemImagemMatch = path.match(/^\/api\/itens\/(\d+)\/imagem$/);
+    if (itemImagemMatch && method === "GET") {
+      const item = await env.DB.prepare("SELECT imagem FROM itens WHERE id = ?").bind(itemImagemMatch[1]).first();
+      const m = item && item.imagem ? item.imagem.match(/^data:([^;]+);base64,(.*)$/) : null;
+      if (!m) return new Response(null, { status: 404 });
+      const bin = atob(m[2]);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return new Response(bytes, { headers: { "Content-Type": m[1], "Cache-Control": "public, max-age=604800", "Access-Control-Allow-Origin": "*" } });
     }
 
     if (path === "/api/solicitacoes" && method === "GET") {
@@ -400,8 +418,10 @@ export default {
         if (usuarioLogado && usuarioLogado.papel !== "admin") {
           return json({ error: "Ação restrita a administradores" }, 403);
         }
+        // imagem só é sobrescrita se vier explicitamente no corpo — preserva a foto atual
+        // quando o formulário de edição (que não lida com fotos) não a envia.
         await env.DB.prepare(
-          "UPDATE itens SET nome=?, categoria=?, quantidade=?, unidade=?, modelo=?, voltagem=?, codigo=?, imagem=? WHERE id=?"
+          "UPDATE itens SET nome=?, categoria=?, quantidade=?, unidade=?, modelo=?, voltagem=?, codigo=?, imagem=COALESCE(?, imagem) WHERE id=?"
         ).bind(b.nome, b.categoria, b.quantidade, b.unidade, b.modelo || "", b.voltagem || "", b.codigo || "", b.imagem ?? null, id).run();
       }
       return json({ ok: true });

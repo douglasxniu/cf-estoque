@@ -309,7 +309,7 @@ function render(){
             return `
           <div class="item-card glass ${noCarrinho?'in-cart':''}" data-id="${i.id}">
             ${noCarrinho?`<span class="in-cart-tag">${noCarrinho} no pedido</span>`:''}
-            ${i.imagem?`<img src="${i.imagem}" alt="" style="width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:12px;margin-bottom:8px">`:''}
+            ${i.tem_imagem?`<img src="${API}/itens/${i.id}/imagem" alt="" loading="lazy" style="width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:12px;margin-bottom:8px">`:''}
             <span class="cat" style="color:${colorFor(cat)}">${esc(cat)}</span>
             <h3>${highlight(i.nome, termo)}</h3>
             ${(i.voltagem||i.modelo)?`<div class="item-specs">
