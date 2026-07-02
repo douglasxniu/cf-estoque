@@ -37,14 +37,19 @@
     return resp;
   };
 
+  // Espera o <body> existir antes de montar qualquer coisa — o script roda no <head>,
+  // então document.body pode ainda não existir no instante em que isso é chamado.
+  function aoFicarPronto(fn) {
+    if (document.body) fn();
+    else document.addEventListener("DOMContentLoaded", fn);
+  }
+
   function overlay(html) {
     const wrap = document.createElement("div");
     wrap.id = "niuAuthOverlay";
     wrap.style.cssText = "position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:var(--bg,#0a0c10);padding:20px";
     wrap.innerHTML = html;
-    const montar = () => document.body.appendChild(wrap);
-    if (document.body) montar();
-    else document.addEventListener("DOMContentLoaded", montar);
+    aoFicarPronto(() => document.body.appendChild(wrap));
     return wrap;
   }
   function removerOverlay() {
@@ -65,12 +70,14 @@
       const r = await origFetch("/api/auth/status");
       const d = await r.json();
       precisaBootstrap = !!d.precisaBootstrap;
-    } catch (e) {}
+    } catch (e) { console.error("[niu-login] falha ao checar status:", e); }
     if (precisaBootstrap) mostrarBootstrap();
     else mostrarFormLogin();
   }
 
   function mostrarFormLogin() {
+    // Usa wrap.querySelector (não document.getElementById): o card pode ainda não estar
+    // anexado ao <body> nesse instante, e querySelector funciona mesmo num nó "solto".
     const wrap = overlay(`
       <div style="${estiloCaixa}">
         <div style="font-weight:800;font-size:1.05rem;color:var(--text,#eef0f4);margin-bottom:2px">Entrar no painel</div>
@@ -80,16 +87,16 @@
         <label style="${estiloLabel}">Senha</label>
         <input id="niuLoginSenha" type="password" style="${estiloInput}" autocomplete="current-password">
         <div id="niuLoginErro" style="${estiloErro}"></div>
-        <button id="niuLoginBtn" style="${estiloBtn}">Entrar</button>
+        <button id="niuLoginBtn" type="button" style="${estiloBtn}">Entrar</button>
       </div>
     `);
     const fazerLogin = async () => {
-      const email = document.getElementById("niuLoginEmail").value.trim();
-      const senha = document.getElementById("niuLoginSenha").value;
-      const erroEl = document.getElementById("niuLoginErro");
-      erroEl.textContent = "";
-      if (!email || !senha) { erroEl.textContent = "Preencha email e senha."; return; }
+      const erroEl = wrap.querySelector("#niuLoginErro");
       try {
+        const email = wrap.querySelector("#niuLoginEmail").value.trim();
+        const senha = wrap.querySelector("#niuLoginSenha").value;
+        erroEl.textContent = "";
+        if (!email || !senha) { erroEl.textContent = "Preencha email e senha."; return; }
         const r = await origFetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, senha }) });
         const d = await r.json();
         if (!r.ok) { erroEl.textContent = d.error || "Erro ao entrar."; return; }
@@ -97,9 +104,12 @@
         window.usuarioAtual = { nome: d.nome, papel: d.papel };
         removerOverlay();
         location.reload();
-      } catch (e) { erroEl.textContent = "Erro de conexão."; }
+      } catch (e) {
+        console.error("[niu-login] falha ao entrar:", e);
+        if (erroEl) erroEl.textContent = "Erro inesperado: " + (e && e.message ? e.message : e);
+      }
     };
-    document.getElementById("niuLoginBtn").addEventListener("click", fazerLogin);
+    wrap.querySelector("#niuLoginBtn").addEventListener("click", fazerLogin);
     wrap.querySelectorAll("input").forEach(i => i.addEventListener("keydown", e => { if (e.key === "Enter") fazerLogin(); }));
   }
 
@@ -117,18 +127,18 @@
         <label style="${estiloLabel}">Token de administrador (o mesmo definido com "wrangler secret put ADMIN_TOKEN")</label>
         <input id="niuBsToken" type="password" style="${estiloInput}">
         <div id="niuBsErro" style="${estiloErro}"></div>
-        <button id="niuBsBtn" style="${estiloBtn}">Criar conta e entrar</button>
+        <button id="niuBsBtn" type="button" style="${estiloBtn}">Criar conta e entrar</button>
       </div>
     `);
     const criar = async () => {
-      const nome = document.getElementById("niuBsNome").value.trim();
-      const email = document.getElementById("niuBsEmail").value.trim();
-      const senha = document.getElementById("niuBsSenha").value;
-      const adminToken = document.getElementById("niuBsToken").value;
-      const erroEl = document.getElementById("niuBsErro");
-      erroEl.textContent = "";
-      if (!nome || !email || !senha || !adminToken) { erroEl.textContent = "Preencha todos os campos."; return; }
+      const erroEl = wrap.querySelector("#niuBsErro");
       try {
+        const nome = wrap.querySelector("#niuBsNome").value.trim();
+        const email = wrap.querySelector("#niuBsEmail").value.trim();
+        const senha = wrap.querySelector("#niuBsSenha").value;
+        const adminToken = wrap.querySelector("#niuBsToken").value;
+        erroEl.textContent = "";
+        if (!nome || !email || !senha || !adminToken) { erroEl.textContent = "Preencha todos os campos."; return; }
         const r = await origFetch("/api/auth/bootstrap", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nome, email, senha, adminToken }) });
         const d = await r.json();
         if (!r.ok) { erroEl.textContent = d.error || "Erro ao criar conta."; return; }
@@ -136,9 +146,12 @@
         window.usuarioAtual = { nome: d.nome, papel: d.papel };
         removerOverlay();
         location.reload();
-      } catch (e) { erroEl.textContent = "Erro de conexão."; }
+      } catch (e) {
+        console.error("[niu-bootstrap] falha ao criar conta:", e);
+        if (erroEl) erroEl.textContent = "Erro inesperado: " + (e && e.message ? e.message : e);
+      }
     };
-    document.getElementById("niuBsBtn").addEventListener("click", criar);
+    wrap.querySelector("#niuBsBtn").addEventListener("click", criar);
     wrap.querySelectorAll("input").forEach(i => i.addEventListener("keydown", e => { if (e.key === "Enter") criar(); }));
   }
 
