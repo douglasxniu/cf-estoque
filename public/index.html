@@ -1050,27 +1050,6 @@ function abrirModalEditarItem(item){
   document.getElementById('eiUn').value=item.unidade||'un';
   document.getElementById('editItemOverlay').classList.add('show');
 }
-document.getElementById('editItemCancel').addEventListener('click', ()=>{
-  document.getElementById('editItemOverlay').classList.remove('show');
-});
-document.getElementById('editItemSalvar').addEventListener('click', async ()=>{
-  const nome=document.getElementById('eiNome').value.trim();
-  if(!nome){ alert('Informe o nome do item.'); return; }
-  const r=await fetch(`${API}/itens/${editItemAtual.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-    nome,
-    categoria:document.getElementById('eiCat').value,
-    quantidade:editItemAtual.quantidade,
-    unidade:document.getElementById('eiUn').value,
-    modelo:document.getElementById('eiModelo').value.trim(),
-    voltagem:document.getElementById('eiVolt').value,
-    codigo:document.getElementById('eiCodigo').value.trim(),
-    imagem:editItemAtual.imagem||null
-  })});
-  if(!r.ok){ const t=await r.text().catch(()=>''); alert('Erro ao salvar: '+t); return; }
-  document.getElementById('editItemOverlay').classList.remove('show');
-  toast('Item atualizado!');
-  carregarTudo();
-});
 
 function abrirModalQR(item){
   const url = `${location.origin}/scan.html?id=${item.id}&nome=${encodeURIComponent(item.nome)}`;
@@ -1524,6 +1503,28 @@ document.getElementById('editOtMesclarResultados').addEventListener('click', asy
   document.getElementById('editOtMesclarBox').style.display='none';
   await carregarTudo();
   renderEditOtItens();
+});
+
+document.getElementById('editItemCancel').addEventListener('click', ()=>{
+  document.getElementById('editItemOverlay').classList.remove('show');
+});
+document.getElementById('editItemSalvar').addEventListener('click', async ()=>{
+  const nome=document.getElementById('eiNome').value.trim();
+  if(!nome){ alert('Informe o nome do item.'); return; }
+  const r=await fetch(`${API}/itens/${editItemAtual.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    nome,
+    categoria:document.getElementById('eiCat').value,
+    quantidade:editItemAtual.quantidade,
+    unidade:document.getElementById('eiUn').value,
+    modelo:document.getElementById('eiModelo').value.trim(),
+    voltagem:document.getElementById('eiVolt').value,
+    codigo:document.getElementById('eiCodigo').value.trim(),
+    imagem:editItemAtual.imagem||null
+  })});
+  if(!r.ok){ const t=await r.text().catch(()=>''); alert('Erro ao salvar: '+t); return; }
+  document.getElementById('editItemOverlay').classList.remove('show');
+  toast('Item atualizado!');
+  carregarTudo();
 });
 
 document.getElementById('editOtCancel').addEventListener('click', ()=>{
