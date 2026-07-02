@@ -737,7 +737,9 @@ export default {
     const otGetMatch = path.match(/^\/api\/ot\/(.+)$/);
     if (otGetMatch && method === "GET") {
       const ot = decodeURIComponent(otGetMatch[1]);
-      const { results } = await env.DB.prepare("SELECT * FROM solicitacoes WHERE ot=? ORDER BY id").bind(ot).all();
+      const { results } = await env.DB.prepare(
+        "SELECT s.*, i.modelo AS item_modelo, i.voltagem AS item_voltagem FROM solicitacoes s LEFT JOIN itens i ON s.item_id = i.id WHERE s.ot=? ORDER BY s.id"
+      ).bind(ot).all();
       return json(results);
     }
 

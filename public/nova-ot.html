@@ -230,7 +230,7 @@ async function adicionarDoEstoque(id){
   const it=itensEstoque.find(i=>i.id==id);
   if(!it) return;
   if(carrinho.find(c=>c._id==id)){await niuAlert('Item já adicionado.');return;}
-  carrinho.push({_id:id,_estoque:true,nome:it.nome,qty:1,unidade:it.unidade,local:'',obs:'',maxQty:it.quantidade});
+  carrinho.push({_id:id,_estoque:true,nome:it.nome,qty:1,unidade:it.unidade,local:'',obs:'',maxQty:it.quantidade,modelo:it.modelo,voltagem:it.voltagem});
   render();
 }
 
@@ -337,7 +337,7 @@ async function confirmar(apenasEmail=false){
 function gerarPDF({ot,solic,setor,local,obs,data}){
   gerarFolhaRequisicaoPDF({
     ot, solicitante: solic, setor, local, data, obs,
-    itens: carrinho.map(c=>({ nome: c.nome, qtd: c.qty, unidade: c.unidade, local: c.local, obs: c.obs }))
+    itens: carrinho.map(c=>({ nome: c.nome, qtd: c.qty, unidade: c.unidade, local: c.local, obs: c.obs, modelo: c.modelo, voltagem: c.voltagem }))
   });
 }
 </script>

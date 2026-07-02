@@ -867,7 +867,7 @@ function gerarPDF(ot){
   const primeiro = itensOt[0];
   gerarFolhaRequisicaoPDF({
     ot, solicitante: primeiro.solicitante, setor: primeiro.setor, data: (primeiro.data||'').slice(0,10),
-    itens: itensOt.map(it=>({ nome: it.item_nome, qtd: it.quantidade, unidade: it.unidade, local: it.local_uso }))
+    itens: itensOt.map(it=>{ const item=itens.find(i=>i.id===it.item_id); return { nome: it.item_nome, qtd: it.quantidade, unidade: it.unidade, local: it.local_uso, modelo: item?.modelo, voltagem: item?.voltagem }; })
   });
 }
 
