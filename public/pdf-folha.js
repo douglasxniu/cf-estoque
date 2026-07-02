@@ -6,22 +6,24 @@ function construirFolhaRequisicaoPDF({ ot, solicitante, setor, local, data, obs,
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const W = 210, H = 297, M = 12;
 
-  // Paleta alinhada à identidade visual do site (tons escuros no cabeçalho, texto com
-  // contraste reforçado no corpo — mesmo cuidado aplicado no dashboard/estoque).
+  // Paleta alinhada à identidade visual do site — navy profundo no cabeçalho, azul da
+  // marca como único acento (nada de blocos de cor decorativos), texto com contraste
+  // reforçado no corpo, mesmo cuidado já aplicado no dashboard/estoque.
   const C = {
-    headerBg: [13, 17, 32],
-    headerAccent: [91, 140, 255],
-    headerSub: [158, 165, 196],
-    otNumber: [124, 163, 255],
-    text: [16, 19, 32],
-    muted: [80, 86, 106],
-    border: [211, 215, 228],
-    sectionBg: [228, 234, 250],
-    zebra: [246, 248, 252],
-    primary: [51, 88, 212],
-    primaryBg: [221, 229, 250],
-    ok: [7, 130, 87],
-    okBg: [215, 241, 230],
+    headerBg: [9, 12, 24],
+    headerBg2: [19, 24, 46],
+    headerAccent: [99, 143, 255],
+    headerSub: [151, 159, 194],
+    text: [17, 20, 34],
+    muted: [96, 102, 122],
+    border: [223, 226, 235],
+    borderSoft: [235, 237, 243],
+    sectionAccent: [51, 88, 212],
+    zebra: [249, 250, 252],
+    primary: [43, 76, 196],
+    primaryBg: [228, 234, 251],
+    ok: [6, 122, 82],
+    okBg: [221, 244, 234],
     white: [255, 255, 255]
   };
 
@@ -49,25 +51,30 @@ function construirFolhaRequisicaoPDF({ ot, solicitante, setor, local, data, obs,
   }
 
   function via(T, alturaVia, etiqueta, itensPagina) {
-    // ---- cabeçalho ----
+    // ---- cabeçalho: navy em dois tons (leve profundidade) + barra de acento ----
     doc.setFillColor(...C.headerBg); doc.rect(M, T, CW, 18, 'F');
-    doc.setFillColor(...C.headerAccent); doc.rect(M, T, 1.6, 18, 'F');
+    doc.setFillColor(...C.headerBg2); doc.rect(M, T + 12, CW, 6, 'F');
+    doc.setFillColor(...C.headerAccent); doc.rect(M, T, CW, 0.6, 'F');
     doc.setFontSize(13); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C.white);
-    doc.text('NIU', M + 5.5, T + 8);
+    doc.text('NIU', M + 5, T + 8);
     doc.setFontSize(6.3); doc.setFont('helvetica', 'normal'); doc.setTextColor(...C.headerSub);
-    doc.text('EXPERIENCE AGENCY', M + 5.5, T + 13);
-    doc.setDrawColor(60, 66, 96); doc.setLineWidth(0.3); doc.line(M + 35, T + 3, M + 35, T + 15);
-    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(232, 235, 245);
-    doc.text('FOLHA DE REQUISIÇÃO DE MATERIAL', M + 39, T + 8);
+    doc.text('EXPERIENCE AGENCY', M + 5, T + 13);
+    doc.setDrawColor(48, 54, 82); doc.setLineWidth(0.3); doc.line(M + 34, T + 3.5, M + 34, T + 14.5);
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(236, 238, 247);
+    doc.text('FOLHA DE REQUISIÇÃO DE MATERIAL', M + 38, T + 8);
     doc.setFontSize(6.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...C.headerSub);
-    doc.text(etiqueta, M + 39, T + 13);
-    doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C.otNumber);
-    doc.text(ot, M + CW - 2, T + 9, { align: 'right' });
+    doc.text(etiqueta, M + 38, T + 13);
+
+    // número da OT em destaque, como um selo/pill
+    doc.setFontSize(9.5); doc.setFont('helvetica', 'bold');
+    const otW = doc.getTextWidth(ot) + 6;
+    doc.setFillColor(...C.headerAccent); doc.roundedRect(M + CW - otW - 1, T + 3.2, otW, 6.4, 1.6, 1.6, 'F');
+    doc.setTextColor(...C.headerBg); doc.text(ot, M + CW - otW / 2 - 1, T + 7.4, { align: 'center' });
     doc.setFontSize(6); doc.setFont('helvetica', 'normal'); doc.setTextColor(...C.headerSub);
-    doc.text(dataFmt, M + CW - 2, T + 14, { align: 'right' });
+    doc.text(dataFmt, M + CW - 2, T + 14.5, { align: 'right' });
 
     const qs = 22;
-    doc.setFillColor(...C.white); doc.setDrawColor(...C.border); doc.setLineWidth(0.25);
+    doc.setFillColor(...C.white); doc.setDrawColor(...C.primaryBg); doc.setLineWidth(0.4);
     doc.roundedRect(M + CW - qs - 1, T + 20, qs + 2, qs + 8, 1.2, 1.2, 'FD');
     doc.addImage(qrImg, 'PNG', M + CW - qs, T + 21, qs, qs);
     doc.setFontSize(5.3); doc.setFont('helvetica', 'normal'); doc.setTextColor(...C.muted);
@@ -90,10 +97,11 @@ function construirFolhaRequisicaoPDF({ ot, solicitante, setor, local, data, obs,
 
     doc.setDrawColor(...C.border); doc.setLineWidth(0.3); doc.line(M, y, W - M, y); y += 4.5;
 
-    // ---- cabeçalho da tabela ----
-    doc.setFillColor(...C.sectionBg); doc.roundedRect(M, y - 3, CW, 6.5, 1, 1, 'F');
-    doc.setFontSize(6.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C.primary);
-    doc.text('MATERIAL / ITEM', M + 2, y + 0.8); doc.text('QTD.', M + 92, y + 0.8); doc.text('LOCAL ESPECÍFICO', M + 112, y + 0.8); doc.text('OBSERVAÇÕES', M + 160, y + 0.8);
+    // ---- cabeçalho da tabela: faixa clara com acento lateral, não um bloco de cor ----
+    doc.setFillColor(...C.borderSoft); doc.rect(M, y - 3, CW, 6.5, 'F');
+    doc.setFillColor(...C.sectionAccent); doc.rect(M, y - 3, 1.1, 6.5, 'F');
+    doc.setFontSize(6.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C.sectionAccent);
+    doc.text('MATERIAL / ITEM', M + 3.5, y + 0.8); doc.text('QTD.', M + 92, y + 0.8); doc.text('LOCAL ESPECÍFICO', M + 112, y + 0.8); doc.text('OBSERVAÇÕES', M + 160, y + 0.8);
     y += 4.5; doc.setDrawColor(...C.border); doc.line(M, y, W - M, y); y += 3;
 
     const yObsAltura = obs ? 11 : 6;
@@ -103,7 +111,7 @@ function construirFolhaRequisicaoPDF({ ot, solicitante, setor, local, data, obs,
     itensRenderizados.forEach((it, i) => {
       const yy = y + i * rowH;
       if (i % 2 === 0) { doc.setFillColor(...C.zebra); doc.rect(M, yy - 1.8, CW, rowH, 'F'); }
-      doc.setDrawColor(...C.border); doc.setLineWidth(0.1); doc.line(M, yy + rowH - 1.8, W - M, yy + rowH - 1.8);
+      doc.setDrawColor(...C.borderSoft); doc.setLineWidth(0.1); doc.line(M, yy + rowH - 1.8, W - M, yy + rowH - 1.8);
 
       doc.setFontSize(7.3); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C.text);
       const nomeStr = String(it.nome || '—');
@@ -125,10 +133,10 @@ function construirFolhaRequisicaoPDF({ ot, solicitante, setor, local, data, obs,
 
     if (obs) {
       const yObs = T + alturaVia - yObsAltura;
-      doc.setFillColor(...C.sectionBg); doc.roundedRect(M, yObs, CW, yObsAltura, 1.2, 1.2, 'F');
-      doc.setDrawColor(...C.border); doc.setLineWidth(0.2); doc.roundedRect(M, yObs, CW, yObsAltura, 1.2, 1.2);
-      doc.setFontSize(6); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C.primary); doc.text('OBSERVAÇÕES GERAIS', M + 2, yObs + 3.6);
-      doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...C.text); doc.text(obs, M + 2, yObs + 8, { maxWidth: CW - 4 });
+      doc.setFillColor(...C.borderSoft); doc.roundedRect(M, yObs, CW, yObsAltura, 1.2, 1.2, 'F');
+      doc.setFillColor(...C.sectionAccent); doc.rect(M, yObs, 1.1, yObsAltura, 'F');
+      doc.setFontSize(6); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C.sectionAccent); doc.text('OBSERVAÇÕES GERAIS', M + 3.5, yObs + 3.6);
+      doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...C.text); doc.text(obs, M + 3.5, yObs + 8, { maxWidth: CW - 6 });
     }
 
     return itensRenderizados.length;
