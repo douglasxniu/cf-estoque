@@ -16,7 +16,7 @@ function construirFolhaRequisicaoPDF({ ot, solicitante, setor, local, data, obs,
   const dataFmt = data ? new Date(data + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
   const CW = W - 2 * M;
 
-  function via(T, alturaVia, etiqueta) {
+  function via(T, alturaVia, etiqueta, itensPagina) {
     doc.setFillColor(12, 14, 22); doc.rect(M, T, CW, 18, 'F');
     doc.setFontSize(13); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
     doc.text('NIU', M + 4, T + 8);
@@ -56,19 +56,20 @@ function construirFolhaRequisicaoPDF({ ot, solicitante, setor, local, data, obs,
     doc.text('MATERIAL / ITEM', M + 1, y + 1); doc.text('QTD.', M + 90, y + 1); doc.text('LOCAL ESPECÍFICO', M + 110, y + 1); doc.text('OBSERVAÇÕES', M + 158, y + 1);
     y += 5; doc.setDrawColor(200, 203, 215); doc.line(M, y, W - M, y); y += 3;
 
-    const rowH = 8;
+    const rowH = 6;
     const maxR = Math.floor((alturaVia - (y - T) - 36) / rowH);
-    itens.slice(0, maxR).forEach((it, i) => {
+    const itensRenderizados = itensPagina.slice(0, maxR);
+    itensRenderizados.forEach((it, i) => {
       const yy = y + i * rowH;
-      if (i % 2 === 0) { doc.setFillColor(248, 249, 252); doc.rect(M, yy - 2, CW, rowH, 'F'); }
-      doc.setDrawColor(225, 227, 235); doc.setLineWidth(0.1); doc.line(M, yy + rowH - 2, W - M, yy + rowH - 2);
-      doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(12, 15, 28);
-      doc.text(String(it.nome || '—'), M + 1, yy + 3, { maxWidth: 86 });
+      if (i % 2 === 0) { doc.setFillColor(248, 249, 252); doc.rect(M, yy - 1.5, CW, rowH, 'F'); }
+      doc.setDrawColor(225, 227, 235); doc.setLineWidth(0.1); doc.line(M, yy + rowH - 1.5, W - M, yy + rowH - 1.5);
+      doc.setFontSize(7.3); doc.setFont('helvetica', 'bold'); doc.setTextColor(12, 15, 28);
+      doc.text(String(it.nome || '—'), M + 1, yy + 2.7, { maxWidth: 86 });
       doc.setFont('helvetica', 'normal');
-      doc.text(`${it.qtd} ${it.unidade || ''}`, M + 90, yy + 3);
-      doc.text(String(it.local || local || '—'), M + 110, yy + 3, { maxWidth: 45 });
+      doc.text(`${it.qtd} ${it.unidade || ''}`, M + 90, yy + 2.7);
+      doc.text(String(it.local || local || '—'), M + 110, yy + 2.7, { maxWidth: 45 });
       doc.setTextColor(80, 85, 100);
-      doc.text(String(it.obs || '—'), M + 158, yy + 3, { maxWidth: W - M - 160 });
+      doc.text(String(it.obs || '—'), M + 158, yy + 2.7, { maxWidth: W - M - 160 });
     });
 
     const yObs = T + alturaVia - 34;
@@ -83,15 +84,27 @@ function construirFolhaRequisicaoPDF({ ot, solicitante, setor, local, data, obs,
     doc.line(M, ySign, M + sw, ySign); doc.line(M + sw + 12, ySign, M + CW, ySign);
     doc.setFontSize(6.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(110, 115, 130);
     doc.text('Solicitante', M, ySign + 4); doc.text('Responsável pelo Estoque', M + sw + 12, ySign + 4);
+    return itensRenderizados.length;
   }
 
+  // Se os itens não couberem em uma página (folha de 2 vias), continua em páginas extras —
+  // nunca descarta itens silenciosamente.
   const meio = H / 2;
-  via(6, meio - 10, 'VIA DO SOLICITANTE');
-  doc.setLineDashPattern([3, 2], 0); doc.setDrawColor(170, 173, 190); doc.setLineWidth(0.4);
-  doc.line(M, meio, W - M, meio); doc.setLineDashPattern([], 0);
-  via(meio + 4, meio - 10, 'VIA DO ESTOQUE');
-  doc.setFontSize(6); doc.setTextColor(160, 163, 175);
-  doc.text(`${ot} · ${new Date().toLocaleString('pt-BR')} · NIU Experience Agency`, W / 2, H - 2, { align: 'center' });
+  let restantes = itens.slice();
+  let pagina = 0;
+  do {
+    if (pagina > 0) doc.addPage();
+    const sufixo = pagina > 0 ? ` (CONT. ${pagina + 1})` : '';
+    const usados1 = via(6, meio - 10, 'VIA DO SOLICITANTE' + sufixo, restantes);
+    restantes = restantes.slice(usados1);
+    doc.setLineDashPattern([3, 2], 0); doc.setDrawColor(170, 173, 190); doc.setLineWidth(0.4);
+    doc.line(M, meio, W - M, meio); doc.setLineDashPattern([], 0);
+    const usados2 = via(meio + 4, meio - 10, 'VIA DO ESTOQUE' + sufixo, restantes);
+    restantes = restantes.slice(usados2);
+    doc.setFontSize(6); doc.setTextColor(160, 163, 175);
+    doc.text(`${ot} · ${new Date().toLocaleString('pt-BR')} · NIU Experience Agency`, W / 2, H - 2, { align: 'center' });
+    pagina++;
+  } while (restantes.length > 0 && pagina < 20);
   return doc;
 }
 
