@@ -54,6 +54,23 @@ select option{background:var(--surface-2)}
 .footer-actions{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);padding:14px 20px;display:flex;gap:10px;z-index:20;box-shadow:0 -4px 20px rgba(0,0,0,.3)}
 .counter{background:var(--primary);color:#fff;font-size:.7rem;font-weight:800;border-radius:20px;padding:1px 7px}
 .add-item-wrap{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:start}
+.filtros-row{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.filtro-grupo{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.filtro-label{font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);min-width:64px}
+.filtro-chips{display:flex;gap:7px;flex-wrap:wrap}
+.chip{padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font-size:.76rem;font-weight:600;cursor:pointer;transition:.15s;font-family:inherit}
+.chip:hover{border-color:var(--primary)}
+.chip.active{background:var(--primary);border-color:var(--primary);color:#fff}
+.catalogo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:14px;max-height:400px;overflow-y:auto;padding:4px 2px}
+.catalogo-card{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:11px;cursor:pointer;transition:.15s}
+.catalogo-card:hover{border-color:var(--primary);transform:translateY(-2px)}
+.catalogo-card.added{border-color:var(--primary);background:rgba(91,140,255,.08);cursor:default}
+.catalogo-card.sem-estoque{opacity:.45;cursor:not-allowed}
+.catalogo-card .nome{font-weight:700;font-size:.82rem;margin-bottom:5px;line-height:1.25}
+.catalogo-card .cat{font-size:.65rem;color:var(--primary);font-weight:700;text-transform:uppercase;letter-spacing:.03em;margin-bottom:3px;display:block}
+.catalogo-card .qtd{font-size:.7rem;color:var(--muted)}
+.catalogo-card .ok-tag{font-size:.68rem;color:var(--primary);font-weight:800;margin-top:5px}
+.catalogo-empty{grid-column:1/-1;text-align:center;padding:20px;color:var(--muted);font-size:.85rem}
 </style>
 </head>
 <body>
@@ -136,10 +153,24 @@ select option{background:var(--surface-2)}
     <div class="add-item-wrap">
       <div class="search-wrap">
         <input id="busca" placeholder="Digite nome, categoria ou código..." autocomplete="off">
-        <div class="search-results" id="searchResults"></div>
       </div>
       <button class="btn btn-ghost" onclick="adicionarItemExtra()" style="white-space:nowrap;padding:10px 14px">+ Item livre</button>
     </div>
+    <div class="filtros-row" id="filtrosRow">
+      <div class="filtro-grupo">
+        <span class="filtro-label">Categoria</span>
+        <div class="filtro-chips" id="filtrosCat"></div>
+      </div>
+      <div class="filtro-grupo" id="grupoModelo">
+        <span class="filtro-label">Modelo</span>
+        <div class="filtro-chips" id="filtrosModelo"></div>
+      </div>
+      <div class="filtro-grupo" id="grupoVolt">
+        <span class="filtro-label">Voltagem</span>
+        <div class="filtro-chips" id="filtrosVolt"></div>
+      </div>
+    </div>
+    <div class="catalogo-grid" id="catalogoGrid"></div>
   </div>
 
   <div id="itensList"></div>
@@ -168,6 +199,8 @@ document.getElementById('otPrefixo').textContent=`OT-${anoOt}-`;
 
 async function init(){
   itensEstoque=await fetch(`${API}/itens`).then(r=>r.json()).catch(()=>[]);
+  renderFiltros();
+  renderCatalogo();
   // reserva um número de projeto novo e único no servidor (evita colisão entre usuários simultâneos)
   const r=await fetch(`${API}/projetos`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})}).then(r=>r.json()).catch(()=>null);
   const digitos=document.getElementById('otDigitos');
@@ -208,29 +241,65 @@ document.getElementById('otDigitos').addEventListener('change', async e=>{
   }
 });
 
-// busca estoque
+// busca estoque + filtros
 const busca=document.getElementById('busca');
-const results=document.getElementById('searchResults');
-busca.addEventListener('input',()=>{
-  const t=busca.value.toLowerCase().trim();
-  if(!t){results.style.display='none';return;}
-  const found=itensEstoque.filter(i=>i.nome.toLowerCase().includes(t)).slice(0,8);
-  if(!found.length){results.style.display='none';return;}
-  results.style.display='block';
-  results.innerHTML=found.map(i=>`
-    <div class="search-result-item" onclick="adicionarDoEstoque(${i.id})">
-      <div>${esc(i.nome)}</div>
-      <div class="search-result-qty">${i.quantidade} ${esc(i.unidade)} disponível · ${esc(i.categoria)}</div>
-    </div>`).join('');
+let filtroCatAtivo='', filtroModeloAtivo='', filtroVoltAtivo='';
+
+function chipsHtml(vals, ativo, grupo){
+  return `<button type="button" class="chip ${!ativo?'active':''}" data-grupo="${grupo}" data-valor="">Todas</button>` +
+    vals.map(v=>`<button type="button" class="chip ${ativo===v?'active':''}" data-grupo="${grupo}" data-valor="${esc(v)}">${esc(v)}</button>`).join('');
+}
+function renderFiltros(){
+  const base=itensEstoque.filter(i=>(!filtroCatAtivo||i.categoria===filtroCatAtivo));
+  const cats=[...new Set(itensEstoque.map(i=>i.categoria).filter(Boolean))].sort();
+  const modelos=[...new Set(base.map(i=>i.modelo).filter(Boolean))].sort();
+  const volts=[...new Set(base.map(i=>i.voltagem).filter(Boolean))].sort();
+  document.getElementById('filtrosCat').innerHTML = chipsHtml(cats, filtroCatAtivo, 'cat');
+  document.getElementById('filtrosModelo').innerHTML = chipsHtml(modelos, filtroModeloAtivo, 'modelo');
+  document.getElementById('filtrosVolt').innerHTML = chipsHtml(volts, filtroVoltAtivo, 'volt');
+  document.getElementById('grupoModelo').style.display = modelos.length ? '' : 'none';
+  document.getElementById('grupoVolt').style.display = volts.length ? '' : 'none';
+}
+document.getElementById('filtrosRow').addEventListener('click', e=>{
+  const btn=e.target.closest('.chip'); if(!btn) return;
+  const grupo=btn.dataset.grupo, valor=btn.dataset.valor;
+  if(grupo==='cat'){ filtroCatAtivo=valor; filtroModeloAtivo=''; filtroVoltAtivo=''; }
+  else if(grupo==='modelo') filtroModeloAtivo=valor;
+  else if(grupo==='volt') filtroVoltAtivo=valor;
+  renderFiltros();
+  renderCatalogo();
 });
-document.addEventListener('click',e=>{if(!e.target.closest('#busca')&&!e.target.closest('#searchResults'))results.style.display='none';});
+
+function renderCatalogo(){
+  const t=busca.value.toLowerCase().trim();
+  const wrap=document.getElementById('catalogoGrid');
+  const found=itensEstoque.filter(i=>
+    (!t||i.nome.toLowerCase().includes(t)) &&
+    (!filtroCatAtivo||i.categoria===filtroCatAtivo) &&
+    (!filtroModeloAtivo||i.modelo===filtroModeloAtivo) &&
+    (!filtroVoltAtivo||i.voltagem===filtroVoltAtivo)
+  );
+  if(!found.length){ wrap.innerHTML='<div class="catalogo-empty">Nenhum item encontrado.</div>'; return; }
+  wrap.innerHTML=found.map(i=>{
+    const noCarrinho=carrinho.some(c=>c._id==i.id);
+    const semEstoque=i.quantidade<=0;
+    return `
+    <div class="catalogo-card ${noCarrinho?'added':''} ${semEstoque&&!noCarrinho?'sem-estoque':''}" ${(!noCarrinho&&!semEstoque)?`onclick="adicionarDoEstoque(${i.id})"`:''}>
+      <span class="cat">${esc(i.categoria)}</span>
+      <div class="nome">${esc(i.nome)}</div>
+      <div class="qtd">${semEstoque?'Sem estoque':`${i.quantidade} ${esc(i.unidade)} disponível`}</div>
+      ${noCarrinho?'<div class="ok-tag">✓ Adicionado</div>':''}
+    </div>`;
+  }).join('');
+}
+busca.addEventListener('input', renderCatalogo);
 
 async function adicionarDoEstoque(id){
-  results.style.display='none'; busca.value='';
   const it=itensEstoque.find(i=>i.id==id);
   if(!it) return;
   if(carrinho.find(c=>c._id==id)){await niuAlert('Item já adicionado.');return;}
   carrinho.push({_id:id,_estoque:true,nome:it.nome,qty:1,unidade:it.unidade,local:'',obs:'',maxQty:it.quantidade,modelo:it.modelo,voltagem:it.voltagem});
+  renderCatalogo();
   render();
 }
 
@@ -239,7 +308,7 @@ function adicionarItemExtra(){
   render();
 }
 
-function remover(idx){ carrinho.splice(idx,1); render(); }
+function remover(idx){ carrinho.splice(idx,1); render(); renderCatalogo(); }
 
 function render(){
   document.getElementById('counter').textContent=carrinho.length;

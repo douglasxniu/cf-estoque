@@ -534,9 +534,13 @@ export default {
     const projetoMatch = path.match(/^\/api\/projetos\/([^/]+)$/);
     if (projetoMatch && method === "PATCH") {
       const b = await request.json();
+      const numero = decodeURIComponent(projetoMatch[1]);
       await env.DB.prepare(
         "UPDATE projetos SET nome = COALESCE(?, nome), setor = COALESCE(?, setor), status = COALESCE(?, status) WHERE numero = ?"
-      ).bind(b.nome ?? null, b.setor ?? null, b.status ?? null, decodeURIComponent(projetoMatch[1])).run();
+      ).bind(b.nome ?? null, b.setor ?? null, b.status ?? null, numero).run();
+      if (b.solicitante) {
+        await env.DB.prepare("UPDATE solicitacoes SET solicitante = ? WHERE ot = ?").bind(b.solicitante, numero).run();
+      }
       return json({ ok: true });
     }
 
@@ -588,8 +592,10 @@ export default {
         return json({ error: `Projeto ${ot} não encontrado. Peça ao responsável pelo estoque para criá-lo primeiro.` }, 404);
       }
       // reserva atômica: cada UPDATE só afeta linha se houver quantidade suficiente
+      // (itens avulsos, sem itemId, não existem no estoque — não reservam nada)
       const reservados = [];
       for (const li of lista) {
+        if (!li.itemId) continue;
         const upd = await env.DB.prepare(
           "UPDATE itens SET quantidade = quantidade - ? WHERE id = ? AND quantidade >= ?"
         ).bind(li.quantidade, li.itemId, li.quantidade).run();
@@ -604,12 +610,21 @@ export default {
       }
       const resultado = [];
       for (const li of lista) {
-        const item = await env.DB.prepare("SELECT * FROM itens WHERE id = ?").bind(li.itemId).first();
-        await env.DB.prepare(
-          "INSERT INTO solicitacoes (projeto_id, item_id, item_nome, unidade, quantidade, ot, solicitante, setor, local_uso) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
-        ).bind(projeto.id, li.itemId, item.nome, item.unidade, li.quantidade, ot, solicitante, setor || "", li.localUso || "").run();
-        resultado.push({ item: item.nome, quantidade: li.quantidade });
-        await verificarQuedaEstoqueBaixo(env, li.itemId, item.quantidade + li.quantidade, item.quantidade);
+        if (li.itemId) {
+          const item = await env.DB.prepare("SELECT * FROM itens WHERE id = ?").bind(li.itemId).first();
+          await env.DB.prepare(
+            "INSERT INTO solicitacoes (projeto_id, item_id, item_nome, unidade, quantidade, ot, solicitante, setor, local_uso) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+          ).bind(projeto.id, li.itemId, item.nome, item.unidade, li.quantidade, ot, solicitante, setor || "", li.localUso || "").run();
+          resultado.push({ item: item.nome, quantidade: li.quantidade });
+          await verificarQuedaEstoqueBaixo(env, li.itemId, item.quantidade + li.quantidade, item.quantidade);
+        } else {
+          const nome = (li.nome || "").trim();
+          if (!nome) continue;
+          await env.DB.prepare(
+            "INSERT INTO solicitacoes (projeto_id, item_id, item_nome, unidade, quantidade, ot, solicitante, setor, local_uso) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?)"
+          ).bind(projeto.id, nome, li.unidade || "", li.quantidade, ot, solicitante, setor || "", li.localUso || "").run();
+          resultado.push({ item: nome, quantidade: li.quantidade });
+        }
       }
       await env.DB.prepare("UPDATE projetos SET status='aberto' WHERE numero=?").bind(ot).run();
       await enviarEmailLote(env, { ot, solicitante, setor, itens: resultado });
@@ -678,6 +693,29 @@ export default {
       const sol = await env.DB.prepare("SELECT * FROM solicitacoes WHERE id = ?").bind(delSolMatch[1]).first();
       if (sol) await devolverSolicitacao(env, sol);
       await env.DB.prepare("DELETE FROM solicitacoes WHERE id = ?").bind(delSolMatch[1]).run();
+      return json({ ok: true });
+    }
+
+    const patchSolMatch = path.match(/^\/api\/solicitacoes\/(\d+)$/);
+    if (patchSolMatch && method === "PATCH") {
+      const b = await request.json();
+      const sol = await env.DB.prepare("SELECT * FROM solicitacoes WHERE id = ?").bind(patchSolMatch[1]).first();
+      if (!sol) return json({ error: "Solicitação não encontrada" }, 404);
+      // Quantidade reservada é descontada do estoque na criação — se o pedido ainda não foi
+      // devolvido, qualquer mudança de quantidade aqui precisa mexer no estoque na mesma proporção.
+      // Itens avulsos (item_id nulo, fora do estoque) não têm quantidade reservada a ajustar.
+      if (b.quantidade != null && b.quantidade !== sol.quantidade && sol.status !== "devolvido" && sol.item_id != null) {
+        const delta = b.quantidade - sol.quantidade; // positivo = precisa reservar mais estoque
+        const upd = await env.DB.prepare(
+          "UPDATE itens SET quantidade = quantidade - ? WHERE id = ? AND quantidade >= ?"
+        ).bind(delta, sol.item_id, delta).run();
+        if (upd.meta.changes === 0) {
+          return json({ error: "Quantidade indisponível no estoque para esse aumento" }, 400);
+        }
+      }
+      await env.DB.prepare(
+        "UPDATE solicitacoes SET item_nome = COALESCE(?, item_nome), quantidade = COALESCE(?, quantidade), local_uso = COALESCE(?, local_uso) WHERE id = ?"
+      ).bind(b.item_nome ?? null, b.quantidade ?? null, b.local_uso ?? null, patchSolMatch[1]).run();
       return json({ ok: true });
     }
 

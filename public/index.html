@@ -87,13 +87,18 @@ tr:hover td{background:rgba(255,255,255,.03)}
 .actions button{width:25px;height:25px;border-radius:8px;border:1px solid var(--glass-brd);background:var(--surface-hover);color:var(--text);cursor:pointer;font-weight:700}
 .del{background:none;border:none;color:var(--danger);cursor:pointer;font-size:.85rem}
 
-.cat-section{margin-bottom:18px}
+.cat-section{margin-bottom:28px;padding-bottom:20px;border-bottom:1px solid var(--glass-brd)}
+.cat-section:last-child{border-bottom:none}
 .cat-section h3{display:flex;align-items:center;gap:8px;font-size:.84rem;font-weight:700;margin:0 0 8px;color:var(--text)}
 .cat-section h3 .dot{width:8px;height:8px;border-radius:50%}
 .subgroup{margin-bottom:12px;padding-left:6px;border-left:2px solid var(--glass-brd)}
 .subgroup-label{display:inline-flex;align-items:center;font-size:.85rem;color:var(--primary);font-weight:800;letter-spacing:.02em;margin:6px 0 10px 10px;padding:5px 12px;border-radius:9px;background:rgba(91,140,255,.14);border:1px solid rgba(91,140,255,.3)}
 
-.estoque-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px;padding:0 0 6px 10px}
+.estoque-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:18px;padding:0 0 6px 10px}
+@media (max-width:1500px){.estoque-grid{grid-template-columns:repeat(4,1fr)}}
+@media (max-width:1150px){.estoque-grid{grid-template-columns:repeat(3,1fr)}}
+@media (max-width:820px){.estoque-grid{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:480px){.estoque-grid{grid-template-columns:repeat(1,1fr)}}
 .est-card{background:var(--surface);border:1px solid var(--glass-brd);border-radius:14px;overflow:hidden;transition:.2s;box-shadow:var(--shadow-card)}
 .est-card:hover{border-color:rgba(91,140,255,.35);transform:translateY(-3px);box-shadow:0 10px 24px rgba(91,140,255,.14)}
 .est-img{position:relative;aspect-ratio:1/1;background:var(--surface-hover);display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden}
@@ -149,6 +154,18 @@ tr:hover td{background:rgba(255,255,255,.03)}
 .status-aprov{color:var(--primary);font-weight:700}
 .status-dev{color:var(--ok);font-weight:700}
 .row-btns{display:flex;gap:6px}
+.hist-list{display:flex;flex-direction:column;gap:10px}
+.hist-card{background:var(--surface);border:1px solid var(--glass-brd);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow-card);transition:.18s}
+.hist-card-top{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.hist-card-left{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.hist-date{color:var(--muted);font-size:.72rem;white-space:nowrap}
+.hist-badge{font-size:.68rem;font-weight:700;padding:3px 10px;border-radius:20px;white-space:nowrap}
+.hist-badge.status-pend{color:var(--warn);background:rgba(240,180,60,.14)}
+.hist-badge.status-aprov{color:var(--primary);background:rgba(91,140,255,.14)}
+.hist-badge.status-dev{color:var(--ok);background:rgba(52,211,153,.14)}
+.hist-items{color:var(--muted);font-size:.78rem;margin-top:8px;line-height:1.5}
+.hist-meta{color:var(--muted);font-size:.72rem;margin-top:6px}
+.hist-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
 .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:rgba(20,22,30,.9);color:#fff;padding:11px 22px;border-radius:30px;font-weight:600;font-size:.84rem;opacity:0;transition:.25s;z-index:99;border:1px solid var(--glass-brd);backdrop-filter:blur(10px)}
 .toast.show{opacity:1}
 .link-box{display:flex;gap:8px;align-items:center;margin-top:8px}
@@ -470,8 +487,7 @@ tr:hover td{background:rgba(255,255,255,.045)}
       <section id="t-hist" class="tab">
         <div class="card glass">
           <h2>Histórico completo</h2>
-          <table><thead><tr><th>Data</th><th>OT / Itens</th><th>Qtd. total</th><th>Solicitante</th><th>Status</th><th></th></tr></thead>
-            <tbody id="tbHist"><tr><td colspan="6"><span class="skel skel-row w80"></span></td></tr><tr><td colspan="6"><span class="skel skel-row w60"></span></td></tr><tr><td colspan="6"><span class="skel skel-row w40"></span></td></tr></tbody></table>
+          <div class="hist-list" id="tbHist"><span class="skel skel-row w80"></span><span class="skel skel-row w60"></span><span class="skel skel-row w40"></span></div>
         </div>
       </section>
 
@@ -570,7 +586,7 @@ document.getElementById('notifList').addEventListener('click', e=>{
   document.getElementById('pageTitle').textContent='Histórico';
   document.getElementById('pageSub').textContent='Todas as solicitações registradas';
   setTimeout(()=>{
-    const row = document.querySelector(`#tbHist tr[data-ot="${CSS.escape(n.ot)}"]`);
+    const row = document.querySelector(`#tbHist .hist-card[data-ot="${CSS.escape(n.ot)}"]`);
     if(row){ row.scrollIntoView({behavior:'smooth', block:'center'}); row.classList.add('row-highlight'); setTimeout(()=>row.classList.remove('row-highlight'),2500); }
   },50);
 });
@@ -843,23 +859,28 @@ function renderHist(){
     const status = todosDevolvidos?'Devolvido':todosAprovados?'Aprovado':'Pendente';
     const statusClass = todosDevolvidos?'status-dev':todosAprovados?'status-aprov':'status-pend';
     return `
-    <tr data-ot="${esc(ot)}">
-      <td>${fmt(first.data)}</td>
-      <td><b>OT ${esc(ot)}</b><div class="small" style="margin-top:2px">${itensResumo}</div></td>
-      <td>${grupo.length} item(ns)</td>
-      <td>${esc(first.solicitante)}</td>
-      <td class="${statusClass}">${status}</td>
-      <td><div class="row-btns">
+    <div class="hist-card" data-ot="${esc(ot)}">
+      <div class="hist-card-top">
+        <div class="hist-card-left">
+          <b>OT ${esc(ot)}</b>
+          <span class="hist-badge ${statusClass}">${status}</span>
+        </div>
+        <span class="hist-date">${fmt(first.data)}</span>
+      </div>
+      <div class="hist-items">${itensResumo}</div>
+      <div class="hist-meta">${grupo.length} item(ns) · ${esc(first.solicitante)}</div>
+      <div class="hist-actions">
         ${algumPendente?`<button class="btn sec" data-a="aprovar-ot" data-ot="${esc(ot)}">Aprovar OT</button>`:''}
         ${todosAprovados && !todosDevolvidos?`<button class="btn sec" data-a="devolver-ot" data-ot="${esc(ot)}">Devolver OT</button>`:''}
+        <button class="btn sec" data-a="editar-ot" data-ot="${esc(ot)}">✎ Editar</button>
         <button class="btn sec" data-a="add-itens-ot" data-ot="${esc(ot)}">+ Itens</button>
         <button class="btn sec" data-a="qr-ot" data-ot="${esc(ot)}">QR OT</button>
         <button class="btn sec" data-a="pdf-ot" data-ot="${esc(ot)}">PDF</button>
         <button class="btn sec" data-a="email-ot" data-ot="${esc(ot)}">✉ Enviar</button>
         ${souAdmin()?`<button class="btn sec" data-a="excluir-ot" data-ot="${esc(ot)}" style="color:var(--danger)">Excluir</button>`:''}
-      </div></td>
-    </tr>`;
-  }).join('') : '<tr><td colspan="6" class="empty">Nenhuma solicitação ainda</td></tr>';
+      </div>
+    </div>`;
+  }).join('') : '<div class="empty">Nenhuma solicitação ainda</div>';
 }
 
 function gerarPDF(ot){
@@ -897,6 +918,8 @@ document.getElementById('tbHist').addEventListener('click', async e=>{
   } else if(btn.dataset.a==='devolver-ot'){
     await fetch(`${API}/solicitacoes/ot/${encodeURIComponent(ot)}/devolver`,{method:'PATCH'});
     toast('OT devolvida ao estoque!'); carregarTudo();
+  } else if(btn.dataset.a==='editar-ot'){
+    abrirModalEditarOt(ot);
   } else if(btn.dataset.a==='add-itens-ot'){
     abrirModalAddItensOt(ot);
   } else if(btn.dataset.a==='qr-ot'){
@@ -1152,6 +1175,15 @@ async function imprimirQR(){
       <input id="addItensBusca" placeholder="Digite o nome do item..." autocomplete="off">
       <div id="addItensResultados" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:10;background:var(--surface-2);border:1px solid var(--glass-brd);border-radius:10px;margin-top:4px;max-height:200px;overflow-y:auto;box-shadow:var(--shadow-float)"></div>
     </div>
+    <button class="btn sec" id="addItensAvulsoToggle" style="font-size:.72rem;padding:6px 10px;margin-bottom:10px">+ Adicionar item que não está no estoque</button>
+    <div id="addItensAvulsoBox" style="display:none;margin-bottom:12px;padding:10px;border:1px solid var(--glass-brd);border-radius:10px">
+      <div class="grid" style="margin-bottom:8px">
+        <div><label>Nome do item</label><input id="avulsoNome" placeholder="Ex: Cabo emprestado"></div>
+        <div><label>Quantidade</label><input id="avulsoQtd" type="number" min="1" value="1"></div>
+        <div><label>Unidade</label><input id="avulsoUnidade" placeholder="un, m, ..."></div>
+      </div>
+      <button class="btn sec" id="avulsoAdicionar" style="font-size:.72rem;padding:6px 10px">Adicionar à lista</button>
+    </div>
     <div id="addItensCarrinho"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
       <button class="btn sec" id="addItensCancel">Cancelar</button>
@@ -1207,6 +1239,7 @@ async function imprimirQR(){
     <h2 id="editOtTitulo" style="margin-top:0;font-size:1.05rem"></h2>
     <div class="grid" style="margin-bottom:16px">
       <div><label>Nome da OT</label><input id="editOtNome" placeholder="Ex: HNK NA"></div>
+      <div><label>Solicitante</label><input id="editOtSolicitante" placeholder="Nome completo"></div>
       <div><label>Setor</label><input id="editOtSetor"></div>
       <div><label>Status</label>
         <select id="editOtStatus"><option value="aberto">Aberto</option><option value="encerrado">Encerrado</option></select>
@@ -1414,6 +1447,10 @@ function abrirModalAddItensOt(ot){
   document.getElementById('addItensTitulo').textContent = `Adicionar itens ao projeto ${ot}`;
   document.getElementById('addItensBusca').value='';
   document.getElementById('addItensResultados').style.display='none';
+  document.getElementById('addItensAvulsoBox').style.display='none';
+  document.getElementById('avulsoNome').value='';
+  document.getElementById('avulsoQtd').value='1';
+  document.getElementById('avulsoUnidade').value='';
   renderAddItensCarrinho();
   document.getElementById('addItensOverlay').classList.add('show');
 }
@@ -1451,7 +1488,7 @@ function renderAddItensCarrinho(){
   const wrap=document.getElementById('addItensCarrinho');
   wrap.innerHTML = addItensCarrinho.length ? addItensCarrinho.map((c,i)=>`
     <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--glass-brd)">
-      <div style="flex:1;font-size:.85rem">${esc(c.nome)}</div>
+      <div style="flex:1;font-size:.85rem">${esc(c.nome)}${c.avulso?' <span class="small" style="color:var(--muted)">(fora do estoque)</span>':''}</div>
       <button data-a="dec" data-i="${i}" style="width:26px;height:26px;border-radius:8px;border:1px solid var(--glass-brd);background:var(--surface-hover);color:var(--text);cursor:pointer">−</button>
       <span style="min-width:26px;text-align:center;font-weight:700">${c.qtd}</span>
       <button data-a="inc" data-i="${i}" style="width:26px;height:26px;border-radius:8px;border:1px solid var(--glass-brd);background:var(--surface-hover);color:var(--text);cursor:pointer">+</button>
@@ -1461,9 +1498,27 @@ function renderAddItensCarrinho(){
 document.getElementById('addItensCarrinho').addEventListener('click', e=>{
   const btn=e.target.closest('button[data-a]'); if(!btn) return;
   const i=parseInt(btn.dataset.i); const c=addItensCarrinho[i]; if(!c) return;
-  if(btn.dataset.a==='inc') c.qtd=Math.min(c.maxQtd, c.qtd+1);
+  if(btn.dataset.a==='inc') c.qtd = c.maxQtd!=null ? Math.min(c.maxQtd, c.qtd+1) : c.qtd+1;
   else if(btn.dataset.a==='dec') c.qtd=Math.max(1, c.qtd-1);
   else if(btn.dataset.a==='rm') addItensCarrinho.splice(i,1);
+  renderAddItensCarrinho();
+});
+
+document.getElementById('addItensAvulsoToggle').addEventListener('click', ()=>{
+  const box=document.getElementById('addItensAvulsoBox');
+  box.style.display = box.style.display==='none' ? 'block' : 'none';
+});
+document.getElementById('avulsoAdicionar').addEventListener('click', async ()=>{
+  const nome=document.getElementById('avulsoNome').value.trim();
+  const qtd=parseInt(document.getElementById('avulsoQtd').value,10);
+  const unidade=document.getElementById('avulsoUnidade').value.trim();
+  if(!nome){ await niuAlert('Informe o nome do item.'); return; }
+  if(!qtd || qtd<1){ await niuAlert('Quantidade inválida.'); return; }
+  addItensCarrinho.push({ itemId:null, nome, unidade, maxQtd:null, qtd, avulso:true });
+  document.getElementById('avulsoNome').value='';
+  document.getElementById('avulsoQtd').value='1';
+  document.getElementById('avulsoUnidade').value='';
+  document.getElementById('addItensAvulsoBox').style.display='none';
   renderAddItensCarrinho();
 });
 
@@ -1475,7 +1530,7 @@ document.getElementById('addItensConfirmar').addEventListener('click', async ()=
   if(!addItensCarrinho.length){ toast('Adicione ao menos um item.'); return; }
   const r=await fetch(`${API}/solicitacoes/lote`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
     ot:addItensOt, solicitante:addItensSolicitante, setor:addItensSetor,
-    itens:addItensCarrinho.map(c=>({itemId:c.itemId, quantidade:c.qtd}))
+    itens:addItensCarrinho.map(c=> c.avulso ? {itemId:null, nome:c.nome, unidade:c.unidade, quantidade:c.qtd} : {itemId:c.itemId, quantidade:c.qtd})
   })});
   if(!r.ok){ const e=await r.json().catch(()=>({})); toast('Erro: '+(e.error||'falha ao adicionar')); return; }
   document.getElementById('addItensOverlay').classList.remove('show');
@@ -1517,6 +1572,8 @@ function abrirModalEditarOt(numero){
   const p=projetos.find(x=>x.numero===numero);
   document.getElementById('editOtTitulo').textContent=`Editar OT ${numero}`;
   document.getElementById('editOtNome').value=p?.nome||'';
+  const itensOt0=solicitacoes.filter(s=>s.ot===numero);
+  document.getElementById('editOtSolicitante').value=itensOt0[0]?.solicitante||'';
   document.getElementById('editOtSetor').value=p?.setor||'';
   document.getElementById('editOtStatus').value=p?.status||'aberto';
   document.getElementById('editOtMesclarToggle').style.display=souAdmin()?'inline-block':'none';
@@ -1529,14 +1586,29 @@ function renderEditOtItens(){
   const itensOt=solicitacoes.filter(s=>s.ot===editOtAtual);
   const wrap=document.getElementById('editOtItens');
   wrap.innerHTML = itensOt.length ? itensOt.map(s=>`
-    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--glass-brd)">
-      <div style="flex:1;font-size:.85rem">${esc(s.item_nome)}
-        <div class="small" style="color:var(--muted)">${s.quantidade} ${esc(s.unidade||'')} · ${s.status}${s.local_uso?' · '+esc(s.local_uso):''}</div>
-      </div>
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--glass-brd)" data-row-id="${s.id}">
+      <input class="ei-nome" data-id="${s.id}" value="${esc(s.item_nome)}" style="flex:1;font-size:.85rem">
+      <input class="ei-qtd" data-id="${s.id}" type="number" min="1" value="${s.quantidade}" style="width:64px;font-size:.85rem">
+      <span class="small" style="color:var(--muted);white-space:nowrap">${esc(s.unidade||'')} · ${s.status}${s.item_id==null?' · fora do estoque':''}</span>
+      <button data-id="${s.id}" class="btn sec" data-a="salvar-item" style="font-size:.72rem;padding:5px 9px">Salvar</button>
       <button data-id="${s.id}" class="del" data-a="rm-item">remover</button>
     </div>`).join('') : '<div class="empty">Nenhum item nesta OT.</div>';
 }
 document.getElementById('editOtItens').addEventListener('click', async e=>{
+  const salvarBtn=e.target.closest('button[data-a="salvar-item"]');
+  if(salvarBtn){
+    const id=salvarBtn.dataset.id;
+    const nome=document.querySelector(`.ei-nome[data-id="${id}"]`).value.trim();
+    const qtd=parseInt(document.querySelector(`.ei-qtd[data-id="${id}"]`).value,10);
+    if(!nome){ await niuAlert('Informe o nome do item.'); return; }
+    if(!qtd || qtd<1){ await niuAlert('Quantidade inválida.'); return; }
+    const r=await fetch(`${API}/solicitacoes/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({item_nome:nome,quantidade:qtd})});
+    if(!r.ok){ const d=await r.json().catch(()=>({})); await niuAlert(d.error||'Erro ao salvar item.'); return; }
+    toast('Item atualizado!');
+    await carregarTudo();
+    renderEditOtItens();
+    return;
+  }
   const btn=e.target.closest('button[data-a="rm-item"]'); if(!btn) return;
   if(!(await niuConfirm('Remover este item da OT? A quantidade volta ao estoque.',{danger:true,confirmText:'Remover'}))) return;
   await fetch(`${API}/solicitacoes/${btn.dataset.id}`,{method:'DELETE'});
@@ -1607,9 +1679,10 @@ document.getElementById('editOtEnviarEmail').addEventListener('click', ()=>{
 });
 document.getElementById('editOtSalvar').addEventListener('click', async ()=>{
   const nome=document.getElementById('editOtNome').value.trim();
+  const solicitante=document.getElementById('editOtSolicitante').value.trim();
   const setor=document.getElementById('editOtSetor').value.trim();
   const status=document.getElementById('editOtStatus').value;
-  const r=await fetch(`${API}/projetos/${encodeURIComponent(editOtAtual)}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome,setor,status})});
+  const r=await fetch(`${API}/projetos/${encodeURIComponent(editOtAtual)}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome,solicitante,setor,status})});
   if(r.ok){
     toast('OT atualizada!');
     document.getElementById('editOtOverlay').classList.remove('show');

@@ -25,7 +25,7 @@ CREATE TABLE projetos (
 CREATE TABLE solicitacoes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   projeto_id INTEGER,
-  item_id INTEGER NOT NULL,
+  item_id INTEGER,
   item_nome TEXT NOT NULL,
   unidade TEXT,
   quantidade INTEGER NOT NULL,

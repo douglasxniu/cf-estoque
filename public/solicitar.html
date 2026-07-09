@@ -22,18 +22,30 @@ header .dot{width:9px;height:9px;border-radius:50%;background:linear-gradient(13
 header h1{margin:0;font-size:1.1rem;font-weight:800}
 header .sub{color:var(--muted);font-size:.78rem;margin-top:2px}
 main{max-width:1000px;margin:0 auto;padding:0 14px 60px}
-.search-row{display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;padding:18px 20px}
+.search-row{display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap;padding:18px 20px}
 input,select{padding:10px 12px;border:1px solid var(--glass-brd);border-radius:10px;background:var(--surface-2);color:var(--text);font-size:.95rem;font-family:inherit}
 .search-row input{flex:2;min-width:200px}
-.search-row select{flex:1;min-width:160px}
 input::placeholder{color:var(--muted-2)}
 input:focus,select:focus{outline:none;border-color:var(--primary)}
 
-.cat-section{margin-bottom:22px}
+.filtros-row{display:flex;flex-direction:column;gap:10px;margin-bottom:18px;padding:16px 20px}
+.filtro-grupo{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.filtro-label{font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);min-width:74px}
+.filtro-chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{padding:6px 14px;border-radius:20px;border:1px solid var(--glass-brd);background:var(--surface-2);color:var(--text);font-size:.8rem;font-weight:600;cursor:pointer;transition:.15s;font-family:inherit}
+.chip:hover{border-color:var(--primary)}
+.chip.active{background:var(--primary);border-color:var(--primary);color:#fff}
+
+.cat-section{margin-bottom:32px;padding-bottom:22px;border-bottom:1px solid var(--glass-brd)}
+.cat-section:last-child{border-bottom:none}
 .cat-section h3{display:flex;align-items:center;gap:8px;font-size:.88rem;font-weight:700;margin:0 0 10px;padding:0 6px}
 .cat-section h3 .dot2{width:8px;height:8px;border-radius:50%}
 .subgroup-label{display:inline-flex;align-items:center;font-size:.85rem;color:var(--primary);font-weight:800;letter-spacing:.02em;margin:4px 0 10px 4px;padding:5px 12px;border-radius:9px;background:rgba(91,140,255,.14);border:1px solid rgba(91,140,255,.3)}
-.item-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px}
+.item-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:18px}
+@media (max-width:1500px){.item-grid{grid-template-columns:repeat(4,1fr)}}
+@media (max-width:1150px){.item-grid{grid-template-columns:repeat(3,1fr)}}
+@media (max-width:820px){.item-grid{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:480px){.item-grid{grid-template-columns:repeat(1,1fr)}}
 .item-card{padding:16px}
 .item-card .cat{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:.7rem;padding:3px 10px;border-radius:20px;background:var(--surface-hover)}
 .item-card .cat::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor}
@@ -168,7 +180,20 @@ body{background-size:200% 200%;animation:bgDrift 22s ease-in-out infinite}
 
   <div class="search-row glass" id="searchRow">
     <input id="busca" placeholder="Buscar item...">
-    <select id="filtroCat"><option value="">Todas as categorias</option></select>
+  </div>
+  <div class="filtros-row glass" id="filtrosRow">
+    <div class="filtro-grupo">
+      <span class="filtro-label">Categoria</span>
+      <div class="filtro-chips" id="filtrosCat"></div>
+    </div>
+    <div class="filtro-grupo" id="grupoModelo">
+      <span class="filtro-label">Modelo</span>
+      <div class="filtro-chips" id="filtrosModelo"></div>
+    </div>
+    <div class="filtro-grupo" id="grupoVolt">
+      <span class="filtro-label">Voltagem</span>
+      <div class="filtro-chips" id="filtrosVolt"></div>
+    </div>
   </div>
   <div id="lista"><div style="display:flex;gap:12px;flex-wrap:wrap"><div class="skel skel-card" style="flex:1;min-width:160px"></div><div class="skel skel-card" style="flex:1;min-width:160px"></div><div class="skel skel-card" style="flex:1;min-width:160px"></div></div></div>
 </main>
@@ -218,6 +243,7 @@ function checarLiberacao(){
   const otPreenchido = document.getElementById('sOt').value.trim();
   document.getElementById('sOtAviso').style.display = (otPreenchido && !projetoValido()) ? 'block' : 'none';
   document.getElementById('searchRow').classList.toggle('locked', !ok);
+  document.getElementById('filtrosRow').classList.toggle('locked', !ok);
   document.getElementById('lista').classList.toggle('locked', !ok);
   document.getElementById('stepInfo').classList.toggle('done', ok);
   document.getElementById('stepInfo').classList.toggle('active', !ok);
@@ -259,10 +285,36 @@ async function carregar(){
     fetch(`${API}/itens`).then(r=>r.json()),
     fetch(`${API}/projetos`).then(r=>r.json())
   ]);
-  const cats=[...new Set(itens.map(i=>i.categoria))].sort();
-  document.getElementById('filtroCat').innerHTML='<option value="">Todas as categorias</option>'+cats.map(c=>`<option>${esc(c)}</option>`).join('');
+  renderFiltros();
   checarLiberacao();
 }
+
+let filtroCatAtivo='', filtroModeloAtivo='', filtroVoltAtivo='';
+
+function chipsHtml(vals, ativo, grupo){
+  return `<button type="button" class="chip ${!ativo?'active':''}" data-grupo="${grupo}" data-valor="">Todas</button>` +
+    vals.map(v=>`<button type="button" class="chip ${ativo===v?'active':''}" data-grupo="${grupo}" data-valor="${esc(v)}">${esc(v)}</button>`).join('');
+}
+function renderFiltros(){
+  const base=itens.filter(i=>(!filtroCatAtivo||i.categoria===filtroCatAtivo));
+  const cats=[...new Set(itens.map(i=>i.categoria).filter(Boolean))].sort();
+  const modelos=[...new Set(base.map(i=>i.modelo).filter(Boolean))].sort();
+  const volts=[...new Set(base.map(i=>i.voltagem).filter(Boolean))].sort();
+  document.getElementById('filtrosCat').innerHTML = chipsHtml(cats, filtroCatAtivo, 'cat');
+  document.getElementById('filtrosModelo').innerHTML = chipsHtml(modelos, filtroModeloAtivo, 'modelo');
+  document.getElementById('filtrosVolt').innerHTML = chipsHtml(volts, filtroVoltAtivo, 'volt');
+  document.getElementById('grupoModelo').style.display = modelos.length ? '' : 'none';
+  document.getElementById('grupoVolt').style.display = volts.length ? '' : 'none';
+}
+document.getElementById('filtrosRow').addEventListener('click', e=>{
+  const btn=e.target.closest('.chip'); if(!btn) return;
+  const grupo=btn.dataset.grupo, valor=btn.dataset.valor;
+  if(grupo==='cat'){ filtroCatAtivo=valor; filtroModeloAtivo=''; filtroVoltAtivo=''; }
+  else if(grupo==='modelo') filtroModeloAtivo=valor;
+  else if(grupo==='volt') filtroVoltAtivo=valor;
+  renderFiltros();
+  render();
+});
 
 function highlight(nome, termo){
   if(!termo) return esc(nome);
@@ -277,8 +329,11 @@ function render(){
     return;
   }
   const termo=(document.getElementById('busca').value||'').toLowerCase().trim();
-  const catF=document.getElementById('filtroCat').value;
-  let filtrados=itens.filter(i=>(!catF||i.categoria===catF) && (!termo||i.nome.toLowerCase().includes(termo)));
+  let filtrados=itens.filter(i=>
+    (!filtroCatAtivo||i.categoria===filtroCatAtivo) &&
+    (!filtroModeloAtivo||i.modelo===filtroModeloAtivo) &&
+    (!filtroVoltAtivo||i.voltagem===filtroVoltAtivo) &&
+    (!termo||i.nome.toLowerCase().includes(termo)));
   filtrados.sort((a,b)=>{
     if(termo){
       const aStart=a.nome.toLowerCase().startsWith(termo)?0:1;
@@ -371,7 +426,6 @@ function atualizarCartBar(){
 }
 
 document.getElementById('busca').addEventListener('input', render);
-document.getElementById('filtroCat').addEventListener('change', render);
 
 document.getElementById('cartOpen').addEventListener('click', ()=>{
   const ids=Object.keys(carrinho);

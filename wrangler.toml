@@ -11,8 +11,8 @@ database_id = "ba514db4-66ed-46a8-9d7c-47c8ff02e623"
 directory = "public"
 binding = "ASSETS"
 
-# Backup automático diário do banco (envia um dump JSON por e-mail) — roda às 3h UTC.
+# Backup automático semanal do banco (envia um dump JSON por e-mail) — roda domingo às 3h UTC.
 [triggers]
-crons = ["0 3 * * *"]
+crons = ["0 3 * * 7"]
 
 # Defina o secret com: wrangler secret put RESEND_API_KEY
