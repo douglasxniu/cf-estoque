@@ -71,6 +71,13 @@ input:focus,select:focus{outline:none;border-color:var(--primary)}
 .search-row{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap}
 .search-row input{flex:2;min-width:180px}
 .search-row select{flex:1;min-width:140px}
+.filtros-row{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
+.filtro-grupo{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.filtro-label{font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);min-width:64px}
+.filtro-chips{display:flex;gap:7px;flex-wrap:wrap}
+.chip{padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font-size:.76rem;font-weight:600;cursor:pointer;transition:.15s;font-family:inherit}
+.chip:hover{border-color:var(--primary)}
+.chip.active{background:var(--primary);border-color:var(--primary);color:#fff}
 
 table{width:100%;border-collapse:collapse;font-size:.85rem}
 th,td{padding:10px 8px;border-bottom:1px solid rgba(255,255,255,.07);text-align:left}
@@ -447,8 +454,20 @@ tr:hover td{background:rgba(255,255,255,.045)}
           </div>
           <div class="search-row">
             <input id="busca" placeholder="Buscar item...">
-            <select id="filtroCat"><option value="">Todas as categorias</option></select>
-            <select id="filtroVolt"><option value="">Todas as voltagens</option><option>12V</option><option>24V</option><option>110V</option><option>220V</option><option>Bivolt</option></select>
+          </div>
+          <div class="filtros-row" id="filtrosRow">
+            <div class="filtro-grupo">
+              <span class="filtro-label">Categoria</span>
+              <div class="filtro-chips" id="filtrosCat"></div>
+            </div>
+            <div class="filtro-grupo" id="grupoModelo">
+              <span class="filtro-label">Modelo</span>
+              <div class="filtro-chips" id="filtrosModelo"></div>
+            </div>
+            <div class="filtro-grupo" id="grupoVolt">
+              <span class="filtro-label">Voltagem</span>
+              <div class="filtro-chips" id="filtrosVolt"></div>
+            </div>
           </div>
           <div id="estoquePorCategoria"><div class="skel skel-row w40" style="height:20px;margin-bottom:14px"></div><div style="display:flex;gap:12px;flex-wrap:wrap"><div class="skel skel-card" style="flex:1;min-width:160px"></div><div class="skel skel-card" style="flex:1;min-width:160px"></div><div class="skel skel-card" style="flex:1;min-width:160px"></div></div></div>
           <input type="file" id="estoqueImagemInput" accept="image/*" style="display:none">
@@ -602,14 +621,13 @@ async function carregarTudo(){
   ]);
   categorias = [...new Set(itens.map(i=>i.categoria))];
   preencherSelects();
-  renderEstoque(); renderHist(); renderDash(); renderOtsAbertas();
+  renderFiltrosEstoque(); renderEstoque(); renderHist(); renderDash(); renderOtsAbertas();
 }
 
 function preencherSelects(){
   const base=['LED','Transformador','Cabo','Lâmpada T8','Reator','Outro'];
   const todas=[...new Set([...base, ...categorias])];
   document.getElementById('iCat').innerHTML = todas.map(c=>`<option>${esc(c)}</option>`).join('') + '<option value="__nova__">+ Criar nova categoria...</option>';
-  document.getElementById('filtroCat').innerHTML = '<option value="">Todas as categorias</option>' + todas.map(c=>`<option>${esc(c)}</option>`).join('');
   document.getElementById('eiCat').innerHTML = todas.map(c=>`<option>${esc(c)}</option>`).join('');
 }
 
@@ -762,11 +780,36 @@ document.addEventListener('themechange', ()=>{
   if(itens.length || solicitacoes.length){ renderChartCategoria(); renderChartTop(); renderChartTendencia(); }
 });
 
+let filtroCatAtivo='', filtroModeloAtivo='', filtroVoltAtivo='';
+
+function chipsHtml(vals, ativo, grupo){
+  return `<button type="button" class="chip ${!ativo?'active':''}" data-grupo="${grupo}" data-valor="">Todas</button>` +
+    vals.map(v=>`<button type="button" class="chip ${ativo===v?'active':''}" data-grupo="${grupo}" data-valor="${esc(v)}">${esc(v)}</button>`).join('');
+}
+function renderFiltrosEstoque(){
+  const base=itens.filter(i=>(!filtroCatAtivo||i.categoria===filtroCatAtivo));
+  const cats=[...new Set(itens.map(i=>i.categoria).filter(Boolean))].sort();
+  const modelos=[...new Set(base.map(i=>i.modelo).filter(Boolean))].sort();
+  const volts=[...new Set(base.map(i=>i.voltagem).filter(Boolean))].sort();
+  document.getElementById('filtrosCat').innerHTML = chipsHtml(cats, filtroCatAtivo, 'cat');
+  document.getElementById('filtrosModelo').innerHTML = chipsHtml(modelos, filtroModeloAtivo, 'modelo');
+  document.getElementById('filtrosVolt').innerHTML = chipsHtml(volts, filtroVoltAtivo, 'volt');
+  document.getElementById('grupoModelo').style.display = modelos.length ? '' : 'none';
+  document.getElementById('grupoVolt').style.display = volts.length ? '' : 'none';
+}
+document.getElementById('filtrosRow').addEventListener('click', e=>{
+  const btn=e.target.closest('.chip'); if(!btn) return;
+  const grupo=btn.dataset.grupo, valor=btn.dataset.valor;
+  if(grupo==='cat'){ filtroCatAtivo=valor; filtroModeloAtivo=''; filtroVoltAtivo=''; }
+  else if(grupo==='modelo') filtroModeloAtivo=valor;
+  else if(grupo==='volt') filtroVoltAtivo=valor;
+  renderFiltrosEstoque();
+  renderEstoque();
+});
+
 function renderEstoque(){
   const termo=(document.getElementById('busca').value||'').toLowerCase();
-  const catF=document.getElementById('filtroCat').value;
-  const voltF=document.getElementById('filtroVolt').value;
-  const filtrados=itens.filter(i=>i.nome.toLowerCase().includes(termo) && (!catF||i.categoria===catF) && (!voltF||i.voltagem===voltF));
+  const filtrados=itens.filter(i=>i.nome.toLowerCase().includes(termo) && (!filtroCatAtivo||i.categoria===filtroCatAtivo) && (!filtroModeloAtivo||i.modelo===filtroModeloAtivo) && (!filtroVoltAtivo||i.voltagem===filtroVoltAtivo));
   const porCat={};
   filtrados.forEach(i=>{ (porCat[i.categoria]=porCat[i.categoria]||[]).push(i); });
   const wrap=document.getElementById('estoquePorCategoria');
@@ -827,9 +870,7 @@ function categoriaIcone(cat){
   return '📦';
 }
 
-document.getElementById('filtroVolt').addEventListener('change', renderEstoque);
 document.getElementById('busca').addEventListener('input', renderEstoque);
-document.getElementById('filtroCat').addEventListener('change', renderEstoque);
 document.getElementById('btnExportarCsv').addEventListener('click', ()=>{
   const cols=['Nome','Categoria','Quantidade','Unidade','Modelo/Potência','Voltagem','Código'];
   const linhas=itens.map(i=>[i.nome,i.categoria,i.quantidade,i.unidade,i.modelo||'',i.voltagem||'',i.codigo||'']);
