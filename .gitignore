@@ -2,3 +2,4 @@ node_modules/
 .cf-temp/
 .DS_Store
 .wrangler/
+scripts/autocommit.log
