@@ -627,7 +627,12 @@ export default {
         }
       }
       await env.DB.prepare("UPDATE projetos SET status='aberto' WHERE numero=?").bind(ot).run();
-      await enviarEmailLote(env, { ot, solicitante, setor, itens: resultado });
+      // Resumo do email é a OT inteira até agora, não só os itens desta leva — evita mandar
+      // um email fragmentado por vez sempre que mais itens são adicionados à mesma OT depois.
+      const { results: itensOt } = await env.DB.prepare(
+        "SELECT item_nome, quantidade FROM solicitacoes WHERE ot = ? ORDER BY id"
+      ).bind(ot).all();
+      await enviarEmailLote(env, { ot, solicitante, setor, itens: itensOt.map(i => ({ item: i.item_nome, quantidade: i.quantidade })) });
       return json({ ok: true });
     }
 
