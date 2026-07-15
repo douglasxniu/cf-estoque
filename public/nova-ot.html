@@ -64,8 +64,9 @@ select option{background:var(--surface-2)}
 .catalogo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:14px;max-height:400px;overflow-y:auto;padding:4px 2px}
 .catalogo-card{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:11px;cursor:pointer;transition:.15s}
 .catalogo-card:hover{border-color:var(--primary);transform:translateY(-2px)}
-.catalogo-card.added{border-color:var(--primary);background:rgba(91,140,255,.08);cursor:default}
+.catalogo-card.added{border-color:var(--primary);background:rgba(91,140,255,.08)}
 .catalogo-card.sem-estoque{opacity:.45;cursor:not-allowed}
+.catalogo-card.added.maxed{cursor:not-allowed}
 .catalogo-card .nome{font-weight:700;font-size:.82rem;margin-bottom:5px;line-height:1.25}
 .catalogo-card .cat{font-size:.65rem;color:var(--primary);font-weight:700;text-transform:uppercase;letter-spacing:.03em;margin-bottom:3px;display:block}
 .catalogo-card .qtd{font-size:.7rem;color:var(--muted)}
@@ -283,14 +284,16 @@ function renderCatalogo(){
   );
   if(!found.length){ wrap.innerHTML='<div class="catalogo-empty">Nenhum item encontrado.</div>'; return; }
   wrap.innerHTML=found.map(i=>{
-    const noCarrinho=carrinho.some(c=>c._id==i.id);
+    const noCarrinhoItem=carrinho.find(c=>c._id==i.id);
     const semEstoque=i.quantidade<=0;
+    const esgotadoNoCarrinho=noCarrinhoItem && noCarrinhoItem.qty>=i.quantidade;
+    const bloqueado=semEstoque||esgotadoNoCarrinho;
     return `
-    <div class="catalogo-card ${noCarrinho?'added':''} ${semEstoque&&!noCarrinho?'sem-estoque':''}" ${(!noCarrinho&&!semEstoque)?`onclick="adicionarDoEstoque(${i.id})"`:''}>
+    <div class="catalogo-card ${noCarrinhoItem?'added':''} ${bloqueado&&!noCarrinhoItem?'sem-estoque':''} ${esgotadoNoCarrinho?'maxed':''}" ${!bloqueado?`onclick="adicionarDoEstoque(${i.id})"`:''}>
       <span class="cat">${esc(i.categoria)}</span>
       <div class="nome">${esc(i.nome)}</div>
       <div class="qtd">${semEstoque?'Sem estoque':`${i.quantidade} ${esc(i.unidade)} disponível`}</div>
-      ${noCarrinho?'<div class="ok-tag">✓ Adicionado</div>':''}
+      ${noCarrinhoItem?`<div class="ok-tag">✓ ${noCarrinhoItem.qty} no pedido${!bloqueado?' · clique pra +1':''}</div>`:''}
     </div>`;
   }).join('');
 }
@@ -299,8 +302,13 @@ busca.addEventListener('input', renderCatalogo);
 async function adicionarDoEstoque(id){
   const it=itensEstoque.find(i=>i.id==id);
   if(!it) return;
-  if(carrinho.find(c=>c._id==id)){await niuAlert('Item já adicionado.');return;}
-  carrinho.push({_id:id,_estoque:true,nome:it.nome,qty:1,unidade:it.unidade,local:'',obs:'',maxQty:it.quantidade,modelo:it.modelo,voltagem:it.voltagem});
+  const existente=carrinho.find(c=>c._id==id);
+  if(existente){
+    if(existente.qty>=it.quantidade){ await niuAlert('Quantidade em estoque esgotada.'); return; }
+    existente.qty++;
+  } else {
+    carrinho.push({_id:id,_estoque:true,nome:it.nome,qty:1,unidade:it.unidade,local:'',obs:'',maxQty:it.quantidade,modelo:it.modelo,voltagem:it.voltagem});
+  }
   renderCatalogo();
   render();
 }
