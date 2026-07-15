@@ -1,6 +1,6 @@
 // Folha de Requisição de Material (2 vias) em PDF — usada pelo dashboard (index.html), pela Nova OT
 // (nova-ot.html) e pelo link "Ver OT online" enviado por email (ot.html).
-function construirFolhaRequisicaoPDF({ ot, solicitante, setor, local, data, obs, itens }) {
+function construirFolhaRequisicaoPDF({ ot, nome, solicitante, setor, local, data, obs, itens }) {
   if (typeof window.jspdf === 'undefined') { if (window.niuAlert) niuAlert('Gerador de PDF não carregou.'); else alert('Gerador de PDF não carregou.'); return null; }
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
@@ -70,8 +70,15 @@ function construirFolhaRequisicaoPDF({ ot, solicitante, setor, local, data, obs,
     const otW = doc.getTextWidth(ot) + 6;
     doc.setFillColor(...C.headerAccent); doc.roundedRect(M + CW - otW - 1, T + 3.2, otW, 6.4, 1.6, 1.6, 'F');
     doc.setTextColor(...C.headerBg); doc.text(ot, M + CW - otW / 2 - 1, T + 7.4, { align: 'center' });
+
+    // nome do projeto em destaque, logo abaixo do número — contraste forte (branco sobre navy)
+    if (nome) {
+      doc.setFontSize(7.2); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C.white);
+      doc.text(String(nome), M + CW - 2, T + 13, { align: 'right', maxWidth: 65 });
+    }
+
     doc.setFontSize(6); doc.setFont('helvetica', 'normal'); doc.setTextColor(...C.headerSub);
-    doc.text(dataFmt, M + CW - 2, T + 14.5, { align: 'right' });
+    doc.text(dataFmt, M + CW - 2, T + 17.3, { align: 'right' });
 
     const qs = 22;
     doc.setFillColor(...C.white); doc.setDrawColor(...C.primaryBg); doc.setLineWidth(0.4);

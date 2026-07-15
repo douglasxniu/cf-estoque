@@ -432,7 +432,7 @@ document.getElementById('cartOpen').addEventListener('click', ()=>{
   if(!ids.length) return;
   const ot=document.getElementById('sOt').value.trim();
   const nome=document.getElementById('sNome').value.trim();
-  document.getElementById('ovResumo').innerHTML = `OT <b>${esc(ot)}</b> · Solicitante: <b>${esc(nome)}</b>`;
+  document.getElementById('ovResumo').innerHTML = `<b>${esc(ot)}</b> · Solicitante: <b>${esc(nome)}</b>`;
   document.getElementById('cartList').innerHTML = ids.map(id=>{
     const item=itens.find(i=>i.id==id);
     return `<div class="cart-row" data-id="${id}">

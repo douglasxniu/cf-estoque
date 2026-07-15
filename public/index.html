@@ -550,7 +550,7 @@ async function checarNotificacoes(){
     if(novas.length){
       novas.reverse().forEach(n=>{
         notifs.unshift({ ...n, lida:false });
-        toast(`Nova solicitação: ${n.item_nome} (OT ${n.ot})`);
+        toast(`Nova solicitação: ${n.item_nome} (${n.ot})`);
       });
       ultimoCheck = new Date().toISOString().slice(0,19).replace('T',' ');
       notifs = notifs.slice(0,40);
@@ -583,7 +583,7 @@ function renderNotifList(){
       <div class="notif-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
       <div class="notif-body">
         <div class="notif-title">${esc(n.solicitante)} solicitou ${n.quantidade} ${esc(n.item_nome)}</div>
-        <div class="notif-meta">OT ${esc(n.ot)} ${n.local_uso?'· Uso: '+esc(n.local_uso):''}${n.setor?' · '+esc(n.setor):''}</div>
+        <div class="notif-meta">${esc(n.ot)} ${n.local_uso?'· Uso: '+esc(n.local_uso):''}${n.setor?' · '+esc(n.setor):''}</div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
         <span class="notif-time">${tempoRelativo(n.data)}</span>
@@ -899,11 +899,13 @@ function renderHist(){
     const itensResumo = grupo.map(s=>`${esc(s.item_nome)} (${s.quantidade})`).join(', ');
     const status = todosDevolvidos?'Devolvido':todosAprovados?'Aprovado':'Pendente';
     const statusClass = todosDevolvidos?'status-dev':todosAprovados?'status-aprov':'status-pend';
+    const nomeOt = projetos.find(p=>p.numero===ot)?.nome;
     return `
     <div class="hist-card" data-ot="${esc(ot)}">
       <div class="hist-card-top">
         <div class="hist-card-left">
-          <b>OT ${esc(ot)}</b>
+          <b>${esc(ot)}</b>
+          ${nomeOt?`<span style="font-weight:800;color:var(--text)">${esc(nomeOt)}</span>`:''}
           <span class="hist-badge ${statusClass}">${status}</span>
         </div>
         <span class="hist-date">${fmt(first.data)}</span>
@@ -928,8 +930,9 @@ function gerarPDF(ot){
   const itensOt = solicitacoes.filter(s=>s.ot===ot);
   if(!itensOt.length) return;
   const primeiro = itensOt[0];
+  const nomeOt = projetos.find(p=>p.numero===ot)?.nome;
   gerarFolhaRequisicaoPDF({
-    ot, solicitante: primeiro.solicitante, setor: primeiro.setor, data: (primeiro.data||'').slice(0,10),
+    ot, nome: nomeOt, solicitante: primeiro.solicitante, setor: primeiro.setor, data: (primeiro.data||'').slice(0,10),
     itens: itensOt.map(it=>{ const item=itens.find(i=>i.id===it.item_id); return { nome: it.item_nome, qtd: it.quantidade, unidade: it.unidade, local: it.local_uso, modelo: item?.modelo, voltagem: item?.voltagem }; })
   });
 }
@@ -937,11 +940,12 @@ function gerarPDF(ot){
 async function enviarCopiaOt(ot){
   const itensOt = solicitacoes.filter(s=>s.ot===ot);
   if(!itensOt.length){ await niuAlert('OT sem itens.'); return; }
-  const destino = await niuPrompt(`Enviar uma cópia da OT ${ot} por email para:`,{placeholder:'email@exemplo.com',type:'email',confirmText:'Enviar'});
+  const destino = await niuPrompt(`Enviar uma cópia da ${ot} por email para:`,{placeholder:'email@exemplo.com',type:'email',confirmText:'Enviar'});
   if(!destino) return;
   const primeiro = itensOt[0];
+  const nomeOt = projetos.find(p=>p.numero===ot)?.nome;
   const r = await fetch(`${API}/ot/email`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-    to: destino, ot,
+    to: destino, ot, nome: nomeOt,
     solic: primeiro.solicitante, setor: primeiro.setor, local: primeiro.local_uso,
     itens: itensOt.map(it=>({ nome: it.item_nome, qty: it.quantidade, unidade: it.unidade, local: it.local_uso })),
     url: `${location.origin}/ot.html?ot=${encodeURIComponent(ot)}`
@@ -970,7 +974,7 @@ document.getElementById('tbHist').addEventListener('click', async e=>{
   } else if(btn.dataset.a==='email-ot'){
     enviarCopiaOt(ot);
   } else if(btn.dataset.a==='excluir-ot'){
-    if(await niuConfirm(`Excluir toda a OT ${ot}? Os itens ainda não devolvidos voltam ao estoque, e o histórico desta OT é removido.`,{danger:true,confirmText:'Excluir'})){
+    if(await niuConfirm(`Excluir toda a ${ot}? Os itens ainda não devolvidos voltam ao estoque, e o histórico desta OT é removido.`,{danger:true,confirmText:'Excluir'})){
       await fetch(`${API}/solicitacoes/ot/${encodeURIComponent(ot)}`,{method:'DELETE'});
       toast('OT excluída.'); carregarTudo();
     }
@@ -1615,10 +1619,10 @@ document.getElementById('listaOtsAbertas').addEventListener('click', async e=>{
   const delBtn=e.target.closest('[data-a="excluir-ot-vazia"]');
   if(delBtn){
     const numero=delBtn.dataset.numero;
-    if(!await niuConfirm(`Excluir a OT ${numero} e liberar o número? Ela não tem nenhum item.`)) return;
+    if(!await niuConfirm(`Excluir a ${numero} e liberar o número? Ela não tem nenhum item.`)) return;
     const r=await fetch(`${API}/projetos/${encodeURIComponent(numero)}`,{method:'DELETE'});
     if(!r.ok){ const d=await r.json().catch(()=>({})); toast(d.error||'Erro ao excluir OT'); return; }
-    toast(`OT ${numero} excluída, número liberado.`);
+    toast(`${numero} excluída, número liberado.`);
     await carregarTudo();
     return;
   }
@@ -1630,7 +1634,7 @@ let editOtAtual=null;
 function abrirModalEditarOt(numero){
   editOtAtual=numero;
   const p=projetos.find(x=>x.numero===numero);
-  document.getElementById('editOtTitulo').textContent=`Editar OT ${numero}`;
+  document.getElementById('editOtTitulo').textContent=`Editar ${numero}`;
   document.getElementById('editOtNome').value=p?.nome||'';
   const itensOt0=solicitacoes.filter(s=>s.ot===numero);
   document.getElementById('editOtSolicitante').value=itensOt0[0]?.solicitante||'';
@@ -1701,10 +1705,10 @@ document.getElementById('editOtMesclarBusca').addEventListener('input', e=>{
 document.getElementById('editOtMesclarResultados').addEventListener('click', async e=>{
   const row=e.target.closest('[data-numero]'); if(!row) return;
   const origem=row.dataset.numero;
-  if(!(await niuConfirm(`Mesclar a OT ${origem} dentro da OT ${editOtAtual}?\n\nTodos os itens de ${origem} passam a pertencer a ${editOtAtual}, e ${origem} deixa de existir. Essa ação não pode ser desfeita.`,{confirmText:'Mesclar'}))) return;
+  if(!(await niuConfirm(`Mesclar a ${origem} dentro da ${editOtAtual}?\n\nTodos os itens de ${origem} passam a pertencer a ${editOtAtual}, e ${origem} deixa de existir. Essa ação não pode ser desfeita.`,{confirmText:'Mesclar'}))) return;
   const r=await fetch(`${API}/projetos/${encodeURIComponent(editOtAtual)}/mesclar`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({origem})});
   if(!r.ok){ const e2=await r.json().catch(()=>({})); toast('Erro: '+(e2.error||'falha ao mesclar')); return; }
-  toast(`OT ${origem} mesclada em ${editOtAtual}!`);
+  toast(`${origem} mesclada em ${editOtAtual}!`);
   document.getElementById('editOtMesclarBox').style.display='none';
   await carregarTudo();
   renderEditOtItens();

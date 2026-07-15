@@ -136,7 +136,7 @@ async function enviarEmail(env, { item, quantidade, unidade, ot, solicitante, se
       body: JSON.stringify({
         from: env.EMAIL_REMETENTE || EMAIL_REMETENTE_PADRAO,
         to: env.EMAIL_DESTINO || EMAIL_DESTINO_PADRAO,
-        subject: `📋 Nova solicitação: ${item} (OT ${ot})`,
+        subject: `📋 Nova solicitação: ${item} (${ot})`,
         html: `
         <div style="background:#0f1115;padding:32px;font-family:-apple-system,Helvetica,Arial,sans-serif">
           <div style="max-width:420px;margin:0 auto;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:18px;padding:26px;backdrop-filter:blur(10px)">
@@ -157,7 +157,7 @@ async function enviarEmail(env, { item, quantidade, unidade, ot, solicitante, se
   }
 }
 
-async function enviarEmailLote(env, { ot, solicitante, setor, itens }) {
+async function enviarEmailLote(env, { ot, nome, solicitante, setor, itens }) {
   if (!env.RESEND_API_KEY) return;
   const linhas = itens.map(i => `
     <tr><td style="padding:6px 0;color:#e2e6ed">${i.item}</td><td style="padding:6px 0;text-align:right;font-weight:600;color:#e2e6ed">${i.quantidade}</td></tr>
@@ -169,12 +169,13 @@ async function enviarEmailLote(env, { ot, solicitante, setor, itens }) {
       body: JSON.stringify({
         from: env.EMAIL_REMETENTE || EMAIL_REMETENTE_PADRAO,
         to: env.EMAIL_DESTINO || EMAIL_DESTINO_PADRAO,
-        subject: `Nova solicitação (OT ${ot}) — ${itens.length} item(ns)`,
+        subject: `Nova solicitação — ${ot}${nome ? " · " + nome : ""} — ${itens.length} item(ns)`,
         html: `
         <div style="background:#0f1115;padding:32px;font-family:-apple-system,Helvetica,Arial,sans-serif">
           <div style="max-width:440px;margin:0 auto;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:18px;padding:26px;backdrop-filter:blur(10px)">
             <div style="font-size:13px;color:#9aa3b2;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Nova solicitação de material</div>
-            <div style="font-size:21px;font-weight:700;color:#fff;margin-bottom:14px">OT ${ot}</div>
+            <div style="display:inline-block;background:#5b8cff;color:#0c0e16;font-weight:800;font-size:13px;padding:4px 10px;border-radius:6px;margin-bottom:8px">${ot}</div>
+            <div style="font-size:21px;font-weight:800;color:#fff;margin-bottom:14px">${nome || "Sem nome definido"}</div>
             <table style="width:100%;font-size:14px;border-collapse:collapse;margin-bottom:14px">
               <tr style="border-bottom:1px solid rgba(255,255,255,.15)"><td style="padding:6px 0;color:#9aa3b2">Item</td><td style="padding:6px 0;text-align:right;color:#9aa3b2">Qtd.</td></tr>
               ${linhas}
@@ -650,7 +651,7 @@ export default {
       const { results: itensOt } = await env.DB.prepare(
         "SELECT item_nome, quantidade FROM solicitacoes WHERE ot = ? ORDER BY id"
       ).bind(ot).all();
-      await enviarEmailLote(env, { ot, solicitante, setor, itens: itensOt.map(i => ({ item: i.item_nome, quantidade: i.quantidade })) });
+      await enviarEmailLote(env, { ot, nome: projeto.nome, solicitante, setor, itens: itensOt.map(i => ({ item: i.item_nome, quantidade: i.quantidade })) });
       return json({ ok: true });
     }
 
@@ -767,13 +768,14 @@ export default {
         headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           from: env.EMAIL_REMETENTE || EMAIL_REMETENTE_PADRAO, to: destino.trim(),
-          subject: `OT ${b.ot} · NIU Experience Agency`,
+          subject: `${b.ot}${b.nome ? " · " + b.nome : ""} · NIU Experience Agency`,
           html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px">
             <div style="background:#0c0e16;border-radius:12px;padding:20px 24px;margin-bottom:20px">
               <div style="color:#fff;font-size:18px;font-weight:800">NIU <span style="color:#5b8cff">EXPERIENCE AGENCY</span></div>
               <div style="color:#9aa3b2;font-size:12px">Folha de Requisição de Material</div>
             </div>
-            <h2 style="font-size:22px;color:#0f1117;margin:0 0 4px">${b.ot}</h2>
+            <div style="display:inline-block;background:#5b8cff;color:#fff;font-weight:800;font-size:13px;padding:4px 12px;border-radius:6px;margin-bottom:8px">${b.ot}</div>
+            <h2 style="font-size:24px;font-weight:800;color:#0f1117;margin:0 0 4px">${b.nome || "Sem nome definido"}</h2>
             <p style="color:#6b7280;margin:0 0 20px;font-size:14px">${b.local||''}</p>
             <table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:20px">
               <tr style="background:#f3f4f6"><td style="padding:8px;font-weight:700">Solicitante</td><td style="padding:8px">${b.solic||''}</td><td style="padding:8px;font-weight:700">Setor</td><td style="padding:8px">${b.setor||'—'}</td></tr>
@@ -799,7 +801,7 @@ export default {
     if (otGetMatch && method === "GET") {
       const ot = decodeURIComponent(otGetMatch[1]);
       const { results } = await env.DB.prepare(
-        "SELECT s.*, i.modelo AS item_modelo, i.voltagem AS item_voltagem FROM solicitacoes s LEFT JOIN itens i ON s.item_id = i.id WHERE s.ot=? ORDER BY s.id"
+        "SELECT s.*, i.modelo AS item_modelo, i.voltagem AS item_voltagem, p.nome AS projeto_nome FROM solicitacoes s LEFT JOIN itens i ON s.item_id = i.id LEFT JOIN projetos p ON s.ot = p.numero WHERE s.ot=? ORDER BY s.id"
       ).bind(ot).all();
       return json(results);
     }

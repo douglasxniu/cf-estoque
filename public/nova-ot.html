@@ -406,17 +406,17 @@ async function confirmar(apenasEmail=false){
       // enviar por email via worker
       const linhas=carrinho.map(c=>`<tr><td style="padding:6px;border-bottom:1px solid #eee">${c.nome}</td><td style="padding:6px;border-bottom:1px solid #eee">${c.qty} ${c.unidade}</td><td style="padding:6px;border-bottom:1px solid #eee">${c.local||local||'—'}</td></tr>`).join('');
       const rEmail=await fetch(`/api/ot/email`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-        to:email, ot, solic, setor, local, obs, data, linhas,
+        to:email, ot, nome:nomeOt, solic, setor, local, obs, data, linhas,
         url:`${location.origin}/ot.html?ot=${encodeURIComponent(ot)}`
       })});
       if(rEmail.ok){
-        await niuAlert(`OT ${ot} enviada para ${email}`);
+        await niuAlert(`${ot} enviada para ${email}`);
       } else {
         const e=await rEmail.json().catch(()=>({}));
         await niuAlert('Erro ao enviar email: '+(e.error||'verifique a configuração do Resend no servidor.'));
       }
     } else {
-      gerarPDF({ot,solic,setor,local,obs,data});
+      gerarPDF({ot,nome:nomeOt,solic,setor,local,obs,data});
     }
   } finally {
     confirmarEmAndamento=false;
@@ -424,9 +424,9 @@ async function confirmar(apenasEmail=false){
   }
 }
 
-function gerarPDF({ot,solic,setor,local,obs,data}){
+function gerarPDF({ot,nome,solic,setor,local,obs,data}){
   gerarFolhaRequisicaoPDF({
-    ot, solicitante: solic, setor, local, data, obs,
+    ot, nome, solicitante: solic, setor, local, data, obs,
     itens: carrinho.map(c=>({ nome: c.nome, qtd: c.qty, unidade: c.unidade, local: c.local, obs: c.obs, modelo: c.modelo, voltagem: c.voltagem }))
   });
 }
