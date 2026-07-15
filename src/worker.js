@@ -514,6 +514,13 @@ export default {
           return json({ error: `Projeto ${numeroManual} já existe` }, 409);
         }
       }
+      // Limpeza oportunista: libera números reservados (ex: página "Nova OT" aberta e
+      // abandonada) que nunca ganharam nenhum item e já passaram de 2h — evita acumular
+      // "OTs fantasma" que bloqueiam números pra sempre sem aparecer em lugar nenhum da UI.
+      await env.DB.prepare(
+        "DELETE FROM projetos WHERE criado_em < datetime('now','-2 hours') AND numero NOT IN (SELECT DISTINCT ot FROM solicitacoes)"
+      ).run();
+
       const year = new Date().getFullYear();
       for (let tentativa = 0; tentativa < 30; tentativa++) {
         const { results } = await env.DB.prepare(
@@ -529,6 +536,16 @@ export default {
         } catch (e) { /* número já reservado por outra requisição concorrente; tenta o próximo */ }
       }
       return json({ error: "Não foi possível reservar um número de projeto" }, 500);
+    }
+
+    const projetoDelMatch = path.match(/^\/api\/projetos\/([^/]+)$/);
+    if (projetoDelMatch && method === "DELETE") {
+      const numero = decodeURIComponent(projetoDelMatch[1]);
+      // Só libera o número se ele nunca chegou a ter nenhum item — nunca apaga uma OT real.
+      const { results } = await env.DB.prepare("SELECT COUNT(*) as n FROM solicitacoes WHERE ot = ?").bind(numero).all();
+      if ((results[0]?.n || 0) > 0) return json({ error: "OT já tem itens registados, não pode ser liberada" }, 409);
+      await env.DB.prepare("DELETE FROM projetos WHERE numero = ?").bind(numero).run();
+      return json({ ok: true });
     }
 
     const projetoMatch = path.match(/^\/api\/projetos\/([^/]+)$/);
