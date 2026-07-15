@@ -84,7 +84,7 @@ select option{background:var(--surface-2)}
       <path d="M14.36,5.39v4.83h-2.47v-4.74c0-2.09-.6-3.1-1.88-3.1s-2.8.77-4.53,2.03l-2.98,2.06v3.76H0V0h2.32c0,1.13,0,2.86-.06,3.99C6.26,1.31,8.05,0,10.4,0c2.53,0,3.96,1.64,3.96,5.39"/>
     </svg>
     <div>
-      <div style="font-weight:800;color:var(--text);font-size:.9rem">Nova Ordem de Trabalho</div>
+      <div style="font-weight:800;color:var(--text);font-size:.9rem" id="paginaTitulo">Nova Ordem de Trabalho</div>
       <div style="font-size:.68rem;color:var(--muted)">NIU Experience Agency</div>
     </div>
   </a>
@@ -198,19 +198,71 @@ document.getElementById('otData').value=new Date().toISOString().slice(0,10);
 const anoOt=new Date().getFullYear();
 document.getElementById('otPrefixo').textContent=`OT-${anoOt}-`;
 
+// Modo edição: ?editar=OT-2026-0037 reaproveita esta mesma tela (catálogo, filtros, item
+// livre, etc.) pra editar uma OT já existente, em vez do modal simplificado do painel.
+const otParaEditar = new URL(location.href).searchParams.get('editar');
+const modoEdicao = !!otParaEditar;
+let itensOriginais=[]; // solicitações já salvas no servidor, pra diff no salvar
+
 async function init(){
   itensEstoque=await fetch(`${API}/itens`).then(r=>r.json()).catch(()=>[]);
+
+  if(modoEdicao){
+    document.getElementById('paginaTitulo').textContent='Editar OT';
+    document.title='Editar OT · NIU Estoque';
+    document.getElementById('otPrefixo').textContent=otParaEditar;
+    document.getElementById('otDigitos').style.display='none';
+    document.getElementById('otNum').value=otParaEditar;
+    document.getElementById('btnGerarOt').textContent='Salvar e gerar PDF';
+
+    const [projetos, itensOt] = await Promise.all([
+      fetch(`${API}/projetos`).then(r=>r.json()).catch(()=>[]),
+      fetch(`${API}/ot/${encodeURIComponent(otParaEditar)}`).then(r=>r.json()).catch(()=>[])
+    ]);
+    const projeto = projetos.find(p=>p.numero===otParaEditar);
+    if(!projeto && !itensOt.length){
+      document.getElementById('otNumMsg').textContent='OT não encontrada.'; document.getElementById('otNumMsg').style.color='var(--danger)';
+    }
+    document.getElementById('otNome').value = projeto?.nome || '';
+    document.getElementById('otSetor').value = projeto?.setor || '';
+    document.getElementById('otSolic').value = itensOt[0]?.solicitante || '';
+    document.getElementById('otLocal').value = itensOt[0]?.local_uso || '';
+
+    itensOriginais = itensOt;
+    carrinho = itensOt.map(it=>{
+      const estoqueItem = it.item_id ? itensEstoque.find(i=>i.id===it.item_id) : null;
+      return {
+        _id: it.item_id || ('x'+it.id),
+        _solId: it.id,
+        _origQty: it.quantidade,
+        _estoque: !!it.item_id,
+        nome: it.item_nome,
+        qty: it.quantidade,
+        unidade: it.unidade,
+        local: it.local_uso||'',
+        obs: '',
+        maxQty: estoqueItem ? estoqueItem.quantidade + it.quantidade : undefined,
+        modelo: it.item_modelo,
+        voltagem: it.item_voltagem
+      };
+    });
+  }
+
   renderFiltros();
   renderCatalogo();
-  // reserva um número de projeto novo e único no servidor (evita colisão entre usuários simultâneos)
-  const r=await fetch(`${API}/projetos`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})}).then(r=>r.json()).catch(()=>null);
-  const digitos=document.getElementById('otDigitos');
-  if(r?.numero){
-    document.getElementById('otNum').value=r.numero;
-    digitos.value=r.numero.split('-').pop();
-    digitos.disabled=false;
-  } else {
-    document.getElementById('otNumMsg').textContent='Erro ao reservar número — recarregue a página.';
+  render();
+
+  if(!modoEdicao){
+    // reserva um número de projeto novo e único no servidor (evita colisão entre usuários simultâneos)
+    const r=await fetch(`${API}/projetos`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})}).then(r=>r.json()).catch(()=>null);
+    const digitos=document.getElementById('otDigitos');
+    if(r?.numero){
+      document.getElementById('otNum').value=r.numero;
+      digitos.value=r.numero.split('-').pop();
+      digitos.disabled=false;
+    } else {
+      document.getElementById('otNumMsg').textContent='Erro ao reservar número — recarregue a página.';
+    }
   }
 }
 init();
@@ -286,7 +338,10 @@ function renderCatalogo(){
   wrap.innerHTML=found.map(i=>{
     const noCarrinhoItem=carrinho.find(c=>c._id==i.id);
     const semEstoque=i.quantidade<=0;
-    const esgotadoNoCarrinho=noCarrinhoItem && noCarrinhoItem.qty>=i.quantidade;
+    // maxQty já soma estoque livre + quantidade que essa mesma OT já tem reservada (modo edição);
+    // pra itens novos ainda sem maxQty, o limite é só o estoque livre atual.
+    const limite=noCarrinhoItem?.maxQty ?? i.quantidade;
+    const esgotadoNoCarrinho=noCarrinhoItem && noCarrinhoItem.qty>=limite;
     const bloqueado=semEstoque||esgotadoNoCarrinho;
     return `
     <div class="catalogo-card ${noCarrinhoItem?'added':''} ${bloqueado&&!noCarrinhoItem?'sem-estoque':''} ${esgotadoNoCarrinho?'maxed':''}" ${!bloqueado?`onclick="adicionarDoEstoque(${i.id})"`:''}>
@@ -304,7 +359,8 @@ async function adicionarDoEstoque(id){
   if(!it) return;
   const existente=carrinho.find(c=>c._id==id);
   if(existente){
-    if(existente.qty>=it.quantidade){ await niuAlert('Quantidade em estoque esgotada.'); return; }
+    const limite=existente.maxQty ?? it.quantidade;
+    if(existente.qty>=limite){ await niuAlert('Quantidade em estoque esgotada.'); return; }
     existente.qty++;
   } else {
     carrinho.push({_id:id,_estoque:true,nome:it.nome,qty:1,unidade:it.unidade,local:'',obs:'',maxQty:it.quantidade,modelo:it.modelo,voltagem:it.voltagem});
@@ -389,10 +445,44 @@ async function confirmar(apenasEmail=false){
   const btnEmail=document.getElementById('btnEmail'), btnOt=document.getElementById('btnGerarOt');
   btnEmail.disabled=true; btnOt.disabled=true;
   try{
-    fetch(`${API}/projetos/${encodeURIComponent(ot)}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({setor,nome:nomeOt})}).catch(()=>{});
+    const rProjeto=await fetch(`${API}/projetos/${encodeURIComponent(ot)}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({setor,nome:nomeOt,solicitante:solic})});
+    if(!rProjeto.ok){ await niuAlert('Erro ao salvar dados da OT.'); return; }
 
-    // Registar no backend todos os itens do carrinho (estoque e avulsos)
-    if(carrinho.length){
+    if(modoEdicao){
+      const origPorId={}; itensOriginais.forEach(o=>origPorId[o.id]=o);
+      const idsAtuais=new Set(carrinho.filter(c=>c._solId).map(c=>c._solId));
+
+      // remove itens que saíram do carrinho (devolve ao estoque automaticamente)
+      for(const orig of itensOriginais){
+        if(!idsAtuais.has(orig.id)){
+          const rDel=await fetch(`${API}/solicitacoes/${orig.id}`,{method:'DELETE'});
+          if(!rDel.ok){ await niuAlert('Erro ao remover um item da OT.'); return; }
+        }
+      }
+      // atualiza itens já existentes que mudaram (quantidade, local ou nome do item livre)
+      for(const c of carrinho.filter(c=>c._solId)){
+        const orig=origPorId[c._solId];
+        const localNovo=c.local||local;
+        if(c.qty!==orig.quantidade || localNovo!==(orig.local_uso||'') || (!c._estoque && c.nome!==orig.item_nome)){
+          const rPatch=await fetch(`${API}/solicitacoes/${c._solId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+            quantidade:c.qty, local_uso:localNovo, item_nome:c._estoque?undefined:c.nome
+          })});
+          if(!rPatch.ok){ const e=await rPatch.json().catch(()=>({})); await niuAlert('Erro ao atualizar item: '+(e.error||'')); return; }
+        }
+      }
+      // insere itens novos adicionados durante a edição
+      const novos=carrinho.filter(c=>!c._solId);
+      if(novos.length){
+        const r=await fetch(`${API}/solicitacoes/lote`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+          ot,solicitante:solic,setor,
+          itens:novos.map(c=>c._estoque
+            ? {itemId:c._id,quantidade:c.qty,localUso:c.local||local}
+            : {itemId:null,nome:c.nome,unidade:c.unidade,quantidade:c.qty,localUso:c.local||local})
+        })});
+        if(!r.ok){const e=await r.json().catch(()=>({}));await niuAlert('Erro: '+(e.error||'falha ao registar itens novos'));return;}
+      }
+    } else if(carrinho.length){
+      // Registar no backend todos os itens do carrinho (estoque e avulsos)
       const r=await fetch(`${API}/solicitacoes/lote`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
         ot,solicitante:solic,setor,
         itens:carrinho.map(c=>c._estoque

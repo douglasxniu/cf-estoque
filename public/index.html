@@ -916,6 +916,7 @@ function renderHist(){
         ${algumPendente?`<button class="btn sec" data-a="aprovar-ot" data-ot="${esc(ot)}">Aprovar OT</button>`:''}
         ${todosAprovados && !todosDevolvidos?`<button class="btn sec" data-a="devolver-ot" data-ot="${esc(ot)}">Devolver OT</button>`:''}
         <button class="btn sec" data-a="editar-ot" data-ot="${esc(ot)}">✎ Editar</button>
+        <button class="btn sec" data-a="opcoes-ot" data-ot="${esc(ot)}" title="Mesclar OT / alterar status">⚙ Opções</button>
         <button class="btn sec" data-a="add-itens-ot" data-ot="${esc(ot)}">+ Itens</button>
         <button class="btn sec" data-a="qr-ot" data-ot="${esc(ot)}">QR OT</button>
         <button class="btn sec" data-a="pdf-ot" data-ot="${esc(ot)}">PDF</button>
@@ -964,6 +965,8 @@ document.getElementById('tbHist').addEventListener('click', async e=>{
     await fetch(`${API}/solicitacoes/ot/${encodeURIComponent(ot)}/devolver`,{method:'PATCH'});
     toast('OT devolvida ao estoque!'); carregarTudo();
   } else if(btn.dataset.a==='editar-ot'){
+    window.open(`/nova-ot.html?editar=${encodeURIComponent(ot)}`,'_blank');
+  } else if(btn.dataset.a==='opcoes-ot'){
     abrirModalEditarOt(ot);
   } else if(btn.dataset.a==='add-itens-ot'){
     abrirModalAddItensOt(ot);
@@ -1627,7 +1630,7 @@ document.getElementById('listaOtsAbertas').addEventListener('click', async e=>{
     return;
   }
   const card=e.target.closest('.ot-card'); if(!card) return;
-  abrirModalEditarOt(card.dataset.numero);
+  window.open(`/nova-ot.html?editar=${encodeURIComponent(card.dataset.numero)}`,'_blank');
 });
 
 let editOtAtual=null;
