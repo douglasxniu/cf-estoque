@@ -180,7 +180,7 @@ select option{background:var(--surface-2)}
 <div class="footer-actions">
   <button class="btn btn-ghost" style="flex:1" onclick="history.back()">Cancelar</button>
   <button class="btn btn-ghost" style="flex:1" onclick="confirmar(true)" id="btnEmail">Enviar email</button>
-  <button class="btn btn-primary" style="flex:2" onclick="confirmar(false)">Gerar OT e PDF</button>
+  <button class="btn btn-primary" style="flex:2" onclick="confirmar(false)" id="btnGerarOt">Gerar OT e PDF</button>
 </div>
 
 <script src="/vendor/qrcode.js"></script>
@@ -358,7 +358,9 @@ function renderNome(i,v){
 }
 render();
 
+let confirmarEmAndamento=false;
 async function confirmar(apenasEmail=false){
+  if(confirmarEmAndamento) return;
   const ot=document.getElementById('otNum').value.trim();
   const solic=document.getElementById('otSolic').value.trim();
   const local=document.getElementById('otLocal').value.trim();
@@ -373,34 +375,42 @@ async function confirmar(apenasEmail=false){
   const data=document.getElementById('otData').value;
   const nomeOt=document.getElementById('otNome').value.trim();
 
-  fetch(`${API}/projetos/${encodeURIComponent(ot)}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({setor,nome:nomeOt})}).catch(()=>{});
+  confirmarEmAndamento=true;
+  const btnEmail=document.getElementById('btnEmail'), btnOt=document.getElementById('btnGerarOt');
+  btnEmail.disabled=true; btnOt.disabled=true;
+  try{
+    fetch(`${API}/projetos/${encodeURIComponent(ot)}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({setor,nome:nomeOt})}).catch(()=>{});
 
-  // Registar no backend todos os itens do carrinho (estoque e avulsos)
-  if(carrinho.length){
-    const r=await fetch(`${API}/solicitacoes/lote`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-      ot,solicitante:solic,setor,
-      itens:carrinho.map(c=>c._estoque
-        ? {itemId:c._id,quantidade:c.qty,localUso:c.local||local}
-        : {itemId:null,nome:c.nome,unidade:c.unidade,quantidade:c.qty,localUso:c.local||local})
-    })});
-    if(!r.ok){const e=await r.json().catch(()=>({}));await niuAlert('Erro: '+(e.error||'falha ao registar'));return;}
-  }
-
-  if(apenasEmail&&email){
-    // enviar por email via worker
-    const linhas=carrinho.map(c=>`<tr><td style="padding:6px;border-bottom:1px solid #eee">${c.nome}</td><td style="padding:6px;border-bottom:1px solid #eee">${c.qty} ${c.unidade}</td><td style="padding:6px;border-bottom:1px solid #eee">${c.local||local||'—'}</td></tr>`).join('');
-    const rEmail=await fetch(`/api/ot/email`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-      to:email, ot, solic, setor, local, obs, data, linhas,
-      url:`${location.origin}/ot.html?ot=${encodeURIComponent(ot)}`
-    })});
-    if(rEmail.ok){
-      await niuAlert(`OT ${ot} enviada para ${email}`);
-    } else {
-      const e=await rEmail.json().catch(()=>({}));
-      await niuAlert('Erro ao enviar email: '+(e.error||'verifique a configuração do Resend no servidor.'));
+    // Registar no backend todos os itens do carrinho (estoque e avulsos)
+    if(carrinho.length){
+      const r=await fetch(`${API}/solicitacoes/lote`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+        ot,solicitante:solic,setor,
+        itens:carrinho.map(c=>c._estoque
+          ? {itemId:c._id,quantidade:c.qty,localUso:c.local||local}
+          : {itemId:null,nome:c.nome,unidade:c.unidade,quantidade:c.qty,localUso:c.local||local})
+      })});
+      if(!r.ok){const e=await r.json().catch(()=>({}));await niuAlert('Erro: '+(e.error||'falha ao registar'));return;}
     }
-  } else {
-    gerarPDF({ot,solic,setor,local,obs,data});
+
+    if(apenasEmail&&email){
+      // enviar por email via worker
+      const linhas=carrinho.map(c=>`<tr><td style="padding:6px;border-bottom:1px solid #eee">${c.nome}</td><td style="padding:6px;border-bottom:1px solid #eee">${c.qty} ${c.unidade}</td><td style="padding:6px;border-bottom:1px solid #eee">${c.local||local||'—'}</td></tr>`).join('');
+      const rEmail=await fetch(`/api/ot/email`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+        to:email, ot, solic, setor, local, obs, data, linhas,
+        url:`${location.origin}/ot.html?ot=${encodeURIComponent(ot)}`
+      })});
+      if(rEmail.ok){
+        await niuAlert(`OT ${ot} enviada para ${email}`);
+      } else {
+        const e=await rEmail.json().catch(()=>({}));
+        await niuAlert('Erro ao enviar email: '+(e.error||'verifique a configuração do Resend no servidor.'));
+      }
+    } else {
+      gerarPDF({ot,solic,setor,local,obs,data});
+    }
+  } finally {
+    confirmarEmAndamento=false;
+    btnEmail.disabled=false; btnOt.disabled=false;
   }
 }
 

@@ -460,7 +460,9 @@ document.getElementById('ovCancel').onclick=()=>{
   document.getElementById('stepFim').classList.remove('active');
 };
 
-document.getElementById('ovConfirm').addEventListener('click', async ()=>{
+document.getElementById('ovConfirm').addEventListener('click', async (e)=>{
+  const btn=e.currentTarget;
+  if(btn.disabled) return;
   const ot=document.getElementById('sOt').value.trim();
   const nome=document.getElementById('sNome').value.trim();
   const setor=document.getElementById('sSetor').value.trim();
@@ -473,14 +475,19 @@ document.getElementById('ovConfirm').addEventListener('click', async ()=>{
     ot, solicitante: nome, setor,
     itens: ids.map(id=>({ itemId: parseInt(id), quantidade: carrinho[id].qtd, localUso: carrinho[id].local.trim() }))
   };
-  const r = await fetch(`${API}/solicitacoes/lote`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-  if(!r.ok){ const e=await r.json().catch(()=>({})); await niuAlert('Erro: ' + (e.error||'quantidade indisponível')); return; }
-  carrinho={};
-  document.getElementById('ov').classList.remove('show');
-  document.getElementById('stepFim').classList.remove('active');
-  ['sOt','sLocal','sNome','sSetor'].forEach(id=>document.getElementById(id).value='');
-  toast('Solicitação enviada com sucesso!');
-  checarLiberacao();
+  btn.disabled=true;
+  try{
+    const r = await fetch(`${API}/solicitacoes/lote`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    if(!r.ok){ const err=await r.json().catch(()=>({})); await niuAlert('Erro: ' + (err.error||'quantidade indisponível')); return; }
+    carrinho={};
+    document.getElementById('ov').classList.remove('show');
+    document.getElementById('stepFim').classList.remove('active');
+    ['sOt','sLocal','sNome','sSetor'].forEach(id=>document.getElementById(id).value='');
+    toast('Solicitação enviada com sucesso!');
+    checarLiberacao();
+  } finally {
+    btn.disabled=false;
+  }
 });
 
 carregar();

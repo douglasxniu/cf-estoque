@@ -1567,18 +1567,25 @@ document.getElementById('addItensCancel').addEventListener('click', ()=>{
   document.getElementById('addItensOverlay').classList.remove('show');
 });
 
-document.getElementById('addItensConfirmar').addEventListener('click', async ()=>{
+document.getElementById('addItensConfirmar').addEventListener('click', async (e)=>{
   if(!addItensCarrinho.length){ toast('Adicione ao menos um item.'); return; }
-  const r=await fetch(`${API}/solicitacoes/lote`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-    ot:addItensOt, solicitante:addItensSolicitante, setor:addItensSetor,
-    itens:addItensCarrinho.map(c=> c.avulso ? {itemId:null, nome:c.nome, unidade:c.unidade, quantidade:c.qtd} : {itemId:c.itemId, quantidade:c.qtd})
-  })});
-  if(!r.ok){ const e=await r.json().catch(()=>({})); toast('Erro: '+(e.error||'falha ao adicionar')); return; }
-  document.getElementById('addItensOverlay').classList.remove('show');
-  toast(`Itens adicionados ao projeto ${addItensOt}!`);
-  await carregarTudo();
-  if(document.getElementById('editOtOverlay').classList.contains('show') && editOtAtual===addItensOt){
-    renderEditOtItens();
+  const btn=e.currentTarget;
+  if(btn.disabled) return;
+  btn.disabled=true;
+  try{
+    const r=await fetch(`${API}/solicitacoes/lote`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      ot:addItensOt, solicitante:addItensSolicitante, setor:addItensSetor,
+      itens:addItensCarrinho.map(c=> c.avulso ? {itemId:null, nome:c.nome, unidade:c.unidade, quantidade:c.qtd} : {itemId:c.itemId, quantidade:c.qtd})
+    })});
+    if(!r.ok){ const e2=await r.json().catch(()=>({})); toast('Erro: '+(e2.error||'falha ao adicionar')); return; }
+    document.getElementById('addItensOverlay').classList.remove('show');
+    toast(`Itens adicionados ao projeto ${addItensOt}!`);
+    await carregarTudo();
+    if(document.getElementById('editOtOverlay').classList.contains('show') && editOtAtual===addItensOt){
+      renderEditOtItens();
+    }
+  } finally {
+    btn.disabled=false;
   }
 });
 

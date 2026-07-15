@@ -392,27 +392,34 @@ function renderCarrinho(){
   document.getElementById('app').innerHTML=h;
 }
 
+let enviandoOt=false;
 async function enviarOT(){
+  if(enviandoOt) return;
   const otDigitado=document.getElementById('otN').value.trim();
   const local=document.getElementById('otL').value.trim();
   const nome=document.getElementById('otS').value.trim();
   const setor=document.getElementById('otSe').value.trim();
   if(!local||!nome){toast('Preencha local e nome','err');return;}
 
-  let ot=otDigitado;
-  if(!ot){
-    const p=await fetch(`${API}/projetos`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({setor,nome:local})}).then(r=>r.json()).catch(()=>null);
-    if(!p?.numero){ toast('Erro ao reservar número de projeto','err'); return; }
-    ot=p.numero;
-  } else {
-    // garante que o projeto existe; se já existir (409), apenas adiciona os itens a ele
-    const rProj=await fetch(`${API}/projetos`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({numero:ot,setor,nome:local})});
-    if(!rProj.ok && rProj.status!==409){ toast('Erro ao validar o projeto','err'); return; }
-  }
+  enviandoOt=true;
+  try{
+    let ot=otDigitado;
+    if(!ot){
+      const p=await fetch(`${API}/projetos`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({setor,nome:local})}).then(r=>r.json()).catch(()=>null);
+      if(!p?.numero){ toast('Erro ao reservar número de projeto','err'); return; }
+      ot=p.numero;
+    } else {
+      // garante que o projeto existe; se já existir (409), apenas adiciona os itens a ele
+      const rProj=await fetch(`${API}/projetos`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({numero:ot,setor,nome:local})});
+      if(!rProj.ok && rProj.status!==409){ toast('Erro ao validar o projeto','err'); return; }
+    }
 
-  const r=await fetch(`${API}/solicitacoes/lote`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ot,solicitante:nome,setor,itens:carrinho.map(c=>({itemId:c.id,quantidade:c.qtd,localUso:local}))})});
-  if(r.ok){toast('OT '+ot+' registada!');carrinho=[];document.getElementById('cbadge').textContent='';renderCarrinho();}
-  else{const e=await r.json().catch(()=>({}));toast('Erro: '+(e.error||'falha'),'err');}
+    const r=await fetch(`${API}/solicitacoes/lote`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ot,solicitante:nome,setor,itens:carrinho.map(c=>({itemId:c.id,quantidade:c.qtd,localUso:local}))})});
+    if(r.ok){toast('OT '+ot+' registada!');carrinho=[];document.getElementById('cbadge').textContent='';renderCarrinho();}
+    else{const e=await r.json().catch(()=>({}));toast('Erro: '+(e.error||'falha'),'err');}
+  } finally {
+    enviandoOt=false;
+  }
 }
 
 // Carregar se veio com parâmetros
