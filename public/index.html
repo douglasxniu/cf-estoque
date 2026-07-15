@@ -1598,6 +1598,7 @@ function renderOtsAbertas(){
   wrap.innerHTML = abertas.map(p=>{
     const itensOt=solicitacoes.filter(s=>s.ot===p.numero);
     const naoDevolvidos=itensOt.filter(s=>s.status!=='devolvido').length;
+    const semItens=itensOt.length===0;
     return `
     <div class="ot-card" data-numero="${esc(p.numero)}">
       <div class="ot-card-top">
@@ -1605,11 +1606,22 @@ function renderOtsAbertas(){
         ${p.nome?`<span class="ot-nome">${esc(p.nome)}</span>`:''}
       </div>
       <div class="ot-card-meta">${itensOt.length} item(ns) · ${naoDevolvidos} não devolvido(s)${p.setor?' · '+esc(p.setor):''}</div>
+      ${semItens?`<button class="del" data-a="excluir-ot-vazia" data-numero="${esc(p.numero)}" style="margin-top:6px">excluir e liberar número</button>`:''}
     </div>`;
   }).join('');
 }
 document.getElementById('buscaOtAberta').addEventListener('input', renderOtsAbertas);
-document.getElementById('listaOtsAbertas').addEventListener('click', e=>{
+document.getElementById('listaOtsAbertas').addEventListener('click', async e=>{
+  const delBtn=e.target.closest('[data-a="excluir-ot-vazia"]');
+  if(delBtn){
+    const numero=delBtn.dataset.numero;
+    if(!await niuConfirm(`Excluir a OT ${numero} e liberar o número? Ela não tem nenhum item.`)) return;
+    const r=await fetch(`${API}/projetos/${encodeURIComponent(numero)}`,{method:'DELETE'});
+    if(!r.ok){ const d=await r.json().catch(()=>({})); toast(d.error||'Erro ao excluir OT'); return; }
+    toast(`OT ${numero} excluída, número liberado.`);
+    await carregarTudo();
+    return;
+  }
   const card=e.target.closest('.ot-card'); if(!card) return;
   abrirModalEditarOt(card.dataset.numero);
 });

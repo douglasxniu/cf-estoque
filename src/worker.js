@@ -44,6 +44,7 @@ function isPublicRoute(path, method) {
 const ADMIN_ONLY_PATTERNS = [
   { method: "DELETE", pattern: /^\/api\/itens\/\d+$/ },
   { method: "DELETE", pattern: /^\/api\/solicitacoes\/ot\/[^/]+$/ },
+  { method: "DELETE", pattern: /^\/api\/projetos\/[^/]+$/ },
   { method: "POST", pattern: /^\/api\/projetos\/[^/]+\/mesclar$/ },
   { method: "GET", pattern: /^\/api\/usuarios$/ },
   { method: "POST", pattern: /^\/api\/usuarios$/ },
