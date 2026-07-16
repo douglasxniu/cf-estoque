@@ -628,20 +628,26 @@ export default {
         reservados.push(li);
       }
       const resultado = [];
-      for (const li of lista) {
+      // ids alinhados por posição com `lista`, pro cliente saber o id de cada linha inserida
+      // (evita reenviar/duplicar o mesmo item se o usuário salvar de novo sem recarregar a página)
+      const idsInseridos = new Array(lista.length).fill(null);
+      for (let idx = 0; idx < lista.length; idx++) {
+        const li = lista[idx];
         if (li.itemId) {
           const item = await env.DB.prepare("SELECT * FROM itens WHERE id = ?").bind(li.itemId).first();
-          await env.DB.prepare(
+          const ins = await env.DB.prepare(
             "INSERT INTO solicitacoes (projeto_id, item_id, item_nome, unidade, quantidade, ot, solicitante, setor, local_uso) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
           ).bind(projeto.id, li.itemId, item.nome, item.unidade, li.quantidade, ot, solicitante, setor || "", li.localUso || "").run();
+          idsInseridos[idx] = ins.meta.last_row_id;
           resultado.push({ item: item.nome, quantidade: li.quantidade });
           await verificarQuedaEstoqueBaixo(env, li.itemId, item.quantidade + li.quantidade, item.quantidade);
         } else {
           const nome = (li.nome || "").trim();
           if (!nome) continue;
-          await env.DB.prepare(
+          const ins = await env.DB.prepare(
             "INSERT INTO solicitacoes (projeto_id, item_id, item_nome, unidade, quantidade, ot, solicitante, setor, local_uso) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?)"
           ).bind(projeto.id, nome, li.unidade || "", li.quantidade, ot, solicitante, setor || "", li.localUso || "").run();
+          idsInseridos[idx] = ins.meta.last_row_id;
           resultado.push({ item: nome, quantidade: li.quantidade });
         }
       }
@@ -652,7 +658,7 @@ export default {
         "SELECT item_nome, quantidade FROM solicitacoes WHERE ot = ? ORDER BY id"
       ).bind(ot).all();
       await enviarEmailLote(env, { ot, nome: projeto.nome, solicitante, setor, itens: itensOt.map(i => ({ item: i.item_nome, quantidade: i.quantidade })) });
-      return json({ ok: true });
+      return json({ ok: true, ids: idsInseridos });
     }
 
     // ---------- SOLICITAÇÕES ----------
