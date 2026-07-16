@@ -179,7 +179,7 @@ select option{background:var(--surface-2)}
 </div>
 
 <div class="footer-actions">
-  <button class="btn btn-ghost" style="flex:1" onclick="history.back()">Cancelar</button>
+  <button class="btn btn-ghost" style="flex:1" onclick="cancelarPagina()">Cancelar</button>
   <button class="btn btn-ghost" style="flex:1" onclick="confirmar(true)" id="btnEmail">Enviar email</button>
   <button class="btn btn-primary" style="flex:2" onclick="confirmar(false)" id="btnGerarOt">Gerar OT e PDF</button>
 </div>
@@ -190,6 +190,14 @@ select option{background:var(--surface-2)}
 <script>
 const API='/api';
 const esc=s=>String(s??'').replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
+
+// Esta página quase sempre é aberta numa aba nova (window.open a partir do painel), onde
+// history.back() não tem pra onde voltar. Fecha a aba; se o navegador não deixar (ex: página
+// aberta digitando a URL direto, não via script), cai pro histórico como alternativa.
+function cancelarPagina(){
+  window.close();
+  history.back();
+}
 let itensEstoque=[], carrinho=[];
 
 // preencher data de hoje
