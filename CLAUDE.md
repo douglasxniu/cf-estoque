@@ -4,9 +4,11 @@ Sistema de controle de estoque de equipamentos elétricos da **NIU Experience Ag
 rodando 100% em Cloudflare Workers + D1 (SQLite), sem build step — HTML/CSS/JS puro em
 `public/`, servido como Workers Assets.
 
-- **Site em produção:** https://niu.niupt.workers.dev (renomeado do Worker "niu-estoque"
-  em 2026-07-22; o subdomínio da conta também mudou de `douglas-silva-c55` para `niupt`.
-  O Worker antigo foi apagado — mesmo banco D1, secrets recriados no novo Worker.)
+- **Site em produção:** https://estoque.niupt.workers.dev (Worker renomeado duas vezes em
+  2026-07-22: "niu-estoque" → "niu" → "estoque"; o subdomínio da conta também mudou de
+  `douglas-silva-c55` para `niupt`. Cada rename cria um Worker novo — mesmo banco D1
+  sempre, mas secrets `AUTH_SECRET`/`RESEND_API_KEY` precisam ser recriados a cada vez;
+  Workers antigos foram apagados.)
 - **Repositório:** https://github.com/douglasxniu/cf-estoque (público)
 - **Dono:** Douglas Silva (douglas.silva@niu.pt / GitHub: douglasxniu)
 
