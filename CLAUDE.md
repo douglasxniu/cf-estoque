@@ -106,8 +106,7 @@ seja explicitamente adicionada a uma dessas listas. Rotas só-admin em
 ## Impressão térmica de etiquetas (preparação)
 
 O botão "Gerar Etiquetas" (Nova OT) hoje só gera um PDF (grid A4, ver `etiquetas.js`). Não
-há automação de impressão térmica ainda (Brother QL-820NWB é a impressora cogitada — ver
-histórico de conversa —, protocolo raster, provavelmente via um agente local na rede da
+há automação de impressão térmica ainda, protocolo raster, provavelmente via um agente local na rede da
 impressora, já que o Worker roda na borda e não alcança a LAN). Enquanto isso não é
 implementado, cada geração de etiquetas grava as unidades físicas na tabela
 `fila_impressao_etiquetas` (`POST/GET /api/etiquetas/fila`, exige login) — um registro do
