@@ -118,6 +118,15 @@ A primeira etiqueta de cada PDF é um QR "Resumo da OT" (não um item físico) a
 via `construirEtiquetasItensPDF(labels)` com `{tipoQr:true, titulo, url}` no lugar de
 `{nome, local, obs}`.
 
+Existe uma impressora Zebra GC420d (EPL) instalada via USB nesta máquina (fila CUPS
+`Zebra_Technologies_ZTC_GC420d__EPL_`). `print-agent/` (ferramenta **local**, não faz parte
+do deploy do Worker — ver `print-agent/README.md`) já gera o PDF de 100x150mm (10x15cm, 5
+etiquetas de 100x30mm empilhadas, com linha de picote e margem de segurança), mas o
+**comando de impressão real ainda não está calibrado**: o driver só imprime fisicamente
+quando o job usa o `PageSize` padrão atual da fila CUPS — qualquer tamanho customizado ou
+outro preset da lista é aceito pela fila mas não sai nada na impressora. Ver
+`print-agent/README.md` pra retomar esse ponto exato.
+
 ## Lições aprendidas (não repetir)
 
 - **Nunca rodar `wrangler` de dentro de `public/`** — cria `.wrangler/cache` ali, que vira
