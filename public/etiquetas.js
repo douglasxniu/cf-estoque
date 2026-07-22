@@ -49,16 +49,44 @@ function imprimirEtiquetasEmLote(labels, filename = 'etiquetas.pdf', opts) {
   if (doc) doc.save(filename);
 }
 
+// Dados da empresa pro cabeçalho discreto das etiquetas de item (logo em logo-niu.svg).
+const EMPRESA_NOME = 'NIU Experience Agency';
+const EMPRESA_ENDERECO = 'Rua Cidade Cordova Nº5 - 2610-038 Alfragide';
+const EMPRESA_TELEFONE = '(+351) 210 108 700';
+const LOGO_RATIO = 10.22 / 36.4; // altura/largura do viewBox de logo-niu.svg
+
+// Rasteriza o logo (SVG) uma única vez — jsPDF não desenha SVG diretamente via addImage.
+let _logoNiuDataUrlPromise = null;
+function logoNiuDataUrl() {
+  if (!_logoNiuDataUrlPromise) {
+    _logoNiuDataUrlPromise = new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const escala = 8; // resolução maior que o tamanho impresso, pra não sair borrado
+        const cv = document.createElement('canvas');
+        cv.width = img.width * escala; cv.height = img.height * escala;
+        cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+        resolve(cv.toDataURL('image/png'));
+      };
+      img.onerror = reject;
+      img.src = '/logo-niu.svg';
+    });
+  }
+  return _logoNiuDataUrlPromise;
+}
+
 // Etiquetas de item (sem QR) pra colar no equipamento físico — grade 2x7 fixa em A4,
-// célula sempre do mesmo tamanho. Cada label: [{ot, nomeOt, nome, local, obs, unitIdx, unitTotal}].
+// célula sempre do mesmo tamanho. Cada label: [{ot, nomeOt, nome, local, obs, unitIdx, unitTotal}]
+// ou, pra etiqueta de resumo, {tipoQr:true, titulo, url}.
 // unitIdx/unitTotal = posição da peça física dentro da quantidade daquele mesmo item
 // (ex: 2/5 = segundo de cinco transformadores iguais), não a posição no lote inteiro da OT.
-function construirEtiquetasItensPDF(labels) {
+async function construirEtiquetasItensPDF(labels) {
   if (typeof window.jspdf === 'undefined') { alert('Gerador de PDF não carregou.'); return null; }
   const { jsPDF } = window.jspdf;
   const cols = 2, rows = 7;
   const W = 210, H = 297, M = 10, pad = 4;
   const cellW = (W - 2 * M) / cols, cellH = (H - 2 * M) / rows;
+  const logoImg = await logoNiuDataUrl().catch(() => null);
 
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const perPage = cols * rows;
@@ -80,6 +108,24 @@ function construirEtiquetasItensPDF(labels) {
     });
   }
 
+  // cabeçalho discreto (logo + nome + endereço + telefone) — mesmo em todas as etiquetas,
+  // inclusive a de QR, pra identificar a empresa dona do material.
+  const headerH = 8.5;
+  function desenharCabecalho(x, y) {
+    const logoW = 6.5, logoH = logoW * LOGO_RATIO;
+    if (logoImg) doc.addImage(logoImg, 'PNG', x + pad, y + 2, logoW, logoH);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(6); doc.setTextColor(90, 90, 90);
+    doc.text(EMPRESA_NOME, x + pad + logoW + 1.5, y + 4.3);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(5); doc.setTextColor(140, 140, 140);
+    doc.text(`${EMPRESA_ENDERECO} · ${EMPRESA_TELEFONE}`, x + pad, y + headerH, { maxWidth: cellW - 2 * pad });
+  }
+
+  // rodapé indicando que a peça pertence ao inventário da empresa (só nas etiquetas de item)
+  function desenharRodapeInventario(x, y) {
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(6); doc.setTextColor(150, 150, 150);
+    doc.text(`Patrimônio ${EMPRESA_NOME}`, x + pad, y + cellH - 3, { maxWidth: cellW - 2 * pad });
+  }
+
   labels.forEach((lab, idx) => {
     const posOnPage = idx % perPage;
     if (idx === 0) desenharMarcasCorte();
@@ -88,14 +134,17 @@ function construirEtiquetasItensPDF(labels) {
     const x = M + col * cellW, y = M + row * cellH;
     const maxW = cellW - 2 * pad;
 
+    desenharCabecalho(x, y);
+
     // etiqueta especial com QR (ex: resumo da OT) em vez do texto de item padrão
     if (lab.tipoQr) {
-      const qrSize = Math.min(cellW, cellH) * 0.55;
+      const areaTopo = y + headerH + 2, areaAltura = cellH - headerH - 2;
+      const qrSize = Math.min(cellW - 2 * pad, areaAltura) * 0.7;
       const qrImg = qrDataUrl(lab.url, 4);
-      doc.addImage(qrImg, 'PNG', x + pad, y + (cellH - qrSize) / 2, qrSize, qrSize);
+      doc.addImage(qrImg, 'PNG', x + pad, areaTopo + (areaAltura - qrSize) / 2, qrSize, qrSize);
       const tx = x + pad + qrSize + pad;
       const tMaxW = cellW - qrSize - 3 * pad;
-      let qty = y + cellH / 2 - 6;
+      let qty = areaTopo + areaAltura / 2 - 3;
       doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(15, 15, 15);
       doc.text(String(lab.titulo || 'Resumo da OT'), tx, qty, { maxWidth: tMaxW });
       qty += 6;
@@ -104,29 +153,31 @@ function construirEtiquetasItensPDF(labels) {
       return;
     }
 
-    let ty = y + 8;
+    let ty = y + headerH + 4.5;
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(70, 70, 70);
     doc.text(`${lab.ot || ''}${lab.nomeOt ? ' - ' + lab.nomeOt : ''}`, x + pad, ty, { maxWidth: maxW * 0.75 });
     // contador de peça dentro da quantidade do item (ex: "2/5") — permite conferir se falta colar alguma unidade igual
     doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(120, 120, 120);
     doc.text(`${lab.unitIdx ?? idx + 1}/${lab.unitTotal ?? labels.length}`, x + cellW - pad, ty, { align: 'right' });
 
-    ty += 8;
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(15, 15, 15);
+    ty += 6.5;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(15, 15, 15);
     doc.text(String(lab.nome || ''), x + pad, ty, { maxWidth: maxW });
 
-    ty += 7;
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(40, 40, 40);
+    ty += 5.5;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(40, 40, 40);
     doc.text(String(lab.local || ''), x + pad, ty, { maxWidth: maxW });
 
-    ty += 6.5;
-    doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(100, 100, 100);
+    ty += 4.5;
+    doc.setFont('helvetica', 'italic'); doc.setFontSize(7.5); doc.setTextColor(100, 100, 100);
     if (lab.obs) doc.text(String(lab.obs), x + pad, ty, { maxWidth: maxW });
+
+    desenharRodapeInventario(x, y);
   });
   return doc;
 }
 
-function imprimirEtiquetasItens(labels, filename = 'etiquetas-itens.pdf') {
-  const doc = construirEtiquetasItensPDF(labels);
+async function imprimirEtiquetasItens(labels, filename = 'etiquetas-itens.pdf') {
+  const doc = await construirEtiquetasItensPDF(labels);
   if (doc) doc.save(filename);
 }

@@ -545,7 +545,7 @@ async function gerarEtiquetas(){
       labels.push({ot,nomeOt,nome:c.nome,local:c.local||local,obs:c.obs,unitIdx:i,unitTotal:total});
     }
   });
-  imprimirEtiquetasItens(labels,`etiquetas-${ot}.pdf`);
+  await imprimirEtiquetasItens(labels,`etiquetas-${ot}.pdf`);
 
   // registra na fila de impressão térmica (preparação pra automação futura — não bloqueia
   // a geração do PDF se falhar, é só um registro auxiliar)
