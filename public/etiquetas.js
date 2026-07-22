@@ -62,14 +62,31 @@ function construirEtiquetasItensPDF(labels) {
 
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const perPage = cols * rows;
+
+  // marcas de corte (cut marks) em cada interseção da grade, em vez de linha de borda —
+  // um pequeno "+" com vão no centro, no padrão gráfico usado pra guiar a tesoura/faca.
+  const xs = Array.from({ length: cols + 1 }, (_, c) => M + c * cellW);
+  const ys = Array.from({ length: rows + 1 }, (_, r) => M + r * cellH);
+  const marcaLen = 2.5, marcaGap = 0.6;
+  function desenharMarcasCorte() {
+    doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.15);
+    xs.forEach(px => {
+      ys.forEach(py => {
+        doc.line(px, py - marcaLen, px, py - marcaGap);
+        doc.line(px, py + marcaGap, px, py + marcaLen);
+        doc.line(px - marcaLen, py, px - marcaGap, py);
+        doc.line(px + marcaGap, py, px + marcaLen, py);
+      });
+    });
+  }
+
   labels.forEach((lab, idx) => {
     const posOnPage = idx % perPage;
-    if (idx > 0 && posOnPage === 0) doc.addPage();
+    if (idx === 0) desenharMarcasCorte();
+    if (idx > 0 && posOnPage === 0) { doc.addPage(); desenharMarcasCorte(); }
     const col = posOnPage % cols, row = Math.floor(posOnPage / cols);
     const x = M + col * cellW, y = M + row * cellH;
     const maxW = cellW - 2 * pad;
-
-    doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.25); doc.rect(x, y, cellW, cellH);
 
     let ty = y + 8;
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(70, 70, 70);
