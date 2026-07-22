@@ -6,11 +6,14 @@
   document.body.insertBefore(canvas, document.body.firstChild);
   const ctx = canvas.getContext('2d');
 
-  const COLOR_NODE = '124,92,255';
-  const COLOR_LINE = '91,140,255';
+  const COLOR_NODE = '110,180,255';
+  const COLOR_LINE = '60,130,255';
+  const COLOR_PULSE = '170,220,255';
   const LINK_DIST = 140;
   const MOUSE_DIST = 200;
-  let W, H, nodes = [];
+  const PULSE_SPAWN_CHANCE = 0.0025;
+  const PULSE_MAX = 14;
+  let W, H, nodes = [], pulses = [];
   const mouse = { x: -9999, y: -9999 };
 
   function contarNos() {
@@ -71,6 +74,10 @@
           ctx.strokeStyle = `rgba(${COLOR_LINE},${(1 - d / LINK_DIST) * 0.35})`;
           ctx.lineWidth = 0.6;
           ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+          // pulso ocasional viajando pela conexão, simulando transferência de dado entre nós
+          if (pulses.length < PULSE_MAX && Math.random() < PULSE_SPAWN_CHANCE) {
+            pulses.push({ ax: a.x, ay: a.y, bx: b.x, by: b.y, t: 0 });
+          }
         }
       }
       const n = nodes[i];
@@ -82,10 +89,25 @@
       }
     }
 
+    ctx.shadowColor = `rgba(${COLOR_NODE},.9)`;
     nodes.forEach(n => {
-      ctx.fillStyle = `rgba(${COLOR_NODE},.8)`;
+      ctx.shadowBlur = n.r * 3.5;
+      ctx.fillStyle = `rgba(${COLOR_NODE},.85)`;
       ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2); ctx.fill();
     });
+    ctx.shadowBlur = 0;
+
+    ctx.shadowColor = `rgba(${COLOR_PULSE},1)`;
+    pulses.forEach(p => {
+      p.t += 0.02;
+      const x = p.ax + (p.bx - p.ax) * p.t, y = p.ay + (p.by - p.ay) * p.t;
+      const fade = p.t < 0.5 ? p.t * 2 : (1 - p.t) * 2;
+      ctx.shadowBlur = 8;
+      ctx.fillStyle = `rgba(${COLOR_PULSE},${fade})`;
+      ctx.beginPath(); ctx.arc(x, y, 1.8, 0, Math.PI * 2); ctx.fill();
+    });
+    ctx.shadowBlur = 0;
+    pulses = pulses.filter(p => p.t < 1);
 
     requestAnimationFrame(passo);
   }
