@@ -122,6 +122,10 @@ tr:hover td{background:rgba(255,255,255,.03)}
 .est-qty-row{display:flex;align-items:center;gap:6px;margin-top:6px}
 .est-qty-row button{width:24px;height:24px;flex-shrink:0;border-radius:7px;border:1px solid var(--glass-brd);background:var(--surface-hover);color:var(--text);cursor:pointer;font-weight:700}
 .est-qty-row .qty{flex:1;text-align:center;font-weight:800;font-size:.8rem}
+.qty-input{flex:1;width:0;min-width:0;text-align:center;border:1px solid transparent;border-radius:7px;background:transparent;color:inherit;font-family:inherit;padding:2px 0;-moz-appearance:textfield}
+.qty-input::-webkit-outer-spin-button,.qty-input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.qty-input:hover,.qty-input:focus{border-color:var(--glass-brd);background:var(--surface-hover)}
+.qty-unidade{font-size:.75rem;color:var(--muted)}
 .est-actions{display:flex;gap:4px;margin-top:8px;flex-wrap:wrap}
 .est-actions .btn{font-size:.64rem;padding:4px 6px}
 .est-actions .del{font-size:.68rem}
@@ -844,7 +848,8 @@ function renderEstoque(){
                 </div>`:''}
                 <div class="est-qty-row">
                   <button data-a="menos">−</button>
-                  <span class="qty ${i.quantidade<=5?'low':'ok'}">${i.quantidade} ${esc(i.unidade)}</span>
+                  <input class="qty qty-input ${i.quantidade<=5?'low':'ok'}" data-a="qtd-input" type="number" inputmode="numeric" min="0" value="${i.quantidade}">
+                  <span class="qty-unidade">${esc(i.unidade)}</span>
                   <button data-a="mais">+</button>
                 </div>
                 <div class="est-actions">
@@ -1069,6 +1074,20 @@ document.getElementById('estoquePorCategoria').addEventListener('click', async e
   else if(btn.dataset.a==='unidades'){ abrirModalUnidades(item); }
   else if(btn.dataset.a==='qr'){ abrirModalQR(item); }
   else if(btn.dataset.a==='editar'){ abrirModalEditarItem(item); }
+});
+document.getElementById('estoquePorCategoria').addEventListener('keydown', e=>{
+  if(e.key==='Enter' && e.target.matches('input[data-a="qtd-input"]')) e.target.blur();
+});
+document.getElementById('estoquePorCategoria').addEventListener('change', async e=>{
+  const inp=e.target.closest('input[data-a="qtd-input"]'); if(!inp) return;
+  const card=e.target.closest('.est-card'); const id=card.dataset.id; const item=itens.find(i=>i.id==id);
+  const novo=parseInt(inp.value);
+  if(isNaN(novo) || novo<0){ inp.value=item.quantidade; return; }
+  const delta=novo-item.quantidade;
+  if(delta===0) return;
+  const r=await fetch(`${API}/itens/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({delta})});
+  if(!r.ok){ const d=await r.json().catch(()=>({})); await niuAlert(d.error||'Erro ao ajustar quantidade.'); inp.value=item.quantidade; return; }
+  carregarTudo();
 });
 document.getElementById('estoqueImagemInput').addEventListener('change', async e=>{
   const file=e.target.files[0]; if(!file || !estoqueImagemAlvoId) return;
