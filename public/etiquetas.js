@@ -50,7 +50,9 @@ function imprimirEtiquetasEmLote(labels, filename = 'etiquetas.pdf', opts) {
 }
 
 // Etiquetas de item (sem QR) pra colar no equipamento físico — grade 2x7 fixa em A4,
-// célula sempre do mesmo tamanho. Cada label: [{ot, nomeOt, nome, local, obs}].
+// célula sempre do mesmo tamanho. Cada label: [{ot, nomeOt, nome, local, obs, unitIdx, unitTotal}].
+// unitIdx/unitTotal = posição da peça física dentro da quantidade daquele mesmo item
+// (ex: 2/5 = segundo de cinco transformadores iguais), não a posição no lote inteiro da OT.
 function construirEtiquetasItensPDF(labels) {
   if (typeof window.jspdf === 'undefined') { alert('Gerador de PDF não carregou.'); return null; }
   const { jsPDF } = window.jspdf;
@@ -71,7 +73,10 @@ function construirEtiquetasItensPDF(labels) {
 
     let ty = y + 8;
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(70, 70, 70);
-    doc.text(`${lab.ot || ''}${lab.nomeOt ? ' - ' + lab.nomeOt : ''}`, x + pad, ty, { maxWidth: maxW });
+    doc.text(`${lab.ot || ''}${lab.nomeOt ? ' - ' + lab.nomeOt : ''}`, x + pad, ty, { maxWidth: maxW * 0.75 });
+    // contador de peça dentro da quantidade do item (ex: "2/5") — permite conferir se falta colar alguma unidade igual
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(120, 120, 120);
+    doc.text(`${lab.unitIdx ?? idx + 1}/${lab.unitTotal ?? labels.length}`, x + cellW - pad, ty, { align: 'right' });
 
     ty += 8;
     doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(15, 15, 15);

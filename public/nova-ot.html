@@ -527,6 +527,10 @@ async function confirmar(apenasEmail=false){
   }
 }
 
+// Unidades "de peça" (contáveis) geram uma etiqueta por unidade física (ex: 5 transformadores
+// = 5 etiquetas, cada uma marcada 1/5, 2/5...). Unidades de medida contínua (m, kg) geram só
+// uma etiqueta pro item inteiro — não faz sentido uma etiqueta por metro de cabo.
+const UNIDADES_CONTAVEIS=['un','pç','cx','rolo'];
 async function gerarEtiquetas(){
   const ot=document.getElementById('otNum').value.trim();
   const nomeOt=document.getElementById('otNome').value.trim();
@@ -534,7 +538,13 @@ async function gerarEtiquetas(){
   if(!ot){await niuAlert('Aguarde o número da OT ser reservado antes de gerar etiquetas.');return;}
   if(!carrinho.length){await niuAlert('Adicione pelo menos um item antes de gerar etiquetas.');return;}
   if(carrinho.some(c=>!c.nome.trim())){await niuAlert('Preencha o nome de todos os itens.');return;}
-  const labels=carrinho.map(c=>({ot,nomeOt,nome:c.nome,local:c.local||local,obs:c.obs}));
+  const labels=[];
+  carrinho.forEach(c=>{
+    const total=UNIDADES_CONTAVEIS.includes(c.unidade)?Math.max(1,Math.round(c.qty)):1;
+    for(let i=1;i<=total;i++){
+      labels.push({ot,nomeOt,nome:c.nome,local:c.local||local,obs:c.obs,unitIdx:i,unitTotal:total});
+    }
+  });
   imprimirEtiquetasItens(labels,`etiquetas-${ot}.pdf`);
 }
 
