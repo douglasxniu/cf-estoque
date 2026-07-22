@@ -51,6 +51,7 @@ function imprimirEtiquetasEmLote(labels, filename = 'etiquetas.pdf', opts) {
 
 // Dados da empresa pro cabeçalho discreto das etiquetas de item (logo em logo-niu.svg).
 const EMPRESA_NOME = 'NIU Experience Agency';
+const EMPRESA_NOME_CURTO = 'Experience Agency'; // ao lado da logo, que já mostra "niu" — não repetir
 const EMPRESA_ENDERECO = 'Rua Cidade Cordova Nº5 - 2610-038 Alfragide';
 const EMPRESA_TELEFONE = '(+351) 210 108 700';
 const LOGO_RATIO = 10.22 / 36.4; // altura/largura do viewBox de logo-niu.svg
@@ -84,7 +85,7 @@ async function construirEtiquetasItensPDF(labels) {
   if (typeof window.jspdf === 'undefined') { alert('Gerador de PDF não carregou.'); return null; }
   const { jsPDF } = window.jspdf;
   const cols = 2, rows = 7;
-  const W = 210, H = 297, M = 10, pad = 4;
+  const W = 210, H = 297, M = 10, pad = 5;
   const cellW = (W - 2 * M) / cols, cellH = (H - 2 * M) / rows;
   const logoImg = await logoNiuDataUrl().catch(() => null);
 
@@ -95,7 +96,7 @@ async function construirEtiquetasItensPDF(labels) {
   // um pequeno "+" com vão no centro, no padrão gráfico usado pra guiar a tesoura/faca.
   const xs = Array.from({ length: cols + 1 }, (_, c) => M + c * cellW);
   const ys = Array.from({ length: rows + 1 }, (_, r) => M + r * cellH);
-  const marcaLen = 2.5, marcaGap = 0.6;
+  const marcaLen = 3.5, marcaGap = 1;
   function desenharMarcasCorte() {
     doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.15);
     xs.forEach(px => {
@@ -110,12 +111,12 @@ async function construirEtiquetasItensPDF(labels) {
 
   // cabeçalho discreto (logo + nome + endereço + telefone) — mesmo em todas as etiquetas,
   // inclusive a de QR, pra identificar a empresa dona do material.
-  const headerH = 8.5;
+  const headerH = 9.5;
   function desenharCabecalho(x, y) {
     const logoW = 6.5, logoH = logoW * LOGO_RATIO;
-    if (logoImg) doc.addImage(logoImg, 'PNG', x + pad, y + 2, logoW, logoH);
+    if (logoImg) doc.addImage(logoImg, 'PNG', x + pad, y + 3, logoW, logoH);
     doc.setFont('helvetica', 'bold'); doc.setFontSize(6); doc.setTextColor(90, 90, 90);
-    doc.text(EMPRESA_NOME, x + pad + logoW + 1.5, y + 4.3);
+    doc.text(EMPRESA_NOME_CURTO, x + pad + logoW + 1.5, y + 5.3);
     doc.setFont('helvetica', 'normal'); doc.setFontSize(5); doc.setTextColor(140, 140, 140);
     doc.text(`${EMPRESA_ENDERECO} · ${EMPRESA_TELEFONE}`, x + pad, y + headerH, { maxWidth: cellW - 2 * pad });
   }
@@ -123,7 +124,7 @@ async function construirEtiquetasItensPDF(labels) {
   // rodapé indicando que a peça pertence ao inventário da empresa (só nas etiquetas de item)
   function desenharRodapeInventario(x, y) {
     doc.setFont('helvetica', 'normal'); doc.setFontSize(6); doc.setTextColor(150, 150, 150);
-    doc.text(`Patrimônio ${EMPRESA_NOME}`, x + pad, y + cellH - 3, { maxWidth: cellW - 2 * pad });
+    doc.text(`Patrimônio ${EMPRESA_NOME}`, x + pad, y + cellH - 3.5, { maxWidth: cellW - 2 * pad });
   }
 
   labels.forEach((lab, idx) => {
