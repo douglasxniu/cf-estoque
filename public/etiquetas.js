@@ -88,6 +88,22 @@ function construirEtiquetasItensPDF(labels) {
     const x = M + col * cellW, y = M + row * cellH;
     const maxW = cellW - 2 * pad;
 
+    // etiqueta especial com QR (ex: resumo da OT) em vez do texto de item padrão
+    if (lab.tipoQr) {
+      const qrSize = Math.min(cellW, cellH) * 0.55;
+      const qrImg = qrDataUrl(lab.url, 4);
+      doc.addImage(qrImg, 'PNG', x + pad, y + (cellH - qrSize) / 2, qrSize, qrSize);
+      const tx = x + pad + qrSize + pad;
+      const tMaxW = cellW - qrSize - 3 * pad;
+      let qty = y + cellH / 2 - 6;
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(15, 15, 15);
+      doc.text(String(lab.titulo || 'Resumo da OT'), tx, qty, { maxWidth: tMaxW });
+      qty += 6;
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(90, 90, 90);
+      doc.text('Aponte a câmera para ver o resumo', tx, qty, { maxWidth: tMaxW });
+      return;
+    }
+
     let ty = y + 8;
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(70, 70, 70);
     doc.text(`${lab.ot || ''}${lab.nomeOt ? ' - ' + lab.nomeOt : ''}`, x + pad, ty, { maxWidth: maxW * 0.75 });

@@ -64,3 +64,19 @@ CREATE TABLE usuarios (
   ativo INTEGER NOT NULL DEFAULT 1,
   criado_em TEXT DEFAULT (datetime('now'))
 );
+
+-- Fila de etiquetas pendentes de impressão numa etiquetadora térmica — ver
+-- migration_fila_impressao.sql. Nenhuma automação de impressão consome isso ainda; é só o
+-- registro do que precisou ser impresso, pronto pra quando essa automação for implementada.
+CREATE TABLE fila_impressao_etiquetas (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ot TEXT NOT NULL,
+  nome_projeto TEXT,
+  item_nome TEXT NOT NULL,
+  local_uso TEXT,
+  observacao TEXT,
+  unit_idx INTEGER NOT NULL DEFAULT 1,
+  unit_total INTEGER NOT NULL DEFAULT 1,
+  impresso INTEGER NOT NULL DEFAULT 0,
+  criado_em TEXT DEFAULT (datetime('now'))
+);

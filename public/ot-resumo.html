@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Resumo da OT · NIU Estoque</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="/theme.js"></script>
+<script src="/dialogs.js"></script>
+<link rel="stylesheet" href="/theme.css">
+<style>
+:root{ --glass:var(--surface); --glass-brd:var(--border); --primary2:var(--primary-2); --radius:16px; }
+body{
+  margin:0;min-height:100vh;font-size:15px;
+  padding:20px 14px 40px;
+}
+.wrap{max-width:520px;margin:0 auto}
+.card{background:var(--glass);border:1px solid var(--glass-brd);border-radius:var(--radius);backdrop-filter:blur(10px) saturate(130%);padding:20px 22px;margin-bottom:14px;box-shadow:var(--shadow-card)}
+.brand{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:18px}
+.brand-label{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:.72rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.brand .dot{width:8px;height:8px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--primary2))}
+.ot-num{font-size:1.35rem;font-weight:800;color:var(--primary)}
+.ot-nome{font-size:1.05rem;font-weight:700;margin-top:2px}
+.small{color:var(--muted);font-size:.8rem}
+.meta-row{margin-top:8px;display:flex;flex-wrap:wrap;gap:4px 10px}
+table{width:100%;border-collapse:collapse;font-size:.88rem;margin-top:10px}
+th,td{padding:9px 4px;border-bottom:1px solid var(--border);text-align:left}
+th{color:var(--muted);font-size:.66rem;text-transform:uppercase;letter-spacing:.03em;font-weight:700}
+.status-pend{color:var(--warn);font-weight:700}
+.status-aprov{color:var(--primary);font-weight:700}
+.status-dev{color:var(--ok);font-weight:700}
+.empty{color:var(--muted);text-align:center;padding:24px;font-size:.9rem}
+.footer{text-align:center;color:var(--muted);font-size:.68rem;margin-top:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <div class="brand-label"><span class="dot"></span> NIU Experience Agency · Controle de Estoque</div>
+    <button class="theme-toggle" title="Alternar tema" aria-label="Alternar tema claro/escuro">
+      <svg class="ic-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      <svg class="ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+    </button>
+  </div>
+  <div id="app"><div class="card"><div class="skel skel-row w40" style="height:22px"></div><div class="skel skel-row w60"></div><div class="skel skel-row w40"></div></div></div>
+  <div class="footer">Resumo somente leitura — pra alterar a OT, use o painel.</div>
+</div>
+
+<script>
+const esc=s=>String(s??'').replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
+const statusLabel=s=>s==='devolvido'?'Devolvido':s==='aprovado'?'Entregue':'Pendente';
+const statusClass=s=>s==='devolvido'?'status-dev':s==='aprovado'?'status-aprov':'status-pend';
+
+(async function () {
+  const app = document.getElementById('app');
+  const ot = new URL(location.href).searchParams.get('ot');
+  if (!ot) { app.innerHTML = '<div class="card empty">OT não informada.</div>'; return; }
+
+  let itens = [];
+  try {
+    itens = await fetch(`/api/ot/${encodeURIComponent(ot)}`).then(r => r.ok ? r.json() : []);
+  } catch (e) { itens = []; }
+
+  if (!Array.isArray(itens) || !itens.length) {
+    app.innerHTML = `<div class="card empty">OT ${esc(ot)} não encontrada ou sem itens.</div>`;
+    return;
+  }
+
+  const primeiro = itens[0];
+  const pendentes = itens.filter(i => i.status !== 'devolvido').length;
+
+  let html = `<div class="card">
+    <div class="ot-num">${esc(ot)}</div>
+    ${primeiro.projeto_nome ? `<div class="ot-nome">${esc(primeiro.projeto_nome)}</div>` : ''}
+    <div class="meta-row small">
+      ${primeiro.solicitante ? `<span>${esc(primeiro.solicitante)}</span>` : ''}
+      ${primeiro.setor ? `<span>· ${esc(primeiro.setor)}</span>` : ''}
+      ${primeiro.data ? `<span>· ${esc(String(primeiro.data).slice(0,10))}</span>` : ''}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="small" style="margin-bottom:2px">${itens.length} ${itens.length===1?'item':'itens'} — ${pendentes} ainda não devolvido(s)</div>
+    <table><thead><tr><th>Item</th><th>Qtd.</th><th>Status</th></tr></thead><tbody>
+      ${itens.map(i => `
+        <tr>
+          <td>${esc(i.item_nome)}${i.local_uso ? `<div class="small">${esc(i.local_uso)}</div>` : ''}</td>
+          <td>${i.quantidade} ${esc(i.unidade || '')}</td>
+          <td class="${statusClass(i.status)}">${statusLabel(i.status)}</td>
+        </tr>`).join('')}
+    </tbody></table>
+  </div>`;
+
+  app.innerHTML = html;
+})();
+</script>
+</body>
+</html>

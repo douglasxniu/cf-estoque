@@ -68,7 +68,8 @@ migrations, então `schema.sql` deve ser mantido em sincronia manual com o que j
 Tabelas: `itens`, `projetos` (OTs formais, número único reservável), `solicitacoes`
 (linhas de pedido, snapshot do nome do item), `unidades` (peças físicas serializadas com
 QR individual), `solicitacao_unidades` (vínculo unidade ↔ solicitação, um vínculo ativo
-por vez), `usuarios`.
+por vez), `usuarios`, `fila_impressao_etiquetas` (preparação pra impressão térmica — ver
+"Impressão térmica de etiquetas (preparação)" abaixo).
 
 Backup automático diário (03h UTC, cron trigger) manda um dump JSON por e-mail — ver
 `scheduled()` em `src/worker.js`. Tem um botão "📦 Backup" no painel (admin) pra disparar
@@ -90,7 +91,9 @@ Sem framework, sem bundler — cada `.html` é uma página completa com seu pró
 
 Páginas: `index.html` (painel admin), `solicitar.html` (catálogo público pra pedidos),
 `nova-ot.html` (criar OT), `scan.html` (leitor QR, check-in/check-out de unidades),
-`unidade.html` (info pública de uma unidade física), `ot.html` (redireciona pro PDF da OT).
+`unidade.html` (info pública de uma unidade física), `ot.html` (redireciona pro PDF da OT),
+`ot-resumo.html` (card público, somente leitura, com o resumo de uma OT — acessado pelo QR
+"Resumo da OT" impresso junto com as etiquetas de item).
 
 ## Backend (`src/worker.js`, ~900 linhas)
 
@@ -99,6 +102,22 @@ Um arquivo só, rotas despachadas via `if (path === ... && method === ...)` dent
 no topo do arquivo — qualquer rota nova sob `/api/` exige login por padrão, a menos que
 seja explicitamente adicionada a uma dessas listas. Rotas só-admin em
 `ADMIN_ONLY_PATTERNS`.
+
+## Impressão térmica de etiquetas (preparação)
+
+O botão "Gerar Etiquetas" (Nova OT) hoje só gera um PDF (grid A4, ver `etiquetas.js`). Não
+há automação de impressão térmica ainda (Brother QL-820NWB é a impressora cogitada — ver
+histórico de conversa —, protocolo raster, provavelmente via um agente local na rede da
+impressora, já que o Worker roda na borda e não alcança a LAN). Enquanto isso não é
+implementado, cada geração de etiquetas grava as unidades físicas na tabela
+`fila_impressao_etiquetas` (`POST/GET /api/etiquetas/fila`, exige login) — um registro do
+que precisou ser impresso, pra não perder histórico até a automação existir. `GET` retorna
+só os pendentes (`impresso = 0`); nada ainda marca como impresso.
+
+A primeira etiqueta de cada PDF é um QR "Resumo da OT" (não um item físico) apontando pra
+`ot-resumo.html?ot=...` — card público somente leitura com os dados da OT, gerado no cliente
+via `construirEtiquetasItensPDF(labels)` com `{tipoQr:true, titulo, url}` no lugar de
+`{nome, local, obs}`.
 
 ## Lições aprendidas (não repetir)
 

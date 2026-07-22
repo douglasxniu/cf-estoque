@@ -538,7 +538,7 @@ async function gerarEtiquetas(){
   if(!ot){await niuAlert('Aguarde o número da OT ser reservado antes de gerar etiquetas.');return;}
   if(!carrinho.length){await niuAlert('Adicione pelo menos um item antes de gerar etiquetas.');return;}
   if(carrinho.some(c=>!c.nome.trim())){await niuAlert('Preencha o nome de todos os itens.');return;}
-  const labels=[];
+  const labels=[{tipoQr:true,titulo:`OT ${ot}`,url:`${location.origin}/ot-resumo.html?ot=${encodeURIComponent(ot)}`}];
   carrinho.forEach(c=>{
     const total=UNIDADES_CONTAVEIS.includes(c.unidade)?Math.max(1,Math.round(c.qty)):1;
     for(let i=1;i<=total;i++){
@@ -546,6 +546,13 @@ async function gerarEtiquetas(){
     }
   });
   imprimirEtiquetasItens(labels,`etiquetas-${ot}.pdf`);
+
+  // registra na fila de impressão térmica (preparação pra automação futura — não bloqueia
+  // a geração do PDF se falhar, é só um registro auxiliar)
+  fetch(`${API}/etiquetas/fila`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    ot, nomeProjeto:nomeOt,
+    itens:labels.filter(l=>!l.tipoQr).map(l=>({nome:l.nome,local:l.local,obs:l.obs,unitIdx:l.unitIdx,unitTotal:l.unitTotal}))
+  })}).catch(()=>{});
 }
 
 function gerarPDF({ot,nome,solic,setor,local,obs,data}){

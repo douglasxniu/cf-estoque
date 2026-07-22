@@ -812,6 +812,27 @@ export default {
       return json(results);
     }
 
+    // ---------- FILA DE IMPRESSÃO TÉRMICA (preparação — sem automação real ainda) ----------
+    // Só registra o que "Gerar Etiquetas" já gera em PDF hoje. Quando a impressão numa
+    // etiquetadora térmica for implementada, essa fila é o ponto de partida: um processo
+    // (rodando perto da impressora) consome os pendentes daqui e marca como impresso.
+    if (path === "/api/etiquetas/fila" && method === "POST") {
+      const b = await request.json();
+      if (!Array.isArray(b.itens) || !b.itens.length) return json({ error: "Nenhum item enviado" }, 400);
+      for (const it of b.itens) {
+        await env.DB.prepare(
+          "INSERT INTO fila_impressao_etiquetas (ot, nome_projeto, item_nome, local_uso, observacao, unit_idx, unit_total) VALUES (?, ?, ?, ?, ?, ?, ?)"
+        ).bind(b.ot || "", b.nomeProjeto || "", it.nome || "", it.local || "", it.obs || "", it.unitIdx || 1, it.unitTotal || 1).run();
+      }
+      return json({ ok: true, inseridos: b.itens.length });
+    }
+    if (path === "/api/etiquetas/fila" && method === "GET") {
+      const { results } = await env.DB.prepare(
+        "SELECT * FROM fila_impressao_etiquetas WHERE impresso = 0 ORDER BY id"
+      ).all();
+      return json(results);
+    }
+
     // ---------- UNIDADES FÍSICAS ----------
     if (path === "/api/unidades" && method === "POST") {
       const b = await request.json();
