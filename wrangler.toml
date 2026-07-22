@@ -1,4 +1,4 @@
-name = "niu-estoque"
+name = "niu"
 main = "src/worker.js"
 compatibility_date = "2024-09-01"
 
