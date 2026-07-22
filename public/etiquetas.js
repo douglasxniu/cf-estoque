@@ -48,3 +48,47 @@ function imprimirEtiquetasEmLote(labels, filename = 'etiquetas.pdf', opts) {
   const doc = construirEtiquetasPDF(labels, opts);
   if (doc) doc.save(filename);
 }
+
+// Etiquetas de item (sem QR) pra colar no equipamento físico — grade 2x7 fixa em A4,
+// célula sempre do mesmo tamanho. Cada label: [{ot, nomeOt, nome, local, obs}].
+function construirEtiquetasItensPDF(labels) {
+  if (typeof window.jspdf === 'undefined') { alert('Gerador de PDF não carregou.'); return null; }
+  const { jsPDF } = window.jspdf;
+  const cols = 2, rows = 7;
+  const W = 210, H = 297, M = 10, pad = 4;
+  const cellW = (W - 2 * M) / cols, cellH = (H - 2 * M) / rows;
+
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const perPage = cols * rows;
+  labels.forEach((lab, idx) => {
+    const posOnPage = idx % perPage;
+    if (idx > 0 && posOnPage === 0) doc.addPage();
+    const col = posOnPage % cols, row = Math.floor(posOnPage / cols);
+    const x = M + col * cellW, y = M + row * cellH;
+    const maxW = cellW - 2 * pad;
+
+    doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.25); doc.rect(x, y, cellW, cellH);
+
+    let ty = y + 8;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(70, 70, 70);
+    doc.text(`${lab.ot || ''}${lab.nomeOt ? ' - ' + lab.nomeOt : ''}`, x + pad, ty, { maxWidth: maxW });
+
+    ty += 8;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(15, 15, 15);
+    doc.text(String(lab.nome || ''), x + pad, ty, { maxWidth: maxW });
+
+    ty += 7;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(40, 40, 40);
+    doc.text(String(lab.local || ''), x + pad, ty, { maxWidth: maxW });
+
+    ty += 6.5;
+    doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(100, 100, 100);
+    if (lab.obs) doc.text(String(lab.obs), x + pad, ty, { maxWidth: maxW });
+  });
+  return doc;
+}
+
+function imprimirEtiquetasItens(labels, filename = 'etiquetas-itens.pdf') {
+  const doc = construirEtiquetasItensPDF(labels);
+  if (doc) doc.save(filename);
+}

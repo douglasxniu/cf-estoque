@@ -181,12 +181,14 @@ select option{background:var(--surface-2)}
 <div class="footer-actions">
   <button class="btn btn-ghost" style="flex:1" onclick="cancelarPagina()">Cancelar</button>
   <button class="btn btn-ghost" style="flex:1" onclick="confirmar(true)" id="btnEmail">Enviar email</button>
+  <button class="btn btn-ghost" style="flex:1" onclick="gerarEtiquetas()" id="btnEtiquetas">Gerar Etiquetas</button>
   <button class="btn btn-primary" style="flex:2" onclick="confirmar(false)" id="btnGerarOt">Gerar OT e PDF</button>
 </div>
 
 <script src="/vendor/qrcode.js"></script>
 <script src="/vendor/jspdf.umd.min.js"></script>
 <script src="/pdf-folha.js"></script>
+<script src="/etiquetas.js"></script>
 <script>
 const API='/api';
 const esc=s=>String(s??'').replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
@@ -523,6 +525,17 @@ async function confirmar(apenasEmail=false){
     confirmarEmAndamento=false;
     btnEmail.disabled=false; btnOt.disabled=false;
   }
+}
+
+async function gerarEtiquetas(){
+  const ot=document.getElementById('otNum').value.trim();
+  const nomeOt=document.getElementById('otNome').value.trim();
+  const local=document.getElementById('otLocal').value.trim();
+  if(!ot){await niuAlert('Aguarde o número da OT ser reservado antes de gerar etiquetas.');return;}
+  if(!carrinho.length){await niuAlert('Adicione pelo menos um item antes de gerar etiquetas.');return;}
+  if(carrinho.some(c=>!c.nome.trim())){await niuAlert('Preencha o nome de todos os itens.');return;}
+  const labels=carrinho.map(c=>({ot,nomeOt,nome:c.nome,local:c.local||local,obs:c.obs}));
+  imprimirEtiquetasItens(labels,`etiquetas-${ot}.pdf`);
 }
 
 function gerarPDF({ot,nome,solic,setor,local,obs,data}){
