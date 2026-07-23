@@ -10,8 +10,10 @@
 const express = require('express');
 const multer = require('multer');
 const os = require('os');
-const { imprimir, TAMANHOS, TAMANHO_PADRAO } = require('./imprimir');
+const { imprimir, TAMANHOS, TAMANHO_PADRAO, nivelDeConteudo } = require('./imprimir');
 const { extrairLabelsDoPDF } = require('./importar-pdf');
+
+const SITE_URL = 'https://estoque.niupt.workers.dev'; // pro QR de resumo da OT
 
 const PORT = Number(process.argv[2]) || 4000;
 const app = express();
@@ -103,10 +105,21 @@ app.post('/api/importar-pdf', upload.single('pdf'), async (req, res) => {
   }
 });
 
-app.post('/api/imprimir', (req, res) => {
+// o QR de resumo só entra no lote nos tamanhos grande/média — no pequeno não sobra espaço
+// útil pro texto ao lado, e ainda assim vale mais um QR avulso (ver /api/imprimir-qr).
+function podeIncluirQrNoLote(tamanhoChave) {
+  const tam = TAMANHOS[tamanhoChave] || TAMANHOS[TAMANHO_PADRAO];
+  return nivelDeConteudo(tam.w, tam.h) !== 'pequena';
+}
+
+app.post('/api/imprimir', async (req, res) => {
   if (!fila.length) return res.status(400).json({ error: 'A fila está vazia.' });
+  const tamanho = req.body.tamanho;
   // expande cada linha (com quantidade) em N etiquetas físicas numeradas 1/N, 2/N...
   const labels = [];
+  if (req.body.comQr && cabecalho.ot && podeIncluirQrNoLote(tamanho)) {
+    labels.push({ tipoQr: true, titulo: `OT ${cabecalho.ot}`, url: `${SITE_URL}/ot-resumo.html?ot=${encodeURIComponent(cabecalho.ot)}` });
+  }
   fila.forEach(l => {
     const total = l.quantidade || 1;
     for (let i = 1; i <= total; i++) {
@@ -114,8 +127,21 @@ app.post('/api/imprimir', (req, res) => {
     }
   });
   try {
-    const arquivo = imprimir(labels, { comLogo: !!req.body.comLogo, tamanho: req.body.tamanho });
+    const arquivo = await imprimir(labels, { comLogo: !!req.body.comLogo, tamanho });
     fila = [];
+    res.json({ ok: true, arquivo });
+  } catch (e) {
+    res.status(500).json({ error: e.message, stderr: e.stderr ? e.stderr.toString() : undefined });
+  }
+});
+
+// imprime só uma etiqueta com o QR de resumo da OT, sem nenhum item — funciona em
+// qualquer tamanho, inclusive os pequenos (só o QR, sem texto do lado).
+app.post('/api/imprimir-qr', async (req, res) => {
+  if (!cabecalho.ot) return res.status(400).json({ error: 'Preencha a OT no cabeçalho antes.' });
+  const labels = [{ tipoQr: true, titulo: `OT ${cabecalho.ot}`, url: `${SITE_URL}/ot-resumo.html?ot=${encodeURIComponent(cabecalho.ot)}` }];
+  try {
+    const arquivo = await imprimir(labels, { tamanho: req.body.tamanho });
     res.json({ ok: true, arquivo });
   } catch (e) {
     res.status(500).json({ error: e.message, stderr: e.stderr ? e.stderr.toString() : undefined });
@@ -214,6 +240,14 @@ button{border:none;border-radius:8px;padding:10px 16px;font-weight:700;cursor:po
   <div id="lista"></div>
 </div>
 
+<div class="card">
+  <label style="display:flex;align-items:center;gap:8px;text-transform:none;cursor:pointer">
+    <input type="checkbox" id="comQr" style="width:auto;margin:0">
+    Incluir QR de resumo da OT no início do lote (só em 10x15cm e 7,6x5,1cm)
+  </label>
+  <button class="btn-ghost btn-sm" style="width:100%;margin-top:10px" onclick="imprimirSoQr()">Imprimir só o QR (etiqueta avulsa)</button>
+</div>
+
 <div class="footer-actions">
   <button class="btn-ghost" style="flex:1" onclick="limpar()">Limpar fila</button>
   <button class="btn-primary" style="flex:2" onclick="imprimirFila()">Imprimir na Zebra</button>
@@ -304,11 +338,23 @@ async function remover(i){ await fetch('/api/fila/'+i,{method:'DELETE'}); carreg
 async function limpar(){ if(!confirm('Limpar toda a fila?')) return; await fetch('/api/fila',{method:'DELETE'}); carregar(); }
 async function imprimirFila(){
   if(!confirm('Confirma o envio pra impressora física?')) return;
-  const r = await fetch('/api/imprimir',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({comLogo:false,tamanho:document.getElementById('tamanho').value})});
+  const r = await fetch('/api/imprimir',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    comLogo:false,
+    tamanho:document.getElementById('tamanho').value,
+    comQr:document.getElementById('comQr').checked
+  })});
   const d = await r.json();
   if(!r.ok){ alert('Erro: '+(d.error||'falha ao imprimir')); return; }
   alert('Enviado pra impressora.');
   carregar();
+}
+async function imprimirSoQr(){
+  if(!document.getElementById('ot').value.trim()){ alert('Preencha a OT no cabeçalho primeiro.'); return; }
+  if(!confirm('Imprimir uma etiqueta avulsa só com o QR de resumo da OT?')) return;
+  const r = await fetch('/api/imprimir-qr',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tamanho:document.getElementById('tamanho').value})});
+  const d = await r.json();
+  if(!r.ok){ alert('Erro: '+(d.error||'falha ao imprimir')); return; }
+  alert('QR enviado pra impressora.');
 }
 carregar();
 </script>

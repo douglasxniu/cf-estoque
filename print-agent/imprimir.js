@@ -14,6 +14,7 @@ const path = require('path');
 const os = require('os');
 const { execFileSync } = require('child_process');
 const { jsPDF } = require('jspdf');
+const QRCode = require('qrcode');
 
 const EMPRESA_NOME = 'NIU Experience Agency';
 const LOGO_RATIO = 200 / 730; // altura/largura de logo-niu.png (rasterizado de public/logo-niu.svg)
@@ -115,45 +116,76 @@ function desenharEtiquetaPequena(doc, lab, W, H) {
   }
 }
 
+async function gerarQrDataUrl(url) {
+  return QRCode.toDataURL(url, { margin: 1, width: 300, color: { dark: '#000000', light: '#ffffff' } });
+}
+
+// etiqueta especial com QR "Resumo da OT" — o quanto de texto ao lado do QR muda com o
+// tamanho; nos formatos pequenos (pequena) é só o QR, sem texto (não cabe/não precisa).
+async function desenharEtiquetaQr(doc, lab, W, H, nivel) {
+  const qrImg = await gerarQrDataUrl(lab.url);
+  if (nivel === 'pequena') {
+    const qrSize = Math.min(W, H) * 0.9;
+    doc.addImage(qrImg, 'PNG', (W - qrSize) / 2, (H - qrSize) / 2, qrSize, qrSize);
+    return;
+  }
+  const pad = nivel === 'grande' ? 4 : 3;
+  const qrSize = Math.min(W * 0.42, H - 2 * pad);
+  doc.addImage(qrImg, 'PNG', pad, (H - qrSize) / 2, qrSize, qrSize);
+  const tx = pad + qrSize + pad, tMaxW = W - qrSize - 3 * pad;
+  let ty = H / 2 - (nivel === 'grande' ? 3 : 1);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(nivel === 'grande' ? 11 : 8.5); doc.setTextColor(15, 15, 15);
+  doc.text(String(lab.titulo || 'Resumo da OT'), tx, ty, { maxWidth: tMaxW });
+  if (nivel === 'grande') {
+    ty += 6;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(90, 90, 90);
+    doc.text('Aponte a câmera para ver o resumo', tx, ty, { maxWidth: tMaxW });
+  }
+}
+
 // labels: array de N {ot, nomeOt, nome, local, obs, unitIdx, unitTotal} — cada item vira
-// uma página própria, no tamanho de opts.tamanho (chave de TAMANHOS, padrão 100x150).
-function gerarPDF(labels, opts = {}) {
+// uma página própria, no tamanho de opts.tamanho (chave de TAMANHOS, padrão 100x150). Uma
+// entrada {tipoQr:true, titulo, url} vira uma etiqueta de QR em vez de item normal.
+async function gerarPDF(labels, opts = {}) {
   const tam = TAMANHOS[opts.tamanho] || TAMANHOS[TAMANHO_PADRAO];
   const { w: W, h: H } = tam;
   const doc = new jsPDF({ unit: 'mm', format: [W, H] });
   const nivel = nivelDeConteudo(W, H);
 
-  labels.forEach((lab, idx) => {
+  for (let idx = 0; idx < labels.length; idx++) {
+    const lab = labels[idx];
     if (idx > 0) doc.addPage();
-    if (nivel === 'grande') desenharEtiquetaGrande(doc, lab, W, H, opts);
+    if (lab.tipoQr) await desenharEtiquetaQr(doc, lab, W, H, nivel);
+    else if (nivel === 'grande') desenharEtiquetaGrande(doc, lab, W, H, opts);
     else if (nivel === 'media') desenharEtiquetaMedia(doc, lab, W, H);
     else desenharEtiquetaPequena(doc, lab, W, H);
-  });
+  }
 
   return doc;
 }
 
-function salvarPDF(labels, arquivo, opts) {
-  const doc = gerarPDF(labels, opts);
+async function salvarPDF(labels, arquivo, opts) {
+  const doc = await gerarPDF(labels, opts);
   fs.writeFileSync(arquivo, Buffer.from(doc.output('arraybuffer')));
   return arquivo;
 }
 
-function imprimir(labels, { salvarEm, comLogo, tamanho } = {}) {
+async function imprimir(labels, { salvarEm, comLogo, tamanho } = {}) {
   const arquivo = salvarEm || path.join(os.tmpdir(), `etiqueta-termica-${Date.now()}.pdf`);
-  salvarPDF(labels, arquivo, { comLogo, tamanho });
+  await salvarPDF(labels, arquivo, { comLogo, tamanho });
   // sem -o media/-o PageSize — usa o padrão atual da fila (o único que imprime de verdade
   // nesse driver, ver comentário no topo do arquivo) — "-n 1" explícito.
   execFileSync('/usr/bin/lp', ['-d', PRINTER, '-n', '1', arquivo]);
   return arquivo;
 }
 
-module.exports = { gerarPDF, salvarPDF, imprimir, TAMANHOS, TAMANHO_PADRAO };
+module.exports = { gerarPDF, salvarPDF, imprimir, TAMANHOS, TAMANHO_PADRAO, nivelDeConteudo };
 
 if (require.main === module) {
   // uso: node imprimir.js dados.json   (ou pipe via stdin)
   const entrada = process.argv[2] ? fs.readFileSync(process.argv[2], 'utf8') : fs.readFileSync(0, 'utf8');
   const labels = JSON.parse(entrada);
-  const arquivo = imprimir(labels);
-  console.log(`Impresso via ${PRINTER}. PDF salvo em ${arquivo}`);
+  imprimir(labels).then(arquivo => {
+    console.log(`Impresso via ${PRINTER}. PDF salvo em ${arquivo}`);
+  });
 }
