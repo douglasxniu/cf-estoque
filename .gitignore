@@ -4,3 +4,5 @@ node_modules/
 .wrangler/
 scripts/autocommit.log
 .dev.vars
+.env
+print-agent/.env
