@@ -10,7 +10,7 @@
 const express = require('express');
 const multer = require('multer');
 const os = require('os');
-const { imprimir, TAMANHOS, TAMANHO_PADRAO, nivelDeConteudo } = require('./imprimir');
+const { imprimir, gerarPDF, TAMANHOS, TAMANHO_PADRAO, nivelDeConteudo } = require('./imprimir');
 const { extrairLabelsDoPDF } = require('./importar-pdf');
 const { extrairLabelsDaImagem } = require('./importar-imagem');
 
@@ -154,12 +154,12 @@ function podeIncluirQrNoLote(tamanhoChave) {
   return nivelDeConteudo(tam.w, tam.h) !== 'pequena';
 }
 
-app.post('/api/imprimir', async (req, res) => {
-  if (!fila.length) return res.status(400).json({ error: 'A fila está vazia.' });
-  const tamanho = req.body.tamanho;
-  // expande cada linha (com quantidade) em N etiquetas físicas numeradas 1/N, 2/N...
+// expande a fila atual (com quantidade) em N etiquetas físicas numeradas 1/N, 2/N...,
+// opcionalmente com o QR de resumo como primeira etiqueta — usado tanto pra imprimir
+// quanto só pra gerar/salvar o PDF.
+function montarLabelsDaFila({ comQr, tamanho }) {
   const labels = [];
-  if (req.body.comQr && cabecalho.ot && podeIncluirQrNoLote(tamanho)) {
+  if (comQr && cabecalho.ot && podeIncluirQrNoLote(tamanho)) {
     labels.push({ tipoQr: true, titulo: `OT ${cabecalho.ot}`, url: `${SITE_URL}/ot-resumo.html?ot=${encodeURIComponent(cabecalho.ot)}` });
   }
   fila.forEach(l => {
@@ -168,12 +168,36 @@ app.post('/api/imprimir', async (req, res) => {
       labels.push({ ot: cabecalho.ot, nomeOt: cabecalho.nomeOt, nome: l.nome, local: l.local, obs: l.obs, unitIdx: i, unitTotal: total });
     }
   });
+  return labels;
+}
+
+app.post('/api/imprimir', async (req, res) => {
+  if (!fila.length) return res.status(400).json({ error: 'A fila está vazia.' });
+  const tamanho = req.body.tamanho;
+  const labels = montarLabelsDaFila({ comQr: req.body.comQr, tamanho });
   try {
     const arquivo = await imprimir(labels, { comLogo: !!req.body.comLogo, tamanho });
     fila = [];
     res.json({ ok: true, arquivo });
   } catch (e) {
     res.status(500).json({ error: e.message, stderr: e.stderr ? e.stderr.toString() : undefined });
+  }
+});
+
+// só gera o PDF e devolve pra download — não manda pra impressora, não esvazia a fila.
+// Pra quem quer imprimir depois (nesta máquina ou levando o arquivo pra outro lugar).
+app.post('/api/gerar-pdf', async (req, res) => {
+  if (!fila.length) return res.status(400).json({ error: 'A fila está vazia.' });
+  const tamanho = req.body.tamanho;
+  const labels = montarLabelsDaFila({ comQr: req.body.comQr, tamanho });
+  try {
+    const doc = await gerarPDF(labels, { comLogo: !!req.body.comLogo, tamanho });
+    const buffer = Buffer.from(doc.output('arraybuffer'));
+    const nome = `etiquetas${cabecalho.ot ? '-' + cabecalho.ot.replace(/[^\w-]/g, '') : ''}-${Date.now()}.pdf`;
+    res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="${nome}"` });
+    res.send(buffer);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -330,6 +354,7 @@ button{border:none;border-radius:8px;padding:10px 16px;font-weight:700;cursor:po
 
 <div class="footer-actions">
   <button class="btn-ghost" style="flex:1" onclick="limpar()">Limpar fila</button>
+  <button class="btn-ghost" style="flex:1" onclick="salvarArquivo()">Salvar arquivo</button>
   <button class="btn-primary" style="flex:2" onclick="imprimirFila()">Imprimir na Zebra</button>
 </div>
 
@@ -494,6 +519,24 @@ async function mesclarSelecionadas(){
 
 async function remover(i){ await fetch('/api/fila/'+i,{method:'DELETE'}); carregar(); }
 async function limpar(){ if(!confirm('Limpar toda a fila?')) return; await fetch('/api/fila',{method:'DELETE'}); carregar(); }
+async function salvarArquivo(){
+  if(!filaAtual.length){ aviso('A fila está vazia.','erro'); return; }
+  const r = await fetch('/api/gerar-pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    comLogo:false,
+    tamanho:document.getElementById('tamanho').value,
+    comQr:document.getElementById('comQr').checked
+  })});
+  if(!r.ok){ const d=await r.json().catch(()=>({})); aviso('Erro: '+(d.error||'falha ao gerar o PDF'),'erro'); return; }
+  const blob = await r.blob();
+  const nome = (r.headers.get('Content-Disposition')||'').match(/filename="([^"]+)"/)?.[1] || 'etiquetas.pdf';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = nome;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(a.href);
+  aviso('PDF salvo — a fila continua aqui pra imprimir depois.','sucesso');
+}
+
 async function imprimirFila(){
   if(!confirm('Confirma o envio pra impressora física?')) return;
   const r = await fetch('/api/imprimir',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
