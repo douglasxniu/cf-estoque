@@ -182,3 +182,66 @@ async function imprimirEtiquetasItens(labels, filename = 'etiquetas-itens.pdf') 
   const doc = await construirEtiquetasItensPDF(labels);
   if (doc) doc.save(filename);
 }
+
+// Etiqueta térmica pra etiquetadoras 10x15cm (ex: Zebra GC420d) — folha de 100x150mm com
+// até 5 etiquetas de 100x30mm empilhadas, linha de picote entre elas. Mesmo formato de
+// label da versão A4 (sem tipoQr — não cabe nesse tamanho menor). Só gera/baixa o PDF;
+// não imprime sozinho — ver print-agent/ pra impressão via linha de comando nesta máquina.
+async function construirEtiquetaTermicaPDF(labels) {
+  if (typeof window.jspdf === 'undefined') { alert('Gerador de PDF não carregou.'); return null; }
+  const { jsPDF } = window.jspdf;
+  const PAGE_W = 100, PAGE_H = 150, TOPO = 3, BASE = 3, POR_PAGINA = 5, pad = 4;
+  const ALTURA_LABEL = (PAGE_H - TOPO - BASE) / POR_PAGINA;
+  const logoImg = await logoNiuDataUrl().catch(() => null);
+
+  const doc = new jsPDF({ unit: 'mm', format: [PAGE_W, PAGE_H] });
+
+  // linha de picote desenhada segmento a segmento — filtros de rasterização de
+  // etiquetadoras térmicas costumam não respeitar setLineDashPattern do PDF
+  function linhaPicote(y) {
+    doc.setDrawColor(60, 60, 60); doc.setLineWidth(0.35);
+    for (let x = 0; x < PAGE_W; x += 3.2) doc.line(x, y, Math.min(x + 2, PAGE_W), y);
+  }
+
+  const semQr = labels.filter(l => !l.tipoQr);
+  semQr.forEach((lab, idx) => {
+    const posNaPagina = idx % POR_PAGINA;
+    if (idx > 0 && posNaPagina === 0) doc.addPage();
+    const y = TOPO + posNaPagina * ALTURA_LABEL;
+    if (posNaPagina > 0) linhaPicote(y);
+
+    const maxW = PAGE_W - 2 * pad;
+    const logoW = 6, logoH = logoW * LOGO_RATIO;
+    if (logoImg) doc.addImage(logoImg, 'PNG', pad, y + 2, logoW, logoH);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(6); doc.setTextColor(70, 70, 70);
+    doc.text(EMPRESA_NOME, pad + logoW + 1.5, y + 4.3);
+
+    let ty = y + 9;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(90, 90, 90);
+    doc.text(`${lab.ot || ''}${lab.nomeOt ? ' - ' + lab.nomeOt : ''}`, pad, ty, { maxWidth: maxW * 0.7 });
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(120, 120, 120);
+    doc.text(`${lab.unitIdx ?? idx + 1}/${lab.unitTotal ?? semQr.length}`, PAGE_W - pad, ty, { align: 'right' });
+
+    ty += 5.5;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(15, 15, 15);
+    doc.text(String(lab.nome || ''), pad, ty, { maxWidth: maxW });
+
+    ty += 5;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(40, 40, 40);
+    doc.text(String(lab.local || ''), pad, ty, { maxWidth: maxW });
+
+    ty += 4.5;
+    doc.setFont('helvetica', 'italic'); doc.setFontSize(7); doc.setTextColor(100, 100, 100);
+    if (lab.obs) doc.text(String(lab.obs), pad, ty, { maxWidth: maxW });
+
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(5.5); doc.setTextColor(150, 150, 150);
+    doc.text(`Patrimônio ${EMPRESA_NOME}`, pad, y + ALTURA_LABEL - 2.5, { maxWidth: maxW });
+  });
+
+  return doc;
+}
+
+async function imprimirEtiquetaTermica(labels, filename = 'etiqueta-termica.pdf') {
+  const doc = await construirEtiquetaTermicaPDF(labels);
+  if (doc) doc.save(filename);
+}

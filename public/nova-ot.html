@@ -182,6 +182,7 @@ select option{background:var(--surface-2)}
   <button class="btn btn-ghost" style="flex:1" onclick="cancelarPagina()">Cancelar</button>
   <button class="btn btn-ghost" style="flex:1" onclick="confirmar(true)" id="btnEmail">Enviar email</button>
   <button class="btn btn-ghost" style="flex:1" onclick="gerarEtiquetas()" id="btnEtiquetas">Gerar Etiquetas</button>
+  <button class="btn btn-ghost" style="flex:1" onclick="gerarEtiquetaTermica()" id="btnEtiquetaTermica" title="PDF 10x15cm pra etiquetadora térmica">Etiqueta Térmica</button>
   <button class="btn btn-primary" style="flex:2" onclick="confirmar(false)" id="btnGerarOt">Gerar OT e PDF</button>
 </div>
 
@@ -531,28 +532,49 @@ async function confirmar(apenasEmail=false){
 // = 5 etiquetas, cada uma marcada 1/5, 2/5...). Unidades de medida contínua (m, kg) geram só
 // uma etiqueta pro item inteiro — não faz sentido uma etiqueta por metro de cabo.
 const UNIDADES_CONTAVEIS=['un','pç','cx','rolo'];
-async function gerarEtiquetas(){
-  const ot=document.getElementById('otNum').value.trim();
-  const nomeOt=document.getElementById('otNome').value.trim();
-  const local=document.getElementById('otLocal').value.trim();
-  if(!ot){await niuAlert('Aguarde o número da OT ser reservado antes de gerar etiquetas.');return;}
-  if(!carrinho.length){await niuAlert('Adicione pelo menos um item antes de gerar etiquetas.');return;}
-  if(carrinho.some(c=>!c.nome.trim())){await niuAlert('Preencha o nome de todos os itens.');return;}
-  const labels=[{tipoQr:true,titulo:`OT ${ot}`,url:`${location.origin}/ot-resumo.html?ot=${encodeURIComponent(ot)}`}];
+// expande o carrinho em uma etiqueta por unidade física (5 transformadores = 5 entradas,
+// marcadas 1/5, 2/5...); unidades de medida contínua (m, kg) ficam com etiqueta única.
+function montarLabelsItens(ot,nomeOt,local){
+  const labels=[];
   carrinho.forEach(c=>{
     const total=UNIDADES_CONTAVEIS.includes(c.unidade)?Math.max(1,Math.round(c.qty)):1;
     for(let i=1;i<=total;i++){
       labels.push({ot,nomeOt,nome:c.nome,local:c.local||local,obs:c.obs,unitIdx:i,unitTotal:total});
     }
   });
+  return labels;
+}
+function validarParaEtiquetas(){
+  const ot=document.getElementById('otNum').value.trim();
+  if(!ot) return {erro:'Aguarde o número da OT ser reservado antes de gerar etiquetas.'};
+  if(!carrinho.length) return {erro:'Adicione pelo menos um item antes de gerar etiquetas.'};
+  if(carrinho.some(c=>!c.nome.trim())) return {erro:'Preencha o nome de todos os itens.'};
+  return {
+    ot, nomeOt:document.getElementById('otNome').value.trim(),
+    local:document.getElementById('otLocal').value.trim()
+  };
+}
+async function gerarEtiquetas(){
+  const v=validarParaEtiquetas();
+  if(v.erro){await niuAlert(v.erro);return;}
+  const {ot,nomeOt,local}=v;
+  const itens=montarLabelsItens(ot,nomeOt,local);
+  const labels=[{tipoQr:true,titulo:`OT ${ot}`,url:`${location.origin}/ot-resumo.html?ot=${encodeURIComponent(ot)}`},...itens];
   await imprimirEtiquetasItens(labels,`etiquetas-${ot}.pdf`);
 
   // registra na fila de impressão térmica (preparação pra automação futura — não bloqueia
   // a geração do PDF se falhar, é só um registro auxiliar)
   fetch(`${API}/etiquetas/fila`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
     ot, nomeProjeto:nomeOt,
-    itens:labels.filter(l=>!l.tipoQr).map(l=>({nome:l.nome,local:l.local,obs:l.obs,unitIdx:l.unitIdx,unitTotal:l.unitTotal}))
+    itens:itens.map(l=>({nome:l.nome,local:l.local,obs:l.obs,unitIdx:l.unitIdx,unitTotal:l.unitTotal}))
   })}).catch(()=>{});
+}
+async function gerarEtiquetaTermica(){
+  const v=validarParaEtiquetas();
+  if(v.erro){await niuAlert(v.erro);return;}
+  const {ot,nomeOt,local}=v;
+  const itens=montarLabelsItens(ot,nomeOt,local);
+  await imprimirEtiquetaTermica(itens,`etiqueta-termica-${ot}.pdf`);
 }
 
 function gerarPDF({ot,nome,solic,setor,local,obs,data}){
