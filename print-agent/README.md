@@ -1,55 +1,73 @@
 # print-agent (ferramenta local)
 
-Gera e imprime etiquetas térmicas na Zebra GC420d (USB) conectada nesta máquina. **Não faz
-parte do deploy do Worker** — não é publicado via `wrangler deploy`, roda só localmente com
-`node`. Ver também a seção "Impressão térmica de etiquetas (preparação)" no `CLAUDE.md` da
-raiz do repo.
+Painel web local pra montar, revisar e imprimir etiquetas térmicas na Zebra GC420d (USB)
+conectada nesta máquina. **Não faz parte do deploy do Worker** — não é publicado via
+`wrangler deploy`, roda só localmente com `node`. Ver também a seção "Impressão térmica de
+etiquetas (preparação)" no `CLAUDE.md` da raiz do repo.
 
-## O que já funciona
-
-- `imprimir.js` gera um PDF de **100×150mm** (10×15cm) com até 5 etiquetas de 100×30mm
-  empilhadas na mesma folha física, no mesmo estilo visual das etiquetas A4 do painel
-  (logo, cabeçalho da empresa, nome do item, local, observação, rodapé de patrimônio).
-- Linha de picote entre as etiquetas desenhada segmento a segmento (`linhaTracejada`) — o
-  filtro de rasterização da impressora não respeita `setLineDashPattern` do PDF, então o
-  tracejado nativo do jsPDF não aparece impresso.
-- Margem de segurança de 3mm no topo/base da folha (a primeira impressão saiu colada na
-  borda, sem folga).
-
-## Pendente: calibração de tamanho de página
-
-A impressora (fila CUPS `Zebra_Technologies_ZTC_GC420d__EPL_`, driver "Zebra EPL1 Label
-Printer") **só imprime fisicamente algo quando o job usa o `PageSize` padrão atual da
-fila** (`w288h360` = 4×5in = 101,6×127mm, o valor marcado com `*` em
-`lpoptions -p ... -l`). Testado e confirmado que **não funcionam**:
-
-- `-o media=Custom.<w>x<h>pt`
-- `-o PageSize=Custom.<w>x<h>` (sintaxe correta de tamanho customizado do CUPS)
-- `-o PageSize=w288h432` (outro preset válido da lista, 4×6in)
-
-Em todos esses casos o job é aceito e sai da fila (CUPS reporta sucesso), mas **nada é
-impresso fisicamente** — o driver aparentemente ignora o `PageSize` por job e só usa o que
-já está configurado como padrão da fila. `imprimir.js` ainda manda
-`-o media=Custom.<w>x<h>pt` (não muda o padrão da fila), então **hoje ele gera o PDF
-certo mas o comando de impressão real precisa ser revisto** antes de imprimir 10x15
-de verdade.
-
-Próximo passo mais provável: mudar o padrão **persistente** da fila (não por job) com
-`lpadmin -p Zebra_Technologies_ZTC_GC420d__EPL_ -o PageSize=w288h432` (ainda não testado —
-a última tentativa foi interrompida) e então imprimir sem `-o PageSize`/`-o media` no job,
-deixando a impressora usar o novo padrão. Se isso também não colar fisicamente o conteúdo
-certo, o caminho alternativo é abandonar o filtro `rastertolabel` do CUPS e falar EPL bruto
-via `lp -o raw` (dá mais controle, mas perde a conveniência de reusar o PDF do jsPDF).
-
-## Uso
+## Setup
 
 ```bash
 cd print-agent
-node imprimir.js dados.json   # dados.json = array de labels, até 5 por chamada
+npm install
+cp .env.example .env   # se existir; senão crie .env com:
+# ANTHROPIC_API_KEY=sk-ant-...   (só necessário pra "Importar print screen (IA)")
+node server.js          # porta padrão 4000
 ```
 
-Formato de cada label (mesmo do `public/etiquetas.js`, sem `tipoQr` — não cabe nesse
-tamanho menor):
+`.env` não vai pro git (`.gitignore`). Sem `ANTHROPIC_API_KEY`, tudo funciona exceto a
+importação de imagem via IA.
+
+## O que faz
+
+- **Painel web** (`server.js`, `http://localhost:4000`, também acessível na rede local) —
+  monta uma fila de etiquetas (nome, local/variante, observação, quantidade) com um
+  cabeçalho único de OT/projeto pra todo o lote, e manda pra Zebra.
+- **Tamanhos configuráveis** (`imprimir.js` → `TAMANHOS`): 10x15cm, 7,6x5,1cm, 5,7x1,9cm,
+  3,2x2,5cm. O conteúdo desenhado se adapta ao espaço (etiquetas pequenas não têm
+  cabeçalho/rodapé, só o essencial). Cada item da fila vira **uma página do PDF** (não mais
+  várias etiquetas empilhadas numa folha).
+- **Importar PDF** (`importar-pdf.js`) — lê de volta um PDF já gerado por este sistema
+  (texto real, não OCR) e preenche a fila.
+- **Importar print screen via IA** (`importar-imagem.js`) — manda uma imagem qualquer (ex:
+  print de um sistema de OT de produção externo, sem estrutura fixa) pra API de visão da
+  Anthropic, que devolve itens já separados por variante com quantidade.
+- **Popup de revisão obrigatório** — tanto a importação de PDF quanto a de imagem abrem um
+  popup com os itens extraídos, totalmente editáveis (e removíveis) antes de confirmar.
+  Nada entra na fila sem essa confirmação — a leitura automática (principalmente a de IA)
+  pode errar.
+- **Mesclar selecionadas** — soma quantidades de linhas marcadas na fila numa só, pra
+  corrigir duplicatas que a extração separou por engano.
+- **QR de resumo da OT** — como primeira etiqueta do lote (só nos tamanhos 10x15cm e
+  7,6x5,1cm) ou avulso em qualquer tamanho (útil nos formatos pequenos, só o QR).
+
+## Pendente: calibração de tamanho de página na impressora física
+
+A impressora (fila CUPS `Zebra_Technologies_ZTC_GC420d__EPL_`, driver "Zebra EPL2 Label
+Printer") **só imprime fisicamente algo quando o job usa o `PageSize` padrão ATUAL da
+fila** — confirmado que ela ignora overrides de tamanho por job (`-o media=Custom...`,
+`-o PageSize=Custom...`, ou até outro preset válido da lista). `imprimir()` não manda
+`-o media`/`-o PageSize` no job por causa disso — usa sempre o que já está configurado como
+padrão da fila.
+
+Ou seja: **trocar o "Tamanho da etiqueta" no painel não muda sozinho o que a impressora
+imprime fisicamente** — só muda como o conteúdo é desenhado dentro do espaço que a
+impressora já assume. Pra imprimir num tamanho diferente de verdade, é preciso: carregar o
+rolo físico certo E rodar
+`lpadmin -p Zebra_Technologies_ZTC_GC420d__EPL_ -o PageSize=<preset>` apontando pro tamanho
+mais próximo do rolo (ver `lpoptions -p ... -l` pra lista de presets aceitos).
+
+Também já observamos que um PDF com imagem embutida grande (o logo) pode corromper o
+stream EPL e causar impressão em loop/lixo — por precaução, `imprimir()` só embute o logo
+se `opts.comLogo` for passado explicitamente (fica desligado por padrão).
+
+## Uso via CLI (sem o painel web)
+
+```bash
+node imprimir.js dados.json   # dados.json = array de labels
+```
+
+Formato de cada label:
 
 ```json
 { "ot": "OT-2026-0057", "nomeOt": "NEOPOP", "nome": "Transformador 24V 400W",
