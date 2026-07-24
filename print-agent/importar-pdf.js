@@ -36,8 +36,11 @@ function montarLabelDoGrupo(itensGrupo) {
     if (pareceRuidoDeCabecalho(it.str)) return;
     if (/^Patrim[oô]nio\b/.test(it.str)) return; // rodapé de patrimônio, descarta
     if (/^\d+\/\d+$/.test(it.str)) return; // contador "2/5", descarta
+    // "OT-2026-0057 - Projeto" (padrão novo) ou "0069 - Projeto" (numeração antiga, sem
+    // prefixo "OT-") — sempre a primeira linha do grupo, então não arrisca confundir com
+    // nome/local/obs que também tenham " - " no meio do texto
     if (!ot && (/^OT-/.test(it.str) || / - /.test(it.str))) {
-      const m = it.str.match(/^(OT-\S+)(?:\s*-\s*(.+))?$/);
+      const m = it.str.match(/^(OT-\S+)(?:\s*-\s*(.+))?$/) || it.str.match(/^(\S.*?)\s*-\s*(.+)$/);
       if (m) { ot = m[1]; nomeOt = m[2] || ''; return; }
     }
     restantes.push(it);

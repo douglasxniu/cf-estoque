@@ -76,6 +76,18 @@ function logoNiuDataUrl() {
   return _logoNiuDataUrlPromise;
 }
 
+// doc.text com maxWidth quebra em várias linhas sozinho — mas o resto do layout
+// (principalmente o rodapé, numa posição Y fixa) assume texto de uma linha só. Texto
+// livre (nome/local/obs) pode vir arbitrariamente longo, então força uma linha só,
+// truncando com reticências, em vez de deixar quebrar e atropelar o que vem depois.
+function linhaUnica(doc, texto, maxWidth) {
+  const linhas = doc.splitTextToSize(texto, maxWidth);
+  if (linhas.length <= 1) return texto;
+  let linha = linhas[0].trimEnd();
+  while (linha.length > 1 && doc.getTextWidth(linha + '…') > maxWidth) linha = linha.slice(0, -1).trimEnd();
+  return linha + '…';
+}
+
 // Etiquetas de item (sem QR) pra colar no equipamento físico — grade 2x7 fixa em A4,
 // célula sempre do mesmo tamanho. Cada label: [{ot, nomeOt, nome, local, obs, unitIdx, unitTotal}]
 // ou, pra etiqueta de resumo, {tipoQr:true, titulo, url}.
@@ -163,15 +175,15 @@ async function construirEtiquetasItensPDF(labels) {
 
     ty += 6.5;
     doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(15, 15, 15);
-    doc.text(String(lab.nome || ''), x + pad, ty, { maxWidth: maxW });
+    doc.text(linhaUnica(doc, String(lab.nome || ''), maxW), x + pad, ty);
 
     ty += 5.5;
     doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(40, 40, 40);
-    doc.text(String(lab.local || ''), x + pad, ty, { maxWidth: maxW });
+    doc.text(linhaUnica(doc, String(lab.local || ''), maxW), x + pad, ty);
 
     ty += 4.5;
     doc.setFont('helvetica', 'italic'); doc.setFontSize(7.5); doc.setTextColor(100, 100, 100);
-    if (lab.obs) doc.text(String(lab.obs), x + pad, ty, { maxWidth: maxW });
+    if (lab.obs) doc.text(linhaUnica(doc, String(lab.obs), maxW), x + pad, ty);
 
     desenharRodapeInventario(x, y);
   });
@@ -224,15 +236,15 @@ async function construirEtiquetaTermicaPDF(labels) {
 
     ty += 5.5;
     doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(15, 15, 15);
-    doc.text(String(lab.nome || ''), pad, ty, { maxWidth: maxW });
+    doc.text(linhaUnica(doc, String(lab.nome || ''), maxW), pad, ty);
 
     ty += 5;
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(40, 40, 40);
-    doc.text(String(lab.local || ''), pad, ty, { maxWidth: maxW });
+    doc.text(linhaUnica(doc, String(lab.local || ''), maxW), pad, ty);
 
     ty += 4.5;
     doc.setFont('helvetica', 'italic'); doc.setFontSize(7); doc.setTextColor(100, 100, 100);
-    if (lab.obs) doc.text(String(lab.obs), pad, ty, { maxWidth: maxW });
+    if (lab.obs) doc.text(linhaUnica(doc, String(lab.obs), maxW), pad, ty);
 
     doc.setFont('helvetica', 'normal'); doc.setFontSize(5.5); doc.setTextColor(150, 150, 150);
     doc.text(`Patrimônio ${EMPRESA_NOME}`, pad, y + ALTURA_LABEL - 2.5, { maxWidth: maxW });

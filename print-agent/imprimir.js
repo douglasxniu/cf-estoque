@@ -57,6 +57,18 @@ function nivelDeConteudo(w, h) {
   return 'pequena';
 }
 
+// doc.text com maxWidth quebra em várias linhas sozinho — mas todo o resto do layout
+// (principalmente o rodapé, numa posição Y fixa) assume texto de uma linha só. Texto
+// livre (nome/local/obs) pode vir arbitrariamente longo, então força uma linha só aqui,
+// truncando com reticências, em vez de deixar quebrar e atropelar o que vem depois.
+function linhaUnica(doc, texto, maxWidth) {
+  const linhas = doc.splitTextToSize(texto, maxWidth);
+  if (linhas.length <= 1) return texto;
+  let linha = linhas[0].trimEnd();
+  while (linha.length > 1 && doc.getTextWidth(linha + '…') > maxWidth) linha = linha.slice(0, -1).trimEnd();
+  return linha + '…';
+}
+
 function desenharEtiquetaGrande(doc, lab, W, H, opts, y0 = 0) {
   const pad = 4, maxW = W - 2 * pad;
   const logo = opts.comLogo ? carregarLogoBase64() : false;
@@ -77,15 +89,15 @@ function desenharEtiquetaGrande(doc, lab, W, H, opts, y0 = 0) {
 
   ty += 6.5;
   doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(15, 15, 15);
-  doc.text(String(lab.nome || ''), pad, ty, { maxWidth: maxW });
+  doc.text(linhaUnica(doc, String(lab.nome || ''), maxW), pad, ty);
 
   ty += 6;
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(40, 40, 40);
-  doc.text(String(lab.local || ''), pad, ty, { maxWidth: maxW });
+  doc.text(linhaUnica(doc, String(lab.local || ''), maxW), pad, ty);
 
   ty += 5.5;
   doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(100, 100, 100);
-  if (lab.obs) doc.text(String(lab.obs), pad, ty, { maxWidth: maxW });
+  if (lab.obs) doc.text(linhaUnica(doc, String(lab.obs), maxW), pad, ty);
 
   doc.setFont('helvetica', 'normal'); doc.setFontSize(6); doc.setTextColor(150, 150, 150);
   doc.text(`Patrimônio ${EMPRESA_NOME}`, pad, y0 + H - 3.5, { maxWidth: maxW });
@@ -101,16 +113,16 @@ function desenharEtiquetaMedia(doc, lab, W, H, y0 = 0) {
 
   ty += 6.5;
   doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(15, 15, 15);
-  doc.text(String(lab.nome || ''), pad, ty, { maxWidth: maxW });
+  doc.text(linhaUnica(doc, String(lab.nome || ''), maxW), pad, ty);
 
   ty += 6;
   doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(50, 50, 50);
-  doc.text(String(lab.local || ''), pad, ty, { maxWidth: maxW });
+  doc.text(linhaUnica(doc, String(lab.local || ''), maxW), pad, ty);
 
   if (lab.obs) {
     ty += 5;
     doc.setFont('helvetica', 'italic'); doc.setFontSize(7); doc.setTextColor(110, 110, 110);
-    doc.text(String(lab.obs), pad, ty, { maxWidth: maxW });
+    doc.text(linhaUnica(doc, String(lab.obs), maxW), pad, ty);
   }
 }
 
@@ -119,10 +131,10 @@ function desenharEtiquetaPequena(doc, lab, W, H, y0 = 0) {
   const pad = 2, maxW = W - 2 * pad;
   const fonteNome = W < 40 ? 8 : 9.5;
   doc.setFont('helvetica', 'bold'); doc.setFontSize(fonteNome); doc.setTextColor(15, 15, 15);
-  doc.text(String(lab.nome || ''), pad, y0 + H * 0.42, { maxWidth: maxW });
+  doc.text(linhaUnica(doc, String(lab.nome || ''), maxW), pad, y0 + H * 0.42);
   if (lab.local) {
     doc.setFont('helvetica', 'normal'); doc.setFontSize(fonteNome - 2); doc.setTextColor(70, 70, 70);
-    doc.text(String(lab.local), pad, y0 + H * 0.72, { maxWidth: maxW });
+    doc.text(linhaUnica(doc, String(lab.local), maxW), pad, y0 + H * 0.72);
   }
 }
 
