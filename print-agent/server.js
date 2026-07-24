@@ -302,6 +302,19 @@ button:active{transform:scale(.98)}
 .import-row{display:flex;gap:8px;align-items:center}
 .import-row input[type=file]{flex:1;margin-bottom:0;padding:8px}
 .hint{font-size:.72rem;color:var(--muted);margin-top:8px;line-height:1.5}
+@keyframes girar{to{transform:rotate(360deg)}}
+.spinner{display:inline-block;width:13px;height:13px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:girar .7s linear infinite;vertical-align:-2px;margin-right:7px}
+.btn-ghost .spinner{border-color:var(--border);border-top-color:var(--text)}
+button:disabled{opacity:.7;cursor:wait}
+@keyframes pulsar{0%,100%{opacity:1}50%{opacity:.45}}
+.analisando{color:var(--primary)!important;font-weight:600}
+.analisando .ponto{animation:pulsar 1.1s ease-in-out infinite}
+.analisando .ponto:nth-child(2){animation-delay:.15s}
+.analisando .ponto:nth-child(3){animation-delay:.3s}
+.progress-bar{height:3px;background:var(--surface-3);border-radius:3px;overflow:hidden;margin-top:8px;display:none}
+.progress-bar.ativo{display:block}
+.progress-bar .fill{height:100%;width:40%;background:linear-gradient(90deg,var(--primary),var(--primary-2));border-radius:3px;animation:varrer 1.2s ease-in-out infinite}
+@keyframes varrer{0%{margin-left:-40%}100%{margin-left:100%}}
 .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 18px;font-size:.85rem;max-width:90vw;box-shadow:var(--shadow);z-index:999;opacity:0;pointer-events:none;transition:opacity .2s}
 .toast.mostrar{opacity:1}
 .toast.erro{border-color:var(--danger-border);color:var(--danger);background:var(--danger-bg)}
@@ -364,17 +377,19 @@ button:active{transform:scale(.98)}
   <div class="card-titulo"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>Importar PDF gerado pelo site</div>
   <div class="import-row">
     <input type="file" id="arquivoPdf" accept="application/pdf">
-    <button class="btn-ghost btn-sm" onclick="importarPdf()">Importar</button>
+    <button class="btn-ghost btn-sm" id="btnImportarPdf" onclick="importarPdf()">Importar</button>
   </div>
-  <div class="hint">Lê o texto do PDF e preenche a fila automaticamente. Confira sempre antes de imprimir — em etiquetas muito pequenas (5,7x1,9cm, 3,2x2,5cm) o nome pode vir cortado/incompleto, corrija manualmente se precisar.</div>
+  <div class="progress-bar" id="progressoPdf"><div class="fill"></div></div>
+  <div class="hint" id="hintPdf">Lê o texto do PDF e preenche a fila automaticamente. Confira sempre antes de imprimir — em etiquetas muito pequenas (5,7x1,9cm, 3,2x2,5cm) o nome pode vir cortado/incompleto, corrija manualmente se precisar.</div>
 </div>
 
 <div class="card">
   <div class="card-titulo"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>Importar print screen de outro sistema (IA)</div>
   <div class="import-row">
     <input type="file" id="arquivoImagem" accept="image/*">
-    <button class="btn-ghost btn-sm" onclick="importarImagem()">Importar</button>
+    <button class="btn-ghost btn-sm" id="btnImportarImagem" onclick="importarImagem()">Importar</button>
   </div>
+  <div class="progress-bar" id="progressoImagem"><div class="fill"></div></div>
   <div class="hint" id="hintImagem">Print de qualquer OT/tabela de produção — a IA identifica itens, variantes (cor/modelo) e quantidades. <b>Sempre revise antes de imprimir</b> — a IA pode interpretar algo errado; use "mesclar" abaixo se ela separar o mesmo item em duas linhas.</div>
 </div>
 
@@ -414,13 +429,13 @@ button:active{transform:scale(.98)}
     <input type="checkbox" id="comQr">
     Incluir como primeira etiqueta do lote (só em 10x15cm e 7,6x5,1cm)
   </label>
-  <button class="btn-ghost btn-sm" style="width:100%;margin-top:12px" onclick="imprimirSoQr()">Imprimir só o QR (etiqueta avulsa)</button>
+  <button class="btn-ghost btn-sm" style="width:100%;margin-top:12px" id="btnSoQr" onclick="imprimirSoQr()">Imprimir só o QR (etiqueta avulsa)</button>
 </div>
 
 <div class="footer-actions">
   <button class="btn-ghost" style="flex:1" onclick="limpar()">Limpar fila</button>
-  <button class="btn-ghost" style="flex:1" onclick="salvarArquivo()">Salvar arquivo</button>
-  <button class="btn-primary" style="flex:2" onclick="imprimirFila()">Imprimir na Zebra</button>
+  <button class="btn-ghost" style="flex:1" id="btnSalvar" onclick="salvarArquivo()">Salvar arquivo</button>
+  <button class="btn-primary" style="flex:2" id="btnImprimir" onclick="imprimirFila()">Imprimir na Zebra</button>
 </div>
 
 <script>
@@ -507,24 +522,52 @@ async function adicionar(){
   carregar();
 }
 
+// mostra spinner no botão + barra de progresso animada + texto piscando no hint,
+// pra deixar claro que a análise do arquivo está rolando (não travou)
+function iniciarCarregamento(btn, progressoEl, hintEl, textoCarregando){
+  btn.dataset.textoOriginal = btn.textContent;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Analisando';
+  progressoEl.classList.add('ativo');
+  if(hintEl){
+    hintEl.dataset.textoOriginal = hintEl.innerHTML;
+    hintEl.innerHTML = '<span class="analisando">'+textoCarregando+'<span class="ponto">.</span><span class="ponto">.</span><span class="ponto">.</span></span>';
+  }
+}
+function pararCarregamento(btn, progressoEl, hintEl){
+  btn.disabled = false;
+  btn.textContent = btn.dataset.textoOriginal;
+  progressoEl.classList.remove('ativo');
+  if(hintEl) hintEl.innerHTML = hintEl.dataset.textoOriginal;
+}
+
 async function importarPdf(){
   const input = document.getElementById('arquivoPdf');
   if(!input.files.length){ aviso('Escolha um arquivo PDF primeiro.','erro'); return; }
+  const btn = document.getElementById('btnImportarPdf');
+  const progresso = document.getElementById('progressoPdf');
+  const hint = document.getElementById('hintPdf');
+  iniciarCarregamento(btn, progresso, hint, 'Lendo o PDF');
   const fd = new FormData();
   fd.append('pdf', input.files[0]);
-  const r = await fetch('/api/importar-pdf', { method:'POST', body:fd });
-  const d = await r.json();
-  if(!r.ok){ aviso('Erro: '+(d.error||'falha ao importar'),'erro'); return; }
-  input.value='';
-  abrirRevisao(d.itens, d.cabecalhoSugerido);
+  try {
+    const r = await fetch('/api/importar-pdf', { method:'POST', body:fd });
+    const d = await r.json();
+    if(!r.ok){ aviso('Erro: '+(d.error||'falha ao importar'),'erro'); return; }
+    input.value='';
+    abrirRevisao(d.itens, d.cabecalhoSugerido);
+  } finally {
+    pararCarregamento(btn, progresso, hint);
+  }
 }
 
 async function importarImagem(){
   const input = document.getElementById('arquivoImagem');
   if(!input.files.length){ aviso('Escolha uma imagem primeiro.','erro'); return; }
+  const btn = document.getElementById('btnImportarImagem');
+  const progresso = document.getElementById('progressoImagem');
   const hint = document.getElementById('hintImagem');
-  const textoOriginal = hint.textContent;
-  hint.textContent = 'Analisando com IA... pode levar alguns segundos.';
+  iniciarCarregamento(btn, progresso, hint, 'Analisando com IA (pode levar alguns segundos)');
   const fd = new FormData();
   fd.append('imagem', input.files[0]);
   try {
@@ -534,7 +577,7 @@ async function importarImagem(){
     input.value='';
     abrirRevisao(d.itens, null);
   } finally {
-    hint.textContent = textoOriginal;
+    pararCarregamento(btn, progresso, hint);
   }
 }
 
@@ -591,43 +634,71 @@ async function mesclarSelecionadas(){
 
 async function remover(i){ await fetch('/api/fila/'+i,{method:'DELETE'}); carregar(); }
 async function limpar(){ if(!confirm('Limpar toda a fila?')) return; await fetch('/api/fila',{method:'DELETE'}); carregar(); }
+function botaoOcupado(btn, texto){
+  btn.dataset.textoOriginal = btn.textContent;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>'+texto;
+}
+function botaoLivre(btn){
+  btn.disabled = false;
+  btn.textContent = btn.dataset.textoOriginal;
+}
+
 async function salvarArquivo(){
   if(!filaAtual.length){ aviso('A fila está vazia.','erro'); return; }
-  const r = await fetch('/api/gerar-pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-    comLogo:false,
-    tamanho:document.getElementById('tamanho').value,
-    comQr:document.getElementById('comQr').checked
-  })});
-  if(!r.ok){ const d=await r.json().catch(()=>({})); aviso('Erro: '+(d.error||'falha ao gerar o PDF'),'erro'); return; }
-  const blob = await r.blob();
-  const nome = (r.headers.get('Content-Disposition')||'').match(/filename="([^"]+)"/)?.[1] || 'etiquetas.pdf';
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = nome;
-  document.body.appendChild(a); a.click(); a.remove();
-  URL.revokeObjectURL(a.href);
-  aviso('PDF salvo — a fila continua aqui pra imprimir depois.','sucesso');
+  const btn = document.getElementById('btnSalvar');
+  botaoOcupado(btn, 'Gerando PDF');
+  try {
+    const r = await fetch('/api/gerar-pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      comLogo:false,
+      tamanho:document.getElementById('tamanho').value,
+      comQr:document.getElementById('comQr').checked
+    })});
+    if(!r.ok){ const d=await r.json().catch(()=>({})); aviso('Erro: '+(d.error||'falha ao gerar o PDF'),'erro'); return; }
+    const blob = await r.blob();
+    const nome = (r.headers.get('Content-Disposition')||'').match(/filename="([^"]+)"/)?.[1] || 'etiquetas.pdf';
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = nome;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(a.href);
+    aviso('PDF salvo — a fila continua aqui pra imprimir depois.','sucesso');
+  } finally {
+    botaoLivre(btn);
+  }
 }
 
 async function imprimirFila(){
   if(!confirm('Confirma o envio pra impressora física?')) return;
-  const r = await fetch('/api/imprimir',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-    comLogo:false,
-    tamanho:document.getElementById('tamanho').value,
-    comQr:document.getElementById('comQr').checked
-  })});
-  const d = await r.json();
-  if(!r.ok){ aviso('Erro: '+(d.error||'falha ao imprimir'),'erro'); return; }
-  aviso('Enviado pra impressora.','sucesso');
-  carregar();
+  const btn = document.getElementById('btnImprimir');
+  botaoOcupado(btn, 'Enviando');
+  try {
+    const r = await fetch('/api/imprimir',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      comLogo:false,
+      tamanho:document.getElementById('tamanho').value,
+      comQr:document.getElementById('comQr').checked
+    })});
+    const d = await r.json();
+    if(!r.ok){ aviso('Erro: '+(d.error||'falha ao imprimir'),'erro'); return; }
+    aviso('Enviado pra impressora.','sucesso');
+    carregar();
+  } finally {
+    botaoLivre(btn);
+  }
 }
 async function imprimirSoQr(){
   if(!document.getElementById('ot').value.trim()){ aviso('Preencha a OT no cabeçalho primeiro.','erro'); return; }
   if(!confirm('Imprimir uma etiqueta avulsa só com o QR de resumo da OT?')) return;
-  const r = await fetch('/api/imprimir-qr',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tamanho:document.getElementById('tamanho').value})});
-  const d = await r.json();
-  if(!r.ok){ aviso('Erro: '+(d.error||'falha ao imprimir'),'erro'); return; }
-  aviso('QR enviado pra impressora.','sucesso');
+  const btn = document.getElementById('btnSoQr');
+  botaoOcupado(btn, 'Enviando');
+  try {
+    const r = await fetch('/api/imprimir-qr',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tamanho:document.getElementById('tamanho').value})});
+    const d = await r.json();
+    if(!r.ok){ aviso('Erro: '+(d.error||'falha ao imprimir'),'erro'); return; }
+    aviso('QR enviado pra impressora.','sucesso');
+  } finally {
+    botaoLivre(btn);
+  }
 }
 carregar();
 </script>
