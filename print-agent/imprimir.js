@@ -22,13 +22,23 @@ const PRINTER = 'Zebra_Technologies_ZTC_GC420d__EPL_';
 
 // tamanhos de etiqueta comuns no mercado (largura x altura, mm) — "TAMANHO_PADRAO" é o que
 // já validamos fisicamente antes. Adicionar um novo tamanho aqui é só adicionar a entrada.
+// porPagina > 1 empilha várias etiquetas na mesma folha física (com picote entre elas) em
+// vez de gastar uma folha inteira por item — só faz sentido pro rolo grande (10x15cm); os
+// outros já são etiquetas individuais pequenas, sem espaço sobrando pra dividir mais.
 const TAMANHOS = {
-  '100x150': { w: 100, h: 150, label: '10 x 15 cm' },
-  '76x51': { w: 76, h: 51, label: '7,6 x 5,1 cm' },
-  '57x19': { w: 57, h: 19, label: '5,7 x 1,9 cm' },
-  '32x25': { w: 32, h: 25, label: '3,2 x 2,5 cm' }
+  '100x150': { w: 100, h: 150, label: '10 x 15 cm', porPagina: 5 },
+  '76x51': { w: 76, h: 51, label: '7,6 x 5,1 cm', porPagina: 1 },
+  '57x19': { w: 57, h: 19, label: '5,7 x 1,9 cm', porPagina: 1 },
+  '32x25': { w: 32, h: 25, label: '3,2 x 2,5 cm', porPagina: 1 }
 };
 const TAMANHO_PADRAO = '100x150';
+
+// linha de picote entre etiquetas empilhadas na mesma folha — desenhada segmento a
+// segmento porque o filtro de rasterização da impressora não respeita setLineDashPattern
+function linhaPicote(doc, y, W) {
+  doc.setDrawColor(60, 60, 60); doc.setLineWidth(0.35);
+  for (let x = 0; x < W; x += 3.2) doc.line(x, y, Math.min(x + 2, W), y);
+}
 
 let _logoCache = null;
 function carregarLogoBase64() {
@@ -47,19 +57,19 @@ function nivelDeConteudo(w, h) {
   return 'pequena';
 }
 
-function desenharEtiquetaGrande(doc, lab, W, H, opts) {
+function desenharEtiquetaGrande(doc, lab, W, H, opts, y0 = 0) {
   const pad = 4, maxW = W - 2 * pad;
   const logo = opts.comLogo ? carregarLogoBase64() : false;
-  let empresaX = pad, ty = 4.3;
+  let empresaX = pad, ty = y0 + 4.3;
   if (logo) {
     const logoW = 6, logoH = logoW * LOGO_RATIO;
-    doc.addImage(logo, 'PNG', pad, 2, logoW, logoH);
+    doc.addImage(logo, 'PNG', pad, y0 + 2, logoW, logoH);
     empresaX = pad + logoW + 1.5;
   }
   doc.setFont('helvetica', 'bold'); doc.setFontSize(6); doc.setTextColor(70, 70, 70);
   doc.text(EMPRESA_NOME, empresaX, ty);
 
-  ty = 9;
+  ty = y0 + 9;
   doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(90, 90, 90);
   doc.text(`${lab.ot || ''}${lab.nomeOt ? ' - ' + lab.nomeOt : ''}`, pad, ty, { maxWidth: maxW * 0.7 });
   doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(120, 120, 120);
@@ -78,12 +88,12 @@ function desenharEtiquetaGrande(doc, lab, W, H, opts) {
   if (lab.obs) doc.text(String(lab.obs), pad, ty, { maxWidth: maxW });
 
   doc.setFont('helvetica', 'normal'); doc.setFontSize(6); doc.setTextColor(150, 150, 150);
-  doc.text(`Patrimônio ${EMPRESA_NOME}`, pad, H - 3.5, { maxWidth: maxW });
+  doc.text(`Patrimônio ${EMPRESA_NOME}`, pad, y0 + H - 3.5, { maxWidth: maxW });
 }
 
-function desenharEtiquetaMedia(doc, lab, W, H) {
+function desenharEtiquetaMedia(doc, lab, W, H, y0 = 0) {
   const pad = 3, maxW = W - 2 * pad;
-  let ty = 5;
+  let ty = y0 + 5;
   doc.setFont('helvetica', 'normal'); doc.setFontSize(6); doc.setTextColor(110, 110, 110);
   doc.text(`${lab.ot || ''}${lab.nomeOt ? ' - ' + lab.nomeOt : ''}`, pad, ty, { maxWidth: maxW * 0.7 });
   doc.setFont('helvetica', 'bold'); doc.setFontSize(6); doc.setTextColor(140, 140, 140);
@@ -104,15 +114,15 @@ function desenharEtiquetaMedia(doc, lab, W, H) {
   }
 }
 
-function desenharEtiquetaPequena(doc, lab, W, H) {
+function desenharEtiquetaPequena(doc, lab, W, H, y0 = 0) {
   // sem espaço pra cabeçalho/rodapé/observação — só o essencial: nome e local
   const pad = 2, maxW = W - 2 * pad;
   const fonteNome = W < 40 ? 8 : 9.5;
   doc.setFont('helvetica', 'bold'); doc.setFontSize(fonteNome); doc.setTextColor(15, 15, 15);
-  doc.text(String(lab.nome || ''), pad, H * 0.42, { maxWidth: maxW });
+  doc.text(String(lab.nome || ''), pad, y0 + H * 0.42, { maxWidth: maxW });
   if (lab.local) {
     doc.setFont('helvetica', 'normal'); doc.setFontSize(fonteNome - 2); doc.setTextColor(70, 70, 70);
-    doc.text(String(lab.local), pad, H * 0.72, { maxWidth: maxW });
+    doc.text(String(lab.local), pad, y0 + H * 0.72, { maxWidth: maxW });
   }
 }
 
@@ -122,18 +132,18 @@ async function gerarQrDataUrl(url) {
 
 // etiqueta especial com QR "Resumo da OT" — o quanto de texto ao lado do QR muda com o
 // tamanho; nos formatos pequenos (pequena) é só o QR, sem texto (não cabe/não precisa).
-async function desenharEtiquetaQr(doc, lab, W, H, nivel) {
+async function desenharEtiquetaQr(doc, lab, W, H, nivel, y0 = 0) {
   const qrImg = await gerarQrDataUrl(lab.url);
   if (nivel === 'pequena') {
     const qrSize = Math.min(W, H) * 0.9;
-    doc.addImage(qrImg, 'PNG', (W - qrSize) / 2, (H - qrSize) / 2, qrSize, qrSize);
+    doc.addImage(qrImg, 'PNG', (W - qrSize) / 2, y0 + (H - qrSize) / 2, qrSize, qrSize);
     return;
   }
   const pad = nivel === 'grande' ? 4 : 3;
   const qrSize = Math.min(W * 0.42, H - 2 * pad);
-  doc.addImage(qrImg, 'PNG', pad, (H - qrSize) / 2, qrSize, qrSize);
+  doc.addImage(qrImg, 'PNG', pad, y0 + (H - qrSize) / 2, qrSize, qrSize);
   const tx = pad + qrSize + pad, tMaxW = W - qrSize - 3 * pad;
-  let ty = H / 2 - (nivel === 'grande' ? 3 : 1);
+  let ty = y0 + H / 2 - (nivel === 'grande' ? 3 : 1);
   doc.setFont('helvetica', 'bold'); doc.setFontSize(nivel === 'grande' ? 11 : 8.5); doc.setTextColor(15, 15, 15);
   doc.text(String(lab.titulo || 'Resumo da OT'), tx, ty, { maxWidth: tMaxW });
   if (nivel === 'grande') {
@@ -143,22 +153,31 @@ async function desenharEtiquetaQr(doc, lab, W, H, nivel) {
   }
 }
 
-// labels: array de N {ot, nomeOt, nome, local, obs, unitIdx, unitTotal} — cada item vira
-// uma página própria, no tamanho de opts.tamanho (chave de TAMANHOS, padrão 100x150). Uma
-// entrada {tipoQr:true, titulo, url} vira uma etiqueta de QR em vez de item normal.
+// labels: array de N {ot, nomeOt, nome, local, obs, unitIdx, unitTotal} — no tamanho de
+// opts.tamanho (chave de TAMANHOS, padrão 100x150). Uma entrada {tipoQr:true, titulo, url}
+// vira uma etiqueta de QR em vez de item normal. Quando o tamanho tem porPagina > 1 (hoje
+// só o 10x15cm), várias etiquetas ficam empilhadas na mesma folha física, com picote entre
+// elas, em vez de gastar uma folha inteira por item — poupa rolo.
 async function gerarPDF(labels, opts = {}) {
   const tam = TAMANHOS[opts.tamanho] || TAMANHOS[TAMANHO_PADRAO];
-  const { w: W, h: H } = tam;
+  const { w: W, h: H, porPagina = 1 } = tam;
   const doc = new jsPDF({ unit: 'mm', format: [W, H] });
-  const nivel = nivelDeConteudo(W, H);
+  const subH = H / porPagina;
+  // empilhado usa sempre o layout completo (cabeçalho+rodapé) — já testado que cabe numa
+  // faixa de ~30mm; fora do modo empilhado, o nível depende do tamanho físico real da etiqueta
+  const nivel = porPagina > 1 ? 'grande' : nivelDeConteudo(W, H);
 
   for (let idx = 0; idx < labels.length; idx++) {
     const lab = labels[idx];
-    if (idx > 0) doc.addPage();
-    if (lab.tipoQr) await desenharEtiquetaQr(doc, lab, W, H, nivel);
-    else if (nivel === 'grande') desenharEtiquetaGrande(doc, lab, W, H, opts);
-    else if (nivel === 'media') desenharEtiquetaMedia(doc, lab, W, H);
-    else desenharEtiquetaPequena(doc, lab, W, H);
+    const posNaPagina = idx % porPagina;
+    if (idx > 0 && posNaPagina === 0) doc.addPage();
+    const y0 = posNaPagina * subH;
+    if (posNaPagina > 0) linhaPicote(doc, y0, W);
+
+    if (lab.tipoQr) await desenharEtiquetaQr(doc, lab, W, subH, nivel, y0);
+    else if (nivel === 'grande') desenharEtiquetaGrande(doc, lab, W, subH, opts, y0);
+    else if (nivel === 'media') desenharEtiquetaMedia(doc, lab, W, subH, y0);
+    else desenharEtiquetaPequena(doc, lab, W, subH, y0);
   }
 
   return doc;

@@ -220,56 +220,114 @@ app.get('/', (req, res) => {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Etiquetas Térmicas · NIU Estoque</title>
 <style>
-:root{color-scheme:dark light}
-body{font-family:-apple-system,Helvetica,Arial,sans-serif;max-width:640px;margin:0 auto;padding:20px 16px 60px;background:#0d0f14;color:#e8eaed}
-h1{font-size:1.1rem;margin:0 0 4px}
-.sub{color:#8a8f98;font-size:.8rem;margin-bottom:20px}
-.card{background:#171a21;border:1px solid #2a2e38;border-radius:12px;padding:16px;margin-bottom:14px}
-label{display:block;font-size:.72rem;font-weight:700;color:#8a8f98;margin-bottom:4px;text-transform:uppercase;letter-spacing:.03em}
-input,textarea{width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid #2a2e38;border-radius:8px;background:#0d0f14;color:#e8eaed;font-size:.9rem;margin-bottom:10px;font-family:inherit}
+:root{color-scheme:dark}
+:root,:root[data-theme="dark"]{
+  --bg:#0b0d12; --surface:#12151c; --surface-2:#1a1e28; --surface-3:#20242f;
+  --border:#262b36; --border-soft:#1d212b;
+  --text:#e9ebf0; --muted:#8b91a0; --muted-2:#5b6070;
+  --primary:#5b8cff; --primary-2:#7c5cff; --on-primary:#fff;
+  --danger:#f0575c; --danger-bg:rgba(240,87,92,.12); --danger-border:rgba(240,87,92,.35);
+  --success:#34c98f; --success-bg:rgba(52,201,143,.12);
+  --shadow:0 12px 32px -14px rgba(0,0,0,.55);
+  --shadow-sm:0 2px 8px rgba(0,0,0,.25);
+}
+:root[data-theme="light"]{
+  --bg:#f3f4f7; --surface:#ffffff; --surface-2:#f7f8fa; --surface-3:#eef0f4;
+  --border:#e1e4ea; --border-soft:#ececf0;
+  --text:#161922; --muted:#666c7c; --muted-2:#9096a3;
+  --primary:#3f6cf0; --primary-2:#7c4de0; --on-primary:#fff;
+  --danger:#d8434c; --danger-bg:rgba(216,67,76,.08); --danger-border:rgba(216,67,76,.25);
+  --success:#1f9d6e; --success-bg:rgba(31,157,110,.1);
+  --shadow:0 12px 32px -16px rgba(20,22,35,.18);
+  --shadow-sm:0 2px 10px rgba(20,22,35,.06);
+}
+@media (prefers-color-scheme: light){ :root:not([data-theme]){
+  --bg:#f3f4f7; --surface:#ffffff; --surface-2:#f7f8fa; --surface-3:#eef0f4;
+  --border:#e1e4ea; --border-soft:#ececf0;
+  --text:#161922; --muted:#666c7c; --muted-2:#9096a3;
+  --primary:#3f6cf0; --primary-2:#7c4de0; --on-primary:#fff;
+  --danger:#d8434c; --danger-bg:rgba(216,67,76,.08); --danger-border:rgba(216,67,76,.25);
+  --success:#1f9d6e; --success-bg:rgba(31,157,110,.1);
+  --shadow:0 12px 32px -16px rgba(20,22,35,.18);
+  --shadow-sm:0 2px 10px rgba(20,22,35,.06);
+}}
+*{box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;max-width:720px;margin:0 auto;padding:28px 20px 70px;background:var(--bg);color:var(--text);transition:background .15s,color .15s}
+h1{font-size:1.15rem;margin:0 0 2px;letter-spacing:-.01em;font-weight:700}
+h2{font-weight:700}
+strong{font-weight:600}
+.sub{color:var(--muted);font-size:.8rem;margin-bottom:20px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:16px;box-shadow:var(--shadow-sm)}
+.card-titulo{display:flex;align-items:center;gap:8px;font-size:.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px}
+.card-titulo .ic{width:14px;height:14px;flex-shrink:0;opacity:.85}
+label{display:block;font-size:.72rem;font-weight:700;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em}
+input,textarea,select{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--border);border-radius:9px;background:var(--surface-2);color:var(--text);font-size:.9rem;margin-bottom:10px;font-family:inherit;transition:border-color .12s,background .12s}
+input:focus,textarea:focus,select:focus{outline:none;border-color:var(--primary);background:var(--surface)}
+input::placeholder{color:var(--muted-2)}
+select{cursor:pointer}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-button{border:none;border-radius:8px;padding:10px 16px;font-weight:700;cursor:pointer;font-size:.85rem;font-family:inherit}
-.btn-primary{background:#5b8cff;color:#fff;width:100%}
-.btn-ghost{background:#22262f;color:#e8eaed;border:1px solid #2a2e38}
-.btn-sm{padding:5px 10px;font-size:.74rem;border-radius:6px}
-.item{padding:10px 0;border-bottom:1px solid #2a2e38}
+button{border:none;border-radius:9px;padding:10px 16px;font-weight:700;cursor:pointer;font-size:.85rem;font-family:inherit;transition:filter .12s,background .12s,transform .05s}
+button:active{transform:scale(.98)}
+.btn-primary{background:linear-gradient(135deg,var(--primary),var(--primary-2));color:var(--on-primary);width:100%;box-shadow:0 4px 14px -4px rgba(91,140,255,.5)}
+.btn-primary:hover{filter:brightness(1.08)}
+.btn-ghost{background:var(--surface-2);color:var(--text);border:1px solid var(--border)}
+.btn-ghost:hover{background:var(--surface-3)}
+.btn-sm{padding:6px 11px;font-size:.74rem;border-radius:7px}
+.item{padding:12px 0;border-bottom:1px solid var(--border-soft)}
 .item:last-child{border-bottom:none}
 .item-view{display:flex;justify-content:space-between;align-items:center;gap:10px}
-.item .info b{display:block;font-size:.9rem}
-.item .info span{font-size:.76rem;color:#8a8f98}
+.item .info b{display:block;font-size:.9rem;font-weight:600}
+.item .info span{font-size:.76rem;color:var(--muted)}
 .item .acoes{display:flex;gap:6px;flex-shrink:0}
-.item .rm{background:#3a1f24;color:#f87171}
-.item .ed{background:#22262f;color:#e8eaed;border:1px solid #2a2e38}
-.item-edit{display:none;margin-top:8px}
+.item .rm{background:var(--danger-bg);color:var(--danger);border:1px solid var(--danger-border)}
+.item .rm:hover{background:var(--danger-border)}
+.item .ed{background:var(--surface-2);color:var(--text);border:1px solid var(--border)}
+.item-edit{display:none;margin-top:10px}
 .item-edit.aberto{display:block}
 .item-edit .row2{margin-bottom:0}
 .item-edit input{margin-bottom:8px}
-.empty{color:#8a8f98;text-align:center;padding:20px;font-size:.85rem}
-.counter{background:#5b8cff;color:#fff;font-size:.7rem;font-weight:800;border-radius:20px;padding:1px 8px;margin-left:6px}
-.footer-actions{display:flex;gap:8px;margin-top:14px}
-.brand{display:flex;align-items:center;gap:10px;margin-bottom:18px}
-.brand svg{width:52px;height:auto;flex-shrink:0;color:#e8eaed}
+.empty{color:var(--muted);text-align:center;padding:24px 10px;font-size:.85rem}
+.counter{background:var(--surface-3);color:var(--muted);border:1px solid var(--border);font-size:.68rem;font-weight:700;border-radius:20px;padding:3px 10px;margin-left:8px}
+.footer-actions{display:flex;gap:8px;margin-top:18px;position:sticky;bottom:16px}
+.brand{display:flex;align-items:center;gap:12px;margin-bottom:22px}
+.brand svg{width:50px;height:auto;flex-shrink:0;color:var(--text)}
+.brand-info{flex:1;min-width:0}
+.theme-toggle{width:36px;height:36px;border-radius:10px;background:var(--surface);border:1px solid var(--border);color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;padding:0}
+.theme-toggle:hover{color:var(--text);background:var(--surface-2)}
+.theme-toggle svg{width:17px;height:17px}
+.theme-toggle .ic-sun{display:none}
+.theme-toggle .ic-moon{display:block}
+[data-theme="light"] .theme-toggle .ic-sun{display:block}
+[data-theme="light"] .theme-toggle .ic-moon{display:none}
 .import-row{display:flex;gap:8px;align-items:center}
-.import-row input[type=file]{flex:1;margin-bottom:0;padding:7px}
-.hint{font-size:.72rem;color:#8a8f98;margin-top:6px}
-.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#22262f;border:1px solid #2a2e38;border-radius:10px;padding:12px 18px;font-size:.85rem;max-width:90vw;box-shadow:0 8px 24px rgba(0,0,0,.4);z-index:999;opacity:0;pointer-events:none;transition:opacity .2s}
+.import-row input[type=file]{flex:1;margin-bottom:0;padding:8px}
+.hint{font-size:.72rem;color:var(--muted);margin-top:8px;line-height:1.5}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 18px;font-size:.85rem;max-width:90vw;box-shadow:var(--shadow);z-index:999;opacity:0;pointer-events:none;transition:opacity .2s}
 .toast.mostrar{opacity:1}
-.toast.erro{border-color:#f87171;color:#f87171}
-.toast.sucesso{border-color:#5b8cff}
-.modal-fundo{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:900;align-items:flex-start;justify-content:center;overflow-y:auto;padding:30px 16px}
+.toast.erro{border-color:var(--danger-border);color:var(--danger);background:var(--danger-bg)}
+.toast.sucesso{border-color:var(--primary);color:var(--text)}
+.modal-fundo{display:none;position:fixed;inset:0;background:rgba(8,9,13,.65);backdrop-filter:blur(2px);z-index:900;align-items:flex-start;justify-content:center;overflow-y:auto;padding:40px 16px}
 .modal-fundo.aberto{display:flex}
-.modal{background:#171a21;border:1px solid #2a2e38;border-radius:14px;padding:20px;max-width:560px;width:100%}
-.modal h2{font-size:1rem;margin:0 0 4px}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:22px;max-width:580px;width:100%;box-shadow:var(--shadow)}
+.modal h2{font-size:1.05rem;margin:0 0 4px}
 .modal .sub{margin-bottom:16px}
-.rev-item{background:#0d0f14;border:1px solid #2a2e38;border-radius:10px;padding:12px;margin-bottom:10px}
+.rev-item{background:var(--surface-2);border:1px solid var(--border);border-radius:11px;padding:14px;margin-bottom:10px}
 .rev-item input{margin-bottom:8px}
 .rev-item .row2{margin-bottom:0}
 .rev-item .row2 input{margin-bottom:0}
 .rev-item-topo{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
-.rev-item-topo span{font-size:.68rem;font-weight:800;color:#8a8f98;text-transform:uppercase;letter-spacing:.03em}
+.rev-item-topo span{font-size:.68rem;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
 .modal-acoes{display:flex;gap:8px;margin-top:14px}
+.check-row{display:flex;align-items:center;gap:8px;text-transform:none;cursor:pointer;font-size:.85rem;font-weight:500;color:var(--text)}
+.check-row input{width:auto;margin:0;flex-shrink:0}
 </style></head>
 <body>
+<script>
+(function(){
+  var salvo = localStorage.getItem('etTema');
+  if(salvo) document.documentElement.setAttribute('data-theme', salvo);
+})();
+</script>
 <div class="toast" id="toast"></div>
 <div class="modal-fundo" id="modalRevisao">
   <div class="modal">
@@ -284,14 +342,18 @@ button{border:none;border-radius:8px;padding:10px 16px;font-weight:700;cursor:po
 </div>
 <div class="brand">
   <svg viewBox="0 0 36.4 10.22" fill="currentColor"><rect x="16.96" y="0" width="2.47" height="10.22"/><path d="M22.04,4.83V0h2.47v4.74c0,2.09.6,3.1,1.88,3.1s2.8-.77,4.53-2.03l2.98-2.06V0h2.5v10.22h-2.32c0-1.13,0-2.86.06-3.99-3.99,2.68-5.78,3.99-8.14,3.99-2.53,0-3.96-1.64-3.96-5.39"/><path d="M14.36,5.39v4.83h-2.47v-4.74c0-2.09-.6-3.1-1.88-3.1s-2.8.77-4.53,2.03l-2.98,2.06v3.76H0V0h2.32c0,1.13,0,2.86-.06,3.99C6.26,1.31,8.05,0,10.4,0c2.53,0,3.96,1.64,3.96,5.39"/></svg>
-  <div>
+  <div class="brand-info">
     <h1>Etiquetas Térmicas</h1>
-    <div class="sub" style="margin-bottom:0">Impressora: Zebra GC420d</div>
+    <div class="sub" style="margin-bottom:0">NIU Experience Agency · Impressora Zebra GC420d</div>
   </div>
+  <button class="theme-toggle" id="themeToggle" title="Alternar tema" aria-label="Alternar tema claro/escuro">
+    <svg class="ic-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    <svg class="ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+  </button>
 </div>
 
 <div class="card">
-  <label>Tamanho da etiqueta</label>
+  <div class="card-titulo"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 3 3 21M15 3h6v6M9 21H3v-6"/></svg>Tamanho da etiqueta</div>
   <select id="tamanho">
     ${Object.entries(TAMANHOS).map(([chave, t]) => `<option value="${chave}" ${chave === TAMANHO_PADRAO ? 'selected' : ''}>${t.label} (${t.w}x${t.h}mm)</option>`).join('')}
   </select>
@@ -299,7 +361,7 @@ button{border:none;border-radius:8px;padding:10px 16px;font-weight:700;cursor:po
 </div>
 
 <div class="card">
-  <label>Importar PDF (gerado pelo site)</label>
+  <div class="card-titulo"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>Importar PDF gerado pelo site</div>
   <div class="import-row">
     <input type="file" id="arquivoPdf" accept="application/pdf">
     <button class="btn-ghost btn-sm" onclick="importarPdf()">Importar</button>
@@ -308,7 +370,7 @@ button{border:none;border-radius:8px;padding:10px 16px;font-weight:700;cursor:po
 </div>
 
 <div class="card">
-  <label>Importar print screen de outro sistema (IA)</label>
+  <div class="card-titulo"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>Importar print screen de outro sistema (IA)</div>
   <div class="import-row">
     <input type="file" id="arquivoImagem" accept="image/*">
     <button class="btn-ghost btn-sm" onclick="importarImagem()">Importar</button>
@@ -317,7 +379,7 @@ button{border:none;border-radius:8px;padding:10px 16px;font-weight:700;cursor:po
 </div>
 
 <div class="card">
-  <label>OT (cabeçalho — vale pra toda a fila)</label>
+  <div class="card-titulo"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><circle cx="7" cy="7" r="1"/></svg>OT — cabeçalho da fila</div>
   <div class="row2">
     <input id="ot" placeholder="OT-2026-0057" onchange="salvarCabecalho()">
     <input id="nomeOt" placeholder="Nome do projeto" onchange="salvarCabecalho()">
@@ -325,6 +387,7 @@ button{border:none;border-radius:8px;padding:10px 16px;font-weight:700;cursor:po
 </div>
 
 <div class="card">
+  <div class="card-titulo"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Adicionar item</div>
   <label>Nome do item *</label>
   <input id="nome" placeholder="Transformador 24V 400W">
   <div class="row2">
@@ -337,19 +400,21 @@ button{border:none;border-radius:8px;padding:10px 16px;font-weight:700;cursor:po
 </div>
 
 <div class="card">
-  <div style="display:flex;align-items:center;margin-bottom:8px">
-    <strong>Fila</strong><span class="counter" id="contador">0</span>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+    <div class="card-titulo" style="margin-bottom:0"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>Fila</div>
+    <span class="counter" id="contador">0</span>
   </div>
   <div id="lista"></div>
   <button class="btn-ghost btn-sm" style="width:100%;margin-top:10px" onclick="mesclarSelecionadas()">Mesclar selecionadas</button>
 </div>
 
 <div class="card">
-  <label style="display:flex;align-items:center;gap:8px;text-transform:none;cursor:pointer">
-    <input type="checkbox" id="comQr" style="width:auto;margin:0">
-    Incluir QR de resumo da OT no início do lote (só em 10x15cm e 7,6x5,1cm)
+  <div class="card-titulo"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h.01M14 18h.01M18 14h.01M18 18h.01"/></svg>QR de resumo da OT</div>
+  <label class="check-row">
+    <input type="checkbox" id="comQr">
+    Incluir como primeira etiqueta do lote (só em 10x15cm e 7,6x5,1cm)
   </label>
-  <button class="btn-ghost btn-sm" style="width:100%;margin-top:10px" onclick="imprimirSoQr()">Imprimir só o QR (etiqueta avulsa)</button>
+  <button class="btn-ghost btn-sm" style="width:100%;margin-top:12px" onclick="imprimirSoQr()">Imprimir só o QR (etiqueta avulsa)</button>
 </div>
 
 <div class="footer-actions">
@@ -359,6 +424,13 @@ button{border:none;border-radius:8px;padding:10px 16px;font-weight:700;cursor:po
 </div>
 
 <script>
+document.getElementById('themeToggle').addEventListener('click', function(){
+  const atual = document.documentElement.getAttribute('data-theme') || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+  const novo = atual === 'light' ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', novo);
+  localStorage.setItem('etTema', novo);
+});
+
 const esc=s=>String(s??'').replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
 let _avisoTimer=null;
 function aviso(msg, tipo){
