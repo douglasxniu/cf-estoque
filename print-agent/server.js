@@ -219,6 +219,7 @@ app.get('/', (req, res) => {
 <html lang="pt-BR"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Etiquetas Térmicas · NIU Estoque</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0MCA0MCI+CiAgPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiByeD0iOCIgZmlsbD0iIzFjMWMxYSIvPgogIDxnIHRyYW5zZm9ybT0idHJhbnNsYXRlKDEuOCwxNC44OSkiIGZpbGw9IiNmZmZmZmYiPgogICAgPHJlY3QgeD0iMTYuOTYiIHk9IjAiIHdpZHRoPSIyLjQ3IiBoZWlnaHQ9IjEwLjIyIi8+CiAgICA8cGF0aCBkPSJNMjIuMDQsNC44M1YwaDIuNDd2NC43NGMwLDIuMDkuNiwzLjEsMS44OCwzLjFzMi44LS43Nyw0LjUzLTIuMDNsMi45OC0yLjA2VjBoMi41djEwLjIyaC0yLjMyYzAtMS4xMywwLTIuODYuMDYtMy45OS0zLjk5LDIuNjgtNS43OCwzLjk5LTguMTQsMy45OS0yLjUzLDAtMy45Ni0xLjY0LTMuOTYtNS4zOSIvPgogICAgPHBhdGggZD0iTTE0LjM2LDUuMzl2NC44M2gtMi40N3YtNC43NGMwLTIuMDktLjYtMy4xLTEuODgtMy4xcy0yLjguNzctNC41MywyLjAzbC0yLjk4LDIuMDZ2My43NkgwVjBoMi4zMmMwLDEuMTMsMCwyLjg2LS4wNiwzLjk5QzYuMjYsMS4zMSw4LjA1LDAsMTAuNCwwYzIuNTMsMCwzLjk2LDEuNjQsMy45Niw1LjM5Ii8+CiAgPC9nPgo8L3N2Zz4K">
 <style>
 :root{color-scheme:dark}
 :root,:root[data-theme="dark"]{
