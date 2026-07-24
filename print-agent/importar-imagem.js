@@ -29,7 +29,7 @@ async function extrairLabelsDaImagem(buffer, mimeType) {
   const client = clienteAnthropic();
   const msg = await client.messages.create({
     model: 'claude-sonnet-5',
-    max_tokens: 2048,
+    max_tokens: 8192, // prints com muitos itens (ex: lista de sinalética) geram bastante JSON — 2048 cortava a resposta no meio
     messages: [{
       role: 'user',
       content: [
@@ -42,7 +42,14 @@ async function extrairLabelsDaImagem(buffer, mimeType) {
   const jsonMatch = texto.match(/\[[\s\S]*\]/);
   if (!jsonMatch) throw new Error('A IA não retornou uma lista reconhecível. Resposta: ' + texto.slice(0, 200));
   let itens;
-  try { itens = JSON.parse(jsonMatch[0]); } catch (e) { throw new Error('JSON da IA inválido: ' + e.message); }
+  try {
+    itens = JSON.parse(jsonMatch[0]);
+  } catch (e) {
+    if (msg.stop_reason === 'max_tokens') {
+      throw new Error('A imagem tem itens demais — a resposta da IA foi cortada pelo limite de tamanho. Tente recortar a imagem em partes menores.');
+    }
+    throw new Error('JSON da IA inválido: ' + e.message);
+  }
   return itens
     .map(it => ({
       nome: String(it.nome || '').trim(),
