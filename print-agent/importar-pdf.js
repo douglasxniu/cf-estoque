@@ -1,9 +1,10 @@
 // Extrai etiquetas de um PDF já gerado por este sistema (public/etiquetas.js ou
 // print-agent/imprimir.js) — esses PDFs têm texto real desenhado via jsPDF, não são
-// imagem, então dá pra ler de volta. Cada página do PDF é sempre uma etiqueta (ver
-// imprimir.js: uma etiqueta por página), então usamos o limite de página como delimitador
-// em vez de depender de algum texto fixo — funciona em qualquer tamanho de etiqueta,
-// inclusive nos formatos pequenos que não têm cabeçalho/rodapé nem contador.
+// imagem, então dá pra ler de volta. Uma página pode conter VÁRIAS etiquetas empilhadas
+// (ex: 10x15cm, até 5 por página — ver imprimir.js) ou só uma (tamanhos menores, sem
+// cabeçalho/rodapé): se a página tem o rodapé "Patrimônio", usamos ele como delimitador
+// entre etiquetas empilhadas; se não tem nenhum (formato pequeno, sem esse campo), a
+// página inteira é uma etiqueta só.
 'use strict';
 const path = require('path');
 
@@ -28,10 +29,10 @@ function agruparLinhasQuebradas(itens) {
   return grupos;
 }
 
-function montarLabelDaPagina(itensPagina) {
+function montarLabelDoGrupo(itensGrupo) {
   let ot = '', nomeOt = '';
   const restantes = [];
-  itensPagina.forEach(it => {
+  itensGrupo.forEach(it => {
     if (pareceRuidoDeCabecalho(it.str)) return;
     if (/^Patrim[oô]nio\b/.test(it.str)) return; // rodapé de patrimônio, descarta
     if (/^\d+\/\d+$/.test(it.str)) return; // contador "2/5", descarta
@@ -72,8 +73,25 @@ async function extrairLabelsDoPDF(buffer) {
     const itensPagina = content.items
       .map(it => ({ str: (it.str || '').trim(), fontSize: Math.abs(it.transform[3]) || Math.abs(it.transform[0]) || 0 }))
       .filter(it => it.str);
-    const label = montarLabelDaPagina(itensPagina);
-    if (label) labels.push(label);
+
+    const temRodape = itensPagina.some(it => /^Patrim[oô]nio\b/.test(it.str));
+    if (temRodape) {
+      // página com uma ou mais etiquetas empilhadas — o rodapé de patrimônio marca o fim de cada uma
+      let grupo = [];
+      itensPagina.forEach(it => {
+        grupo.push(it);
+        if (/^Patrim[oô]nio\b/.test(it.str)) {
+          const label = montarLabelDoGrupo(grupo);
+          if (label) labels.push(label);
+          grupo = [];
+        }
+      });
+      if (grupo.length) { const label = montarLabelDoGrupo(grupo); if (label) labels.push(label); }
+    } else {
+      // sem rodapé (tamanhos pequenos/médios não têm esse campo) — a página inteira é 1 etiqueta
+      const label = montarLabelDoGrupo(itensPagina);
+      if (label) labels.push(label);
+    }
   }
   return agruparIguais(labels);
 }
