@@ -81,49 +81,65 @@ function desenharEtiquetaGrande(doc, lab, W, H, opts, y0 = 0) {
   doc.setFont('helvetica', 'bold'); doc.setFontSize(6); doc.setTextColor(70, 70, 70);
   doc.text(EMPRESA_NOME, empresaX, ty);
 
-  ty = y0 + 9;
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(90, 90, 90);
-  doc.text(`${lab.ot || ''}${lab.nomeOt ? ' - ' + lab.nomeOt : ''}`, pad, ty, { maxWidth: maxW * 0.7 });
+  ty = y0 + 8;
+  // OT + nome do trabalho em negrito — tem que ter destaque, não só uma legenda apagada
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(40, 40, 40);
+  doc.text(linhaUnica(doc, `${lab.ot || ''}${lab.nomeOt ? ' - ' + lab.nomeOt : ''}`, maxW * 0.72), pad, ty);
   doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(120, 120, 120);
   doc.text(`${lab.unitIdx ?? 1}/${lab.unitTotal ?? 1}`, W - pad, ty, { align: 'right' });
 
-  ty += 6.5;
+  ty += 5.5;
   doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(15, 15, 15);
   doc.text(linhaUnica(doc, String(lab.nome || ''), maxW), pad, ty);
 
-  ty += 6;
+  ty += 5;
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(40, 40, 40);
   doc.text(linhaUnica(doc, String(lab.local || ''), maxW), pad, ty);
 
-  ty += 5.5;
-  doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(100, 100, 100);
-  if (lab.obs) doc.text(linhaUnica(doc, String(lab.obs), maxW), pad, ty);
+  if (lab.obs) {
+    ty += 4.5;
+    doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(100, 100, 100);
+    doc.text(linhaUnica(doc, String(lab.obs), maxW), pad, ty);
+  }
 
+  // rodapé fica ancorado no fundo, mas nunca mais perto do que 3.5mm da última linha de
+  // conteúdo acima dele — um rodapé fixo em y0+H-3.5 colidia com a obs quando ela existia
+  // (a baseline da obs ficava abaixo da posição fixa do rodapé, sobrepondo os dois textos)
+  const rodapeY = Math.max(y0 + H - 3.5, ty + 3.5);
   doc.setFont('helvetica', 'normal'); doc.setFontSize(6); doc.setTextColor(150, 150, 150);
-  doc.text(`Patrimônio ${EMPRESA_NOME}`, pad, y0 + H - 3.5, { maxWidth: maxW });
+  doc.text(`Patrimônio ${EMPRESA_NOME}`, pad, rodapeY, { maxWidth: maxW });
 }
 
 function desenharEtiquetaMedia(doc, lab, W, H, y0 = 0) {
-  const pad = 3, maxW = W - 2 * pad;
-  let ty = y0 + 5;
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(6); doc.setTextColor(110, 110, 110);
-  doc.text(`${lab.ot || ''}${lab.nomeOt ? ' - ' + lab.nomeOt : ''}`, pad, ty, { maxWidth: maxW * 0.7 });
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(6); doc.setTextColor(140, 140, 140);
-  doc.text(`${lab.unitIdx ?? 1}/${lab.unitTotal ?? 1}`, W - pad, ty, { align: 'right' });
+  // conteúdo centralizado (horizontal e vertical) dentro da área útil da etiqueta —
+  // monta a pilha de linhas que existem (obs é opcional) e centraliza o bloco todo,
+  // em vez de ancorar tudo fixo no topo.
+  const pad = 5, maxW = W - 2 * pad, cx = W / 2;
 
-  ty += 6.5;
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(15, 15, 15);
-  doc.text(linhaUnica(doc, String(lab.nome || ''), maxW), pad, ty);
+  // OT e nome do trabalho com destaque próprio (negrito, tamanho maior) — não é só uma
+  // legenda pequena, é informação tão importante quanto o nome do item pra saber de qual
+  // trabalho essa peça é.
+  const linhas = [];
+  if (lab.ot) linhas.push({ texto: linhaUnica(doc, String(lab.ot), maxW), fonte: 9.5, bold: true, cor: [20, 20, 20], altura: 5 });
+  if (lab.nomeOt) linhas.push({ texto: linhaUnica(doc, String(lab.nomeOt), maxW), fonte: 8.5, bold: true, cor: [50, 50, 50], altura: 4.5 });
+  linhas.push({ texto: linhaUnica(doc, String(lab.nome || ''), maxW), fonte: 12, bold: true, cor: [15, 15, 15], altura: 6.5 });
+  if (lab.local) linhas.push({ texto: linhaUnica(doc, String(lab.local), maxW), fonte: 9, cor: [50, 50, 50], altura: 5.5 });
+  if (lab.obs) linhas.push({ texto: linhaUnica(doc, String(lab.obs), maxW), fonte: 7.5, italic: true, cor: [110, 110, 110], altura: 5 });
 
-  ty += 6;
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(50, 50, 50);
-  doc.text(linhaUnica(doc, String(lab.local || ''), maxW), pad, ty);
+  const totalH = linhas.reduce((s, l) => s + l.altura, 0);
+  let ty = y0 + (H - totalH) / 2 + linhas[0].altura * 0.7;
 
-  if (lab.obs) {
-    ty += 5;
-    doc.setFont('helvetica', 'italic'); doc.setFontSize(7); doc.setTextColor(110, 110, 110);
-    doc.text(linhaUnica(doc, String(lab.obs), maxW), pad, ty);
-  }
+  linhas.forEach(l => {
+    doc.setFont('helvetica', l.italic ? 'italic' : (l.bold ? 'bold' : 'normal'));
+    doc.setFontSize(l.fonte);
+    doc.setTextColor(...l.cor);
+    doc.text(l.texto, cx, ty, { align: 'center' });
+    ty += l.altura;
+  });
+
+  // contador "2/5" discreto no canto — fica fora da pilha centralizada
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(6); doc.setTextColor(170, 170, 170);
+  doc.text(`${lab.unitIdx ?? 1}/${lab.unitTotal ?? 1}`, W - pad, y0 + H - 3, { align: 'right' });
 }
 
 function desenharEtiquetaPequena(doc, lab, W, H, y0 = 0) {
@@ -173,7 +189,10 @@ async function desenharEtiquetaQr(doc, lab, W, H, nivel, y0 = 0) {
 async function gerarPDF(labels, opts = {}) {
   const tam = TAMANHOS[opts.tamanho] || TAMANHOS[TAMANHO_PADRAO];
   const { w: W, h: H, porPagina = 1 } = tam;
-  const doc = new jsPDF({ unit: 'mm', format: [W, H] });
+  // jsPDF assume retrato por padrão e pode reinterpretar a orientação do [W,H] passado —
+  // precisa dizer explicitamente quando a etiqueta é mais larga que alta (a maioria dos
+  // tamanhos aqui, exceto o 10x15cm), senão ele gira a página sem avisar.
+  const doc = new jsPDF({ unit: 'mm', format: [W, H], orientation: W > H ? 'landscape' : 'portrait' });
   const subH = H / porPagina;
   // empilhado usa sempre o layout completo (cabeçalho+rodapé) — já testado que cabe numa
   // faixa de ~30mm; fora do modo empilhado, o nível depende do tamanho físico real da etiqueta
