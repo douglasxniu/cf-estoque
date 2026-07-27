@@ -69,6 +69,22 @@ function linhaUnica(doc, texto, maxWidth) {
   return linha + '…';
 }
 
+// pra campos que não podem simplesmente truncar (ex: nome da OT, que pode crescer no
+// futuro) — reduz o tamanho da fonte em passos pequenos até caber inteiro na largura
+// disponível; só recorre a reticências (via linhaUnica) se nem no tamanho mínimo couber.
+// Requer que doc.setFont (família/estilo) já esteja configurado por quem chama, já que a
+// largura do texto depende disso.
+function fonteResponsiva(doc, texto, maxWidth, fonteMax, fonteMin) {
+  let fonte = fonteMax;
+  doc.setFontSize(fonte);
+  while (fonte > fonteMin && doc.getTextWidth(texto) > maxWidth) {
+    fonte = Math.max(fonteMin, fonte - 0.5);
+    doc.setFontSize(fonte);
+  }
+  const coube = doc.getTextWidth(texto) <= maxWidth;
+  return { fonte, texto: coube ? texto : linhaUnica(doc, texto, maxWidth) };
+}
+
 function desenharEtiquetaGrande(doc, lab, W, H, opts, y0 = 0) {
   const pad = 4, maxW = W - 2 * pad;
   const logo = opts.comLogo ? carregarLogoBase64() : false;
@@ -110,36 +126,110 @@ function desenharEtiquetaGrande(doc, lab, W, H, opts, y0 = 0) {
   doc.text(`Patrimônio ${EMPRESA_NOME}`, pad, rodapeY, { maxWidth: maxW });
 }
 
-function desenharEtiquetaMedia(doc, lab, W, H, y0 = 0) {
-  // conteúdo centralizado (horizontal e vertical) dentro da área útil da etiqueta —
-  // monta a pilha de linhas que existem (obs é opcional) e centraliza o bloco todo,
-  // em vez de ancorar tudo fixo no topo.
-  const pad = 5, maxW = W - 2 * pad, cx = W / 2;
+function desenharEtiquetaMedia(doc, lab, W, H, opts = {}, y0 = 0) {
+  const pad = 4, maxW = W - 2 * pad;
 
-  // OT e nome do trabalho com destaque próprio (negrito, tamanho maior) — não é só uma
-  // legenda pequena, é informação tão importante quanto o nome do item pra saber de qual
-  // trabalho essa peça é.
+  // cabeçalho: só a logomarca (opcional) + o nome curto da empresa, sem repetir "niu" (o
+  // logo já mostra) — igual ao padrão já usado nas outras etiquetas/documentos do sistema.
+  // Logo e texto alinhados pelo centro vertical (não pela base do texto), senão a logo
+  // fica visualmente "flutuando" acima da frase.
+  const logo = opts.comLogo ? carregarLogoBase64() : false;
+  const headerY = y0 + 4.3; // baseline do texto
+  let headerX = pad;
+  if (logo) {
+    const logoW = 5, logoH = logoW * LOGO_RATIO;
+    // centro da logo alinhado com a altura-x do texto (~0.3em acima da baseline pra fonte
+    // minúscula), não com a baseline em si
+    doc.addImage(logo, 'PNG', pad, headerY - 0.3 * 2.294 - logoH / 2, logoW, logoH);
+    headerX = pad + logoW + 1.4;
+  }
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); doc.setTextColor(100, 100, 100);
+  doc.text('Experience Agency', headerX, headerY);
+
+  // indicador de unidade: em vez de um número solto, quadradinhos preenchidos até a
+  // posição atual e vazios depois — mostra de cara "esse item faz parte de um grupo de
+  // outros X" sem precisar ler texto. Cai pra um badge numérico só em lotes muito grandes
+  // (mais de 8 unidades), onde uma fileira de quadradinhos ficaria ilegível/apertada.
+  const totalUnidades = lab.unitTotal ?? 1;
+  const idxAtual = lab.unitIdx ?? 1;
+  let larguraColunaDireita = 0;
+  if (totalUnidades <= 8) {
+    const quad = 1.9, gap = 0.7;
+    const n = totalUnidades;
+    const largura = n * quad + (n - 1) * gap;
+    const qx = W - pad - largura, qy = y0 + 2.1;
+    const corPreenchido = totalUnidades > 1 ? [216, 90, 48] : [140, 140, 140];
+    for (let i = 0; i < n; i++) {
+      const x = qx + i * (quad + gap);
+      if (i < idxAtual) {
+        doc.setFillColor(...corPreenchido);
+        doc.roundedRect(x, qy, quad, quad, 0.35, 0.35, 'F');
+      } else {
+        doc.setDrawColor(200, 197, 188); doc.setLineWidth(0.25);
+        doc.roundedRect(x, qy, quad, quad, 0.35, 0.35, 'S');
+      }
+    }
+    // o grafismo sozinho não é auto-explicativo pra quem não conhece o padrão — o número
+    // continua sempre presente junto, embaixo dos quadradinhos
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(6); doc.setTextColor(...corPreenchido);
+    doc.text(`${idxAtual}/${totalUnidades}`, W - pad, qy + quad + 2.6, { align: 'right' });
+    larguraColunaDireita = largura;
+  } else {
+    const textoContador = `${idxAtual}/${totalUnidades}`;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8);
+    const contadorW = doc.getTextWidth(textoContador) + 4, contadorH = 5;
+    const contadorX = W - pad - contadorW, contadorY = y0 + 2;
+    doc.setFillColor(216, 90, 48);
+    doc.roundedRect(contadorX, contadorY, contadorW, contadorH, 1.2, 1.2, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.text(textoContador, contadorX + contadorW / 2, contadorY + contadorH / 2 + 1.1, { align: 'center' });
+    larguraColunaDireita = contadorW;
+  }
+
+  // número da OT e nome do trabalho em linhas separadas (não "OT - Nome" numa linha só) —
+  // nome de trabalho pode crescer bastante no futuro, e numa linha só ou ele empurra a OT
+  // pra fora ou trunca cedo demais. Cada linha encolhe a própria fonte pra caber inteira em
+  // vez de truncar (só recorre a reticências se nem a fonte mínima couber). A linha da OT
+  // reserva a largura da coluna do indicador de unidade (quadradinhos/badge) acima dela;
+  // o nome do trabalho já fica abaixo dessa faixa, então usa a largura toda.
+  const otY = y0 + 9;
+  const otMaxW = maxW - larguraColunaDireita - 2;
+  doc.setFont('helvetica', 'bold'); doc.setTextColor(25, 25, 25);
+  const otResp = fonteResponsiva(doc, String(lab.ot || ''), otMaxW, 9.5, 7);
+  doc.setFontSize(otResp.fonte);
+  doc.text(otResp.texto, pad, otY);
+
+  let ultimaLinhaCabecalhoY = otY;
+  if (lab.nomeOt) {
+    ultimaLinhaCabecalhoY = otY + 4.6;
+    doc.setFont('helvetica', 'bold'); doc.setTextColor(95, 95, 95);
+    const nomeOtResp = fonteResponsiva(doc, String(lab.nomeOt), maxW, 8.5, 6);
+    doc.setFontSize(nomeOtResp.fonte);
+    doc.text(nomeOtResp.texto, pad, ultimaLinhaCabecalhoY);
+  }
+
+  const dividerY = ultimaLinhaCabecalhoY + 2.6;
+  doc.setDrawColor(215, 213, 205); doc.setLineWidth(0.25);
+  doc.line(pad, dividerY, W - pad, dividerY);
+
+  // corpo: nome do item, local e observação — o bloco fica centralizado no espaço que
+  // sobra abaixo do cabeçalho (não colado no topo), pra aproveitar bem o resto da etiqueta.
   const linhas = [];
-  if (lab.ot) linhas.push({ texto: linhaUnica(doc, String(lab.ot), maxW), fonte: 9.5, bold: true, cor: [20, 20, 20], altura: 5 });
-  if (lab.nomeOt) linhas.push({ texto: linhaUnica(doc, String(lab.nomeOt), maxW), fonte: 8.5, bold: true, cor: [50, 50, 50], altura: 4.5 });
-  linhas.push({ texto: linhaUnica(doc, String(lab.nome || ''), maxW), fonte: 12, bold: true, cor: [15, 15, 15], altura: 6.5 });
-  if (lab.local) linhas.push({ texto: linhaUnica(doc, String(lab.local), maxW), fonte: 9, cor: [50, 50, 50], altura: 5.5 });
-  if (lab.obs) linhas.push({ texto: linhaUnica(doc, String(lab.obs), maxW), fonte: 7.5, italic: true, cor: [110, 110, 110], altura: 5 });
+  linhas.push({ texto: linhaUnica(doc, String(lab.nome || ''), maxW), fonte: 14, bold: true, cor: [15, 15, 15], altura: 6.8 });
+  if (lab.local) linhas.push({ texto: linhaUnica(doc, String(lab.local), maxW), fonte: 10, cor: [55, 55, 55], altura: 6 });
+  if (lab.obs) linhas.push({ texto: linhaUnica(doc, String(lab.obs), maxW), fonte: 8.5, italic: true, cor: [110, 110, 110], altura: 5.5 });
 
   const totalH = linhas.reduce((s, l) => s + l.altura, 0);
-  let ty = y0 + (H - totalH) / 2 + linhas[0].altura * 0.7;
+  const espacoDisponivel = (y0 + H) - dividerY - 2;
+  let ty = dividerY + 2 + Math.max(0, (espacoDisponivel - totalH) / 2) + linhas[0].altura * 0.72;
 
   linhas.forEach(l => {
     doc.setFont('helvetica', l.italic ? 'italic' : (l.bold ? 'bold' : 'normal'));
     doc.setFontSize(l.fonte);
     doc.setTextColor(...l.cor);
-    doc.text(l.texto, cx, ty, { align: 'center' });
+    doc.text(l.texto, pad, ty);
     ty += l.altura;
   });
-
-  // contador "2/5" discreto no canto — fica fora da pilha centralizada
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(6); doc.setTextColor(170, 170, 170);
-  doc.text(`${lab.unitIdx ?? 1}/${lab.unitTotal ?? 1}`, W - pad, y0 + H - 3, { align: 'right' });
 }
 
 function desenharEtiquetaPequena(doc, lab, W, H, y0 = 0) {
@@ -207,7 +297,7 @@ async function gerarPDF(labels, opts = {}) {
 
     if (lab.tipoQr) await desenharEtiquetaQr(doc, lab, W, subH, nivel, y0);
     else if (nivel === 'grande') desenharEtiquetaGrande(doc, lab, W, subH, opts, y0);
-    else if (nivel === 'media') desenharEtiquetaMedia(doc, lab, W, subH, y0);
+    else if (nivel === 'media') desenharEtiquetaMedia(doc, lab, W, subH, opts, y0);
     else desenharEtiquetaPequena(doc, lab, W, subH, y0);
   }
 
