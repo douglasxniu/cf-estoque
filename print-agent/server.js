@@ -381,6 +381,10 @@ button:disabled{opacity:.7;cursor:wait}
     ${Object.entries(TAMANHOS).map(([chave, t]) => `<option value="${chave}" ${chave === TAMANHO_PADRAO ? 'selected' : ''}>${t.label} (${t.w}x${t.h}mm)</option>`).join('')}
   </select>
   <div class="hint">Precisa bater com o rolo físico carregado na impressora — e com o PageSize padrão configurado na fila CUPS (troca de rolo exige reconfigurar isso também).</div>
+  <label class="check-row" style="margin-top:10px">
+    <input type="checkbox" id="comLogo" checked>
+    Incluir a logomarca no cabeçalho da etiqueta
+  </label>
 </div>
 
 <div class="card">
@@ -660,7 +664,7 @@ async function salvarArquivo(){
   botaoOcupado(btn, 'Gerando PDF');
   try {
     const r = await fetch('/api/gerar-pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-      comLogo:false,
+      comLogo:document.getElementById('comLogo').checked,
       tamanho:document.getElementById('tamanho').value,
       comQr:document.getElementById('comQr').checked
     })});
@@ -684,7 +688,7 @@ async function imprimirFila(){
   botaoOcupado(btn, 'Enviando');
   try {
     const r = await fetch('/api/imprimir',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-      comLogo:false,
+      comLogo:document.getElementById('comLogo').checked,
       tamanho:document.getElementById('tamanho').value,
       comQr:document.getElementById('comQr').checked
     })});
