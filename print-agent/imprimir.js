@@ -31,7 +31,7 @@ const TAMANHOS = {
   '57x19': { w: 57, h: 19, label: '5,7 x 1,9 cm', porPagina: 1 },
   '32x25': { w: 32, h: 25, label: '3,2 x 2,5 cm', porPagina: 1 }
 };
-const TAMANHO_PADRAO = '100x150';
+const TAMANHO_PADRAO = '76x51'; // rolo físico atualmente carregado/calibrado na impressora
 
 // linha de picote entre etiquetas empilhadas na mesma folha — desenhada segmento a
 // segmento porque o filtro de rasterização da impressora não respeita setLineDashPattern
