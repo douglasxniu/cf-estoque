@@ -561,7 +561,7 @@ async function gerarEtiquetas(){
   const {ot,nomeOt,local}=v;
   const itens=montarLabelsItens(ot,nomeOt,local);
   const labels=[{tipoQr:true,titulo:`OT ${ot}`,url:`${location.origin}/ot-resumo.html?ot=${encodeURIComponent(ot)}`},...itens];
-  await imprimirEtiquetasItens(labels,`etiquetas-${ot}.pdf`);
+  await imprimirEtiquetaTermica(labels,`etiquetas-${ot}.pdf`);
 
   // registra na fila de impressão térmica (preparação pra automação futura — não bloqueia
   // a geração do PDF se falhar, é só um registro auxiliar)

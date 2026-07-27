@@ -88,6 +88,22 @@ function linhaUnica(doc, texto, maxWidth) {
   return linha + '…';
 }
 
+// pra campos que não podem simplesmente truncar (ex: nome da OT, que pode crescer no
+// futuro) — reduz o tamanho da fonte em passos pequenos até caber inteiro na largura
+// disponível; só recorre a reticências (via linhaUnica) se nem no tamanho mínimo couber.
+// Requer que doc.setFont (família/estilo) já esteja configurado por quem chama, já que a
+// largura do texto depende disso.
+function fonteResponsiva(doc, texto, maxWidth, fonteMax, fonteMin) {
+  let fonte = fonteMax;
+  doc.setFontSize(fonte);
+  while (fonte > fonteMin && doc.getTextWidth(texto) > maxWidth) {
+    fonte = Math.max(fonteMin, fonte - 0.5);
+    doc.setFontSize(fonte);
+  }
+  const coube = doc.getTextWidth(texto) <= maxWidth;
+  return { fonte, texto: coube ? texto : linhaUnica(doc, texto, maxWidth) };
+}
+
 // Etiquetas de item (sem QR) pra colar no equipamento físico — grade 2x7 fixa em A4,
 // célula sempre do mesmo tamanho. Cada label: [{ot, nomeOt, nome, local, obs, unitIdx, unitTotal}]
 // ou, pra etiqueta de resumo, {tipoQr:true, titulo, url}.
@@ -195,59 +211,125 @@ async function imprimirEtiquetasItens(labels, filename = 'etiquetas-itens.pdf') 
   if (doc) doc.save(filename);
 }
 
-// Etiqueta térmica pra etiquetadoras 10x15cm (ex: Zebra GC420d) — folha de 100x150mm com
-// até 5 etiquetas de 100x30mm empilhadas, linha de picote entre elas. Mesmo formato de
-// label da versão A4 (sem tipoQr — não cabe nesse tamanho menor). Só gera/baixa o PDF;
-// não imprime sozinho — ver print-agent/ pra impressão via linha de comando nesta máquina.
+// Etiqueta térmica pra etiquetadoras (ex: Zebra GC420d) — padrão 76x51mm, uma etiqueta por
+// página. Cabeçalho só com logo + "Experience Agency" (sem repetir "niu"); OT e nome do
+// trabalho em linhas separadas logo abaixo, cada uma com fonte responsiva (encolhe pra
+// caber inteira antes de truncar); contador de unidade como quadradinhos preenchidos/
+// vazios (com o número sempre junto) — mesmo desenho usado no print-agent (imprimir.js),
+// só portado pra rodar no navegador via jsPDF em vez de Node. Só gera/baixa o PDF; não
+// imprime sozinho — ver print-agent/ pra impressão direta na Zebra desta máquina.
 async function construirEtiquetaTermicaPDF(labels) {
   if (typeof window.jspdf === 'undefined') { alert('Gerador de PDF não carregou.'); return null; }
   const { jsPDF } = window.jspdf;
-  const PAGE_W = 100, PAGE_H = 150, TOPO = 3, BASE = 3, POR_PAGINA = 5, pad = 4;
-  const ALTURA_LABEL = (PAGE_H - TOPO - BASE) / POR_PAGINA;
+  const W = 76, H = 51, pad = 4, maxW = W - 2 * pad;
   const logoImg = await logoNiuDataUrl().catch(() => null);
 
-  const doc = new jsPDF({ unit: 'mm', format: [PAGE_W, PAGE_H] });
+  const doc = new jsPDF({ unit: 'mm', format: [W, H], orientation: W > H ? 'landscape' : 'portrait' });
 
-  // linha de picote desenhada segmento a segmento — filtros de rasterização de
-  // etiquetadoras térmicas costumam não respeitar setLineDashPattern do PDF
-  function linhaPicote(y) {
-    doc.setDrawColor(60, 60, 60); doc.setLineWidth(0.35);
-    for (let x = 0; x < PAGE_W; x += 3.2) doc.line(x, y, Math.min(x + 2, PAGE_W), y);
+  function desenharQr(lab, idx) {
+    const qrImg = qrDataUrl(lab.url, 5);
+    const qrSize = Math.min(W * 0.42, H - 2 * pad);
+    doc.addImage(qrImg, 'PNG', pad, (H - qrSize) / 2, qrSize, qrSize);
+    const tx = pad + qrSize + pad, tMaxW = W - qrSize - 3 * pad;
+    let ty = H / 2 - 1;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(15, 15, 15);
+    doc.text(String(lab.titulo || 'Resumo da OT'), tx, ty, { maxWidth: tMaxW });
   }
 
-  const semQr = labels.filter(l => !l.tipoQr);
-  semQr.forEach((lab, idx) => {
-    const posNaPagina = idx % POR_PAGINA;
-    if (idx > 0 && posNaPagina === 0) doc.addPage();
-    const y = TOPO + posNaPagina * ALTURA_LABEL;
-    if (posNaPagina > 0) linhaPicote(y);
+  function desenharItem(lab, idx) {
+    // cabeçalho: só a logomarca + o nome curto da empresa, sem repetir "niu"
+    let headerX = pad;
+    const headerY = 4.3;
+    if (logoImg) {
+      const logoW = 5, logoH = logoW * LOGO_RATIO;
+      doc.addImage(logoImg, 'PNG', pad, headerY - 0.3 * 2.294 - logoH / 2, logoW, logoH);
+      headerX = pad + logoW + 1.4;
+    }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); doc.setTextColor(100, 100, 100);
+    doc.text(EMPRESA_NOME_CURTO, headerX, headerY);
 
-    const maxW = PAGE_W - 2 * pad;
-    const logoW = 6, logoH = logoW * LOGO_RATIO;
-    if (logoImg) doc.addImage(logoImg, 'PNG', pad, y + 2, logoW, logoH);
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(6); doc.setTextColor(70, 70, 70);
-    doc.text(EMPRESA_NOME, pad + logoW + 1.5, y + 4.3);
+    // indicador de unidade: quadradinhos preenchidos até a posição atual e vazios depois,
+    // com o número sempre junto embaixo — cai pra um badge numérico sozinho acima de 8
+    // unidades, onde a fileira de quadrados ficaria ilegível/apertada
+    const totalUnidades = lab.unitTotal ?? 1;
+    const idxAtual = lab.unitIdx ?? (idx + 1);
+    let larguraColunaDireita = 0;
+    if (totalUnidades <= 8) {
+      const quad = 1.9, gap = 0.7;
+      const n = totalUnidades;
+      const largura = n * quad + (n - 1) * gap;
+      const qx = W - pad - largura, qy = 2.1;
+      const corPreenchido = totalUnidades > 1 ? [216, 90, 48] : [140, 140, 140];
+      for (let i = 0; i < n; i++) {
+        const x = qx + i * (quad + gap);
+        if (i < idxAtual) {
+          doc.setFillColor(...corPreenchido);
+          doc.roundedRect(x, qy, quad, quad, 0.35, 0.35, 'F');
+        } else {
+          doc.setDrawColor(200, 197, 188); doc.setLineWidth(0.25);
+          doc.roundedRect(x, qy, quad, quad, 0.35, 0.35, 'S');
+        }
+      }
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(6); doc.setTextColor(...corPreenchido);
+      doc.text(`${idxAtual}/${totalUnidades}`, W - pad, qy + quad + 2.6, { align: 'right' });
+      larguraColunaDireita = largura;
+    } else {
+      const textoContador = `${idxAtual}/${totalUnidades}`;
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(8);
+      const contadorW = doc.getTextWidth(textoContador) + 4, contadorH = 5;
+      const contadorX = W - pad - contadorW, contadorY = 2;
+      doc.setFillColor(216, 90, 48);
+      doc.roundedRect(contadorX, contadorY, contadorW, contadorH, 1.2, 1.2, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.text(textoContador, contadorX + contadorW / 2, contadorY + contadorH / 2 + 1.1, { align: 'center' });
+      larguraColunaDireita = contadorW;
+    }
 
-    let ty = y + 9;
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(90, 90, 90);
-    doc.text(`${lab.ot || ''}${lab.nomeOt ? ' - ' + lab.nomeOt : ''}`, pad, ty, { maxWidth: maxW * 0.7 });
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(120, 120, 120);
-    doc.text(`${lab.unitIdx ?? idx + 1}/${lab.unitTotal ?? semQr.length}`, PAGE_W - pad, ty, { align: 'right' });
+    // número da OT e nome do trabalho em linhas separadas, cada uma com fonte responsiva
+    const otY = 9;
+    const otMaxW = maxW - larguraColunaDireita - 2;
+    doc.setFont('helvetica', 'bold'); doc.setTextColor(25, 25, 25);
+    const otResp = fonteResponsiva(doc, String(lab.ot || ''), otMaxW, 9.5, 7);
+    doc.setFontSize(otResp.fonte);
+    doc.text(otResp.texto, pad, otY);
 
-    ty += 5.5;
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(15, 15, 15);
-    doc.text(linhaUnica(doc, String(lab.nome || ''), maxW), pad, ty);
+    let ultimaLinhaCabecalhoY = otY;
+    if (lab.nomeOt) {
+      ultimaLinhaCabecalhoY = otY + 4.6;
+      doc.setFont('helvetica', 'bold'); doc.setTextColor(95, 95, 95);
+      const nomeOtResp = fonteResponsiva(doc, String(lab.nomeOt), maxW, 8.5, 6);
+      doc.setFontSize(nomeOtResp.fonte);
+      doc.text(nomeOtResp.texto, pad, ultimaLinhaCabecalhoY);
+    }
 
-    ty += 5;
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(40, 40, 40);
-    doc.text(linhaUnica(doc, String(lab.local || ''), maxW), pad, ty);
+    const dividerY = ultimaLinhaCabecalhoY + 2.6;
+    doc.setDrawColor(215, 213, 205); doc.setLineWidth(0.25);
+    doc.line(pad, dividerY, W - pad, dividerY);
 
-    ty += 4.5;
-    doc.setFont('helvetica', 'italic'); doc.setFontSize(7); doc.setTextColor(100, 100, 100);
-    if (lab.obs) doc.text(linhaUnica(doc, String(lab.obs), maxW), pad, ty);
+    // corpo: nome do item, local e observação, centralizados no espaço que sobra abaixo
+    // do cabeçalho
+    const linhas = [];
+    linhas.push({ texto: linhaUnica(doc, String(lab.nome || ''), maxW), fonte: 14, bold: true, cor: [15, 15, 15], altura: 6.8 });
+    if (lab.local) linhas.push({ texto: linhaUnica(doc, String(lab.local), maxW), fonte: 10, cor: [55, 55, 55], altura: 6 });
+    if (lab.obs) linhas.push({ texto: linhaUnica(doc, String(lab.obs), maxW), fonte: 8.5, italic: true, cor: [110, 110, 110], altura: 5.5 });
 
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(5.5); doc.setTextColor(150, 150, 150);
-    doc.text(`Patrimônio ${EMPRESA_NOME}`, pad, y + ALTURA_LABEL - 2.5, { maxWidth: maxW });
+    const totalH = linhas.reduce((s, l) => s + l.altura, 0);
+    const espacoDisponivel = H - dividerY - 2;
+    let ty = dividerY + 2 + Math.max(0, (espacoDisponivel - totalH) / 2) + linhas[0].altura * 0.72;
+
+    linhas.forEach(l => {
+      doc.setFont('helvetica', l.italic ? 'italic' : (l.bold ? 'bold' : 'normal'));
+      doc.setFontSize(l.fonte);
+      doc.setTextColor(...l.cor);
+      doc.text(l.texto, pad, ty);
+      ty += l.altura;
+    });
+  }
+
+  labels.forEach((lab, idx) => {
+    if (idx > 0) doc.addPage();
+    if (lab.tipoQr) desenharQr(lab, idx);
+    else desenharItem(lab, idx);
   });
 
   return doc;
