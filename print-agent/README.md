@@ -41,7 +41,7 @@ importação de imagem via IA.
 - **QR de resumo da OT** — como primeira etiqueta do lote (só nos tamanhos 10x15cm e
   7,6x5,1cm) ou avulso em qualquer tamanho (útil nos formatos pequenos, só o QR).
 
-## Pendente: calibração de tamanho de página na impressora física
+## Trocando o tamanho físico da etiqueta na impressora
 
 A impressora (fila CUPS `Zebra_Technologies_ZTC_GC420d__EPL_`, driver "Zebra EPL2 Label
 Printer") **só imprime fisicamente algo quando o job usa o `PageSize` padrão ATUAL da
@@ -52,10 +52,28 @@ padrão da fila.
 
 Ou seja: **trocar o "Tamanho da etiqueta" no painel não muda sozinho o que a impressora
 imprime fisicamente** — só muda como o conteúdo é desenhado dentro do espaço que a
-impressora já assume. Pra imprimir num tamanho diferente de verdade, é preciso: carregar o
-rolo físico certo E rodar
-`lpadmin -p Zebra_Technologies_ZTC_GC420d__EPL_ -o PageSize=<preset>` apontando pro tamanho
-mais próximo do rolo (ver `lpoptions -p ... -l` pra lista de presets aceitos).
+impressora já assume. Trocar de verdade pra um rolo de tamanho diferente precisa de **dois
+passos**, os dois obrigatórios:
+
+1. **Trocar o `PageSize` padrão da fila**, apontando pro preset mais próximo do rolo
+   físico novo (ver `lpoptions -p Zebra_Technologies_ZTC_GC420d__EPL_ -l` pra lista de
+   presets aceitos — nem todo tamanho da lista `TAMANHOS` do `imprimir.js` tem um preset
+   exato, ex: 57x19 e 32x25 não têm). Isso dá pra fazer sem sudo, a nível de usuário:
+   ```bash
+   lpoptions -p Zebra_Technologies_ZTC_GC420d__EPL_ -o PageSize=<preset>
+   ```
+   Presets já calibrados: `w288h360` = 10x15cm (100x150mm), `w216h144` = 7,6x5,1cm (76x51mm).
+
+2. **Recalibrar o sensor de gap na própria impressora** — sem isso, ela continua "lendo" o
+   comprimento do rolo antigo e sai imprimindo etiquetas em branco/cortadas até se perder
+   (foi exatamente o que aconteceu ao trocar pro rolo de 76x51mm sem recalibrar: saíram 7
+   etiquetas, várias em branco, de um job que devia gerar só 1). Com a impressora ligada:
+   segurar o botão **FEED** até a luz de status **piscar duas vezes**, soltar logo em
+   seguida — ela puxa e mede algumas etiquetas sozinha pra aprender o novo tamanho/gap.
+
+Os dois passos são independentes: mudar só o `PageSize` sem recalibrar (ou vice-versa) não
+resolve. Sempre testar com **uma etiqueta só** depois de trocar de rolo, antes de mandar um
+lote inteiro.
 
 Também já observamos que um PDF com imagem embutida grande (o logo) pode corromper o
 stream EPL e causar impressão em loop/lixo — por precaução, `imprimir()` só embute o logo
