@@ -290,9 +290,12 @@ button:active{transform:scale(.98)}
 .empty{color:var(--muted);text-align:center;padding:24px 10px;font-size:.85rem}
 .counter{background:var(--surface-3);color:var(--muted);border:1px solid var(--border);font-size:.68rem;font-weight:700;border-radius:20px;padding:3px 10px;margin-left:8px}
 .footer-actions{display:flex;gap:8px;margin-top:18px;position:sticky;bottom:16px}
-.brand{display:flex;align-items:center;gap:12px;margin-bottom:22px}
+.brand{display:flex;align-items:center;gap:12px;margin-bottom:12px}
 .brand svg{width:50px;height:auto;flex-shrink:0;color:var(--text)}
 .brand-info{flex:1;min-width:0}
+.eco-links{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:22px}
+.eco-links a{display:inline-flex;align-items:center;gap:5px;font-size:.72rem;font-weight:600;color:var(--muted);background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:5px 10px;text-decoration:none}
+.eco-links a:hover{color:var(--text);background:var(--surface-3)}
 .theme-toggle{width:36px;height:36px;border-radius:10px;background:var(--surface);border:1px solid var(--border);color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;padding:0}
 .theme-toggle:hover{color:var(--text);background:var(--surface-2)}
 .theme-toggle svg{width:17px;height:17px}
@@ -364,6 +367,12 @@ button:disabled{opacity:.7;cursor:wait}
     <svg class="ic-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
     <svg class="ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
   </button>
+</div>
+
+<div class="eco-links">
+  <a href="https://estoque.niupt.workers.dev" target="_blank" title="Dashboard / Estoque (NIU Estoque)">📊 Dashboard</a>
+  <a href="https://niumapas.pages.dev" target="_blank" title="Mapa de Instalação">🗺 Mapa</a>
+  <a href="https://niukanban.pages.dev" target="_blank" title="Kanban de produção">🗂 Kanban</a>
 </div>
 
 <div class="card">
