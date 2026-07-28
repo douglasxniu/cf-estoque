@@ -570,14 +570,15 @@ async function gerarEtiquetas(){
     itens:itens.map(l=>({nome:l.nome,local:l.local,obs:l.obs,unitIdx:l.unitIdx,unitTotal:l.unitTotal}))
   })}).catch(()=>{});
 }
-// hostname mDNS estável (não IP — IP muda por DHCP) da máquina onde o print-agent roda,
-// conectada à impressora por USB — mesmo host já usado no link "Etiquetas Térmicas" do
-// menu lateral, funciona de qualquer dispositivo na mesma rede. Os dados vão embutidos na
-// própria URL (não via fetch em segundo plano) porque o navegador bloqueia silenciosamente
-// fetch() de uma página HTTPS pra um destino HTTP ("mixed content") — só uma navegação de
-// verdade (abrir a URL) é permitida; é a própria página do print-agent, já em HTTP nos dois
-// lados, que manda os dados pro backend dela (ver importarDaQueryString no server.js).
-const PRINT_AGENT_URL = 'http://Douglas-Studio-2.local:4000';
+// IP direto (não hostname mDNS) da máquina onde o print-agent roda, conectada à impressora
+// por USB. Essa máquina tem Ethernet E Wi-Fi ativos ao mesmo tempo, em sub-redes
+// diferentes — o hostname "Douglas-Studio-2.local" (mDNS) respondia com um IP que outros
+// computadores na rede não conseguiam alcançar (ERR_ADDRESS_UNREACHABLE), então trocamos
+// pro IP da rede Wi-Fi, que é a que os outros dispositivos realmente usam.
+// ATENÇÃO: esse IP vem de DHCP e pode mudar se o roteador reatribuir o endereço (reboot da
+// máquina, do roteador, etc) — o ideal é reservar esse IP fixo pra essa máquina nas
+// configurações do roteador; sem isso, esse link pode voltar a quebrar mais cedo ou tarde.
+const PRINT_AGENT_URL = 'http://192.168.23.185:4000';
 
 async function enviarParaZebra(){
   const v=validarParaEtiquetas();
