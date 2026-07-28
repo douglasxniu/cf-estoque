@@ -170,13 +170,28 @@ function podeIncluirQrNoLote(tamanhoChave) {
   return nivelDeConteudo(tam.w, tam.h) !== 'pequena';
 }
 
+// manda o estado atual da fila (o que está sendo impresso agora) pro Estoque guardar como
+// "resumo público" dessa OT — o QR da etiqueta aponta pra lá. Não é a mesma coisa que uma
+// OT real do Estoque (a fila daqui pode ter itens de sistemas externos, sem correspondência
+// nenhuma em "solicitacoes"), por isso é uma tabela/rota própria (ver etiqueta-resumo.html
+// e /api/etiquetas-resumo no worker.js), não /api/ot/:ot.
+async function publicarResumoDaOt() {
+  const itens = fila.map(l => ({ nome: l.nome, local: l.local, obs: l.obs, quantidade: l.quantidade || 1 }));
+  const r = await fetch(`${SITE_URL}/api/etiquetas-resumo`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ot: cabecalho.ot, nomeOt: cabecalho.nomeOt, itens })
+  });
+  if (!r.ok) throw new Error('Não consegui publicar o resumo da OT (' + r.status + ')');
+}
+
 // expande a fila atual (com quantidade) em N etiquetas físicas numeradas 1/N, 2/N...,
 // opcionalmente com o QR de resumo como primeira etiqueta — usado tanto pra imprimir
 // quanto só pra gerar/salvar o PDF.
-function montarLabelsDaFila({ comQr, tamanho }) {
+async function montarLabelsDaFila({ comQr, tamanho }) {
   const labels = [];
   if (comQr && cabecalho.ot && podeIncluirQrNoLote(tamanho)) {
-    labels.push({ tipoQr: true, titulo: `OT ${cabecalho.ot}`, url: `${SITE_URL}/ot-resumo.html?ot=${encodeURIComponent(cabecalho.ot)}` });
+    await publicarResumoDaOt();
+    labels.push({ tipoQr: true, titulo: `OT ${cabecalho.ot}`, url: `${SITE_URL}/etiqueta-resumo.html?ot=${encodeURIComponent(cabecalho.ot)}` });
   }
   fila.forEach(l => {
     const total = l.quantidade || 1;
@@ -190,8 +205,8 @@ function montarLabelsDaFila({ comQr, tamanho }) {
 app.post('/api/imprimir', async (req, res) => {
   if (!fila.length) return res.status(400).json({ error: 'A fila está vazia.' });
   const tamanho = req.body.tamanho;
-  const labels = montarLabelsDaFila({ comQr: req.body.comQr, tamanho });
   try {
+    const labels = await montarLabelsDaFila({ comQr: req.body.comQr, tamanho });
     const arquivo = await imprimir(labels, { comLogo: !!req.body.comLogo, tamanho });
     fila = [];
     res.json({ ok: true, arquivo });
@@ -205,8 +220,8 @@ app.post('/api/imprimir', async (req, res) => {
 app.post('/api/gerar-pdf', async (req, res) => {
   if (!fila.length) return res.status(400).json({ error: 'A fila está vazia.' });
   const tamanho = req.body.tamanho;
-  const labels = montarLabelsDaFila({ comQr: req.body.comQr, tamanho });
   try {
+    const labels = await montarLabelsDaFila({ comQr: req.body.comQr, tamanho });
     const doc = await gerarPDF(labels, { comLogo: !!req.body.comLogo, tamanho });
     const buffer = Buffer.from(doc.output('arraybuffer'));
     const nome = `etiquetas${cabecalho.ot ? '-' + cabecalho.ot.replace(/[^\w-]/g, '') : ''}-${Date.now()}.pdf`;
@@ -218,11 +233,14 @@ app.post('/api/gerar-pdf', async (req, res) => {
 });
 
 // imprime só uma etiqueta com o QR de resumo da OT, sem nenhum item — funciona em
-// qualquer tamanho, inclusive os pequenos (só o QR, sem texto do lado).
+// qualquer tamanho, inclusive os pequenos (só o QR, sem texto do lado). Pode ser usado com
+// a fila vazia (ex: reimprimir um QR avulso pra uma OT já publicada antes), então só
+// republica o resumo se tiver algo na fila agora — senão o QR aponta pro que já estava lá.
 app.post('/api/imprimir-qr', async (req, res) => {
   if (!cabecalho.ot) return res.status(400).json({ error: 'Preencha a OT no cabeçalho antes.' });
-  const labels = [{ tipoQr: true, titulo: `OT ${cabecalho.ot}`, url: `${SITE_URL}/ot-resumo.html?ot=${encodeURIComponent(cabecalho.ot)}` }];
   try {
+    if (fila.length) await publicarResumoDaOt();
+    const labels = [{ tipoQr: true, titulo: `OT ${cabecalho.ot}`, url: `${SITE_URL}/etiqueta-resumo.html?ot=${encodeURIComponent(cabecalho.ot)}` }];
     const arquivo = await imprimir(labels, { tamanho: req.body.tamanho });
     res.json({ ok: true, arquivo });
   } catch (e) {

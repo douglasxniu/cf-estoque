@@ -80,3 +80,12 @@ CREATE TABLE fila_impressao_etiquetas (
   impresso INTEGER NOT NULL DEFAULT 0,
   criado_em TEXT DEFAULT (datetime('now'))
 );
+
+-- Resumo público de uma OT alimentada no painel de Etiquetas Térmicas (print-agent) — ver
+-- migration_etiquetas_resumo.sql.
+CREATE TABLE etiquetas_resumo (
+  ot TEXT PRIMARY KEY,
+  nome_ot TEXT,
+  itens_json TEXT NOT NULL,
+  atualizado_em TEXT DEFAULT (datetime('now'))
+);

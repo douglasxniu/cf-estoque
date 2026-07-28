@@ -25,14 +25,16 @@ const PUBLIC_ROUTES = [
   { method: "POST", path: "/api/solicitacoes/lote" },
   { method: "GET", path: "/api/auth/status" },
   { method: "POST", path: "/api/auth/bootstrap" },
-  { method: "POST", path: "/api/auth/login" }
+  { method: "POST", path: "/api/auth/login" },
+  { method: "POST", path: "/api/etiquetas-resumo" }
 ];
 // GET /api/ot/:ot e GET /api/unidades/:id precisam ser públicos: são acessados pelo QR
 // físico colado no item / link do email, sem que quem lê tenha o token de admin.
 const PUBLIC_ROUTE_PATTERNS = [
   { method: "GET", pattern: /^\/api\/ot\/[^/]+$/ },
   { method: "GET", pattern: /^\/api\/unidades\/\d+$/ },
-  { method: "GET", pattern: /^\/api\/itens\/\d+\/imagem$/ }
+  { method: "GET", pattern: /^\/api\/itens\/\d+\/imagem$/ },
+  { method: "GET", pattern: /^\/api\/etiquetas-resumo\/.+$/ }
 ];
 
 function isPublicRoute(path, method) {
@@ -810,6 +812,38 @@ export default {
         "SELECT s.*, i.modelo AS item_modelo, i.voltagem AS item_voltagem, p.nome AS projeto_nome FROM solicitacoes s LEFT JOIN itens i ON s.item_id = i.id LEFT JOIN projetos p ON s.ot = p.numero WHERE s.ot=? ORDER BY s.id"
       ).bind(ot).all();
       return json(results);
+    }
+
+    // ---------- RESUMO DE ETIQUETAS (painel local print-agent) ----------
+    // Público e sem tabela de origem própria: os itens vêm da fila do print-agent, que
+    // aceita OTs de sistemas externos (não necessariamente cadastradas em "solicitacoes").
+    // O QR "resumo da OT" impresso nas etiquetas aponta pra cá — POST é chamado pelo
+    // print-agent antes de gerar o QR, GET é o que a página pública lê.
+    if (path === "/api/etiquetas-resumo" && method === "POST") {
+      const b = await request.json().catch(() => null);
+      const ot = typeof b?.ot === "string" ? b.ot.trim().slice(0, 60) : "";
+      if (!ot) return json({ error: "ot é obrigatório" }, 400);
+      const nomeOt = typeof b?.nomeOt === "string" ? b.nomeOt.trim().slice(0, 200) : "";
+      const itens = Array.isArray(b?.itens) ? b.itens.slice(0, 200).map(it => ({
+        nome: String(it?.nome || "").slice(0, 200),
+        local: String(it?.local || "").slice(0, 200),
+        obs: String(it?.obs || "").slice(0, 300),
+        quantidade: Math.max(1, Math.min(500, parseInt(it?.quantidade, 10) || 1))
+      })).filter(it => it.nome) : [];
+      if (!itens.length) return json({ error: "nenhum item válido" }, 400);
+      await env.DB.prepare(
+        "INSERT INTO etiquetas_resumo (ot, nome_ot, itens_json, atualizado_em) VALUES (?, ?, ?, datetime('now')) " +
+        "ON CONFLICT(ot) DO UPDATE SET nome_ot=excluded.nome_ot, itens_json=excluded.itens_json, atualizado_em=excluded.atualizado_em"
+      ).bind(ot, nomeOt, JSON.stringify(itens)).run();
+      return json({ ok: true });
+    }
+
+    const etiquetasResumoMatch = path.match(/^\/api\/etiquetas-resumo\/(.+)$/);
+    if (etiquetasResumoMatch && method === "GET") {
+      const ot = decodeURIComponent(etiquetasResumoMatch[1]);
+      const row = await env.DB.prepare("SELECT * FROM etiquetas_resumo WHERE ot=?").bind(ot).first();
+      if (!row) return json({ error: "não encontrado" }, 404);
+      return json({ ot: row.ot, nomeOt: row.nome_ot, itens: JSON.parse(row.itens_json), atualizadoEm: row.atualizado_em });
     }
 
     // ---------- FILA DE IMPRESSÃO TÉRMICA (preparação — sem automação real ainda) ----------
