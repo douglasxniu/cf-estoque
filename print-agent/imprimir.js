@@ -282,7 +282,11 @@ async function gerarPDF(labels, opts = {}) {
   // jsPDF assume retrato por padrão e pode reinterpretar a orientação do [W,H] passado —
   // precisa dizer explicitamente quando a etiqueta é mais larga que alta (a maioria dos
   // tamanhos aqui, exceto o 10x15cm), senão ele gira a página sem avisar.
-  const doc = new jsPDF({ unit: 'mm', format: [W, H], orientation: W > H ? 'landscape' : 'portrait' });
+  // compress:true ativa Flate nos streams do PDF (inclusive imagens) — sem isso, a logo
+  // embutida vai praticamente crua (bitmap RGB sem compressão: 730x200x3 bytes ≈ 438KB só
+  // pra logo numa etiqueta de poucos KB), o que já se mostrou capaz de travar/corromper o
+  // job na fila da Zebra (ver nota no topo do arquivo e no README).
+  const doc = new jsPDF({ unit: 'mm', format: [W, H], orientation: W > H ? 'landscape' : 'portrait', compress: true });
   const subH = H / porPagina;
   // empilhado usa sempre o layout completo (cabeçalho+rodapé) — já testado que cabe numa
   // faixa de ~30mm; fora do modo empilhado, o nível depende do tamanho físico real da etiqueta

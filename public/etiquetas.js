@@ -22,7 +22,7 @@ function construirEtiquetasPDF(labels, opts = {}) {
   const cellH = (H - 2 * M - (rows - 1) * gap) / rows;
   const qrSize = Math.min(cellW, cellH) * 0.62;
 
-  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
   const perPage = cols * rows;
   labels.forEach((lab, idx) => {
     const posOnPage = idx % perPage;
@@ -117,7 +117,7 @@ async function construirEtiquetasItensPDF(labels) {
   const cellW = (W - 2 * M) / cols, cellH = (H - 2 * M) / rows;
   const logoImg = await logoNiuDataUrl().catch(() => null);
 
-  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
   const perPage = cols * rows;
 
   // marcas de corte (cut marks) em cada interseção da grade, em vez de linha de borda —
@@ -224,7 +224,7 @@ async function construirEtiquetaTermicaPDF(labels) {
   const W = 76, H = 51, pad = 4, maxW = W - 2 * pad;
   const logoImg = await logoNiuDataUrl().catch(() => null);
 
-  const doc = new jsPDF({ unit: 'mm', format: [W, H], orientation: W > H ? 'landscape' : 'portrait' });
+  const doc = new jsPDF({ unit: 'mm', format: [W, H], orientation: W > H ? 'landscape' : 'portrait', compress: true });
 
   function desenharQr(lab, idx) {
     const qrImg = qrDataUrl(lab.url, 5);
