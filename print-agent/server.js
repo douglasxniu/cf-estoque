@@ -322,6 +322,10 @@ button:active{transform:scale(.98)}
 .import-row{display:flex;gap:8px;align-items:center}
 .import-row input[type=file]{flex:1;margin-bottom:0;padding:8px}
 .hint{font-size:.72rem;color:var(--muted);margin-top:8px;line-height:1.5}
+.dropzone{border:1.5px dashed var(--border);border-radius:10px;padding:6px;margin-bottom:10px;transition:border-color .15s,background .15s}
+.dropzone.arrastando{border-color:var(--primary);background:rgba(91,140,255,.08)}
+.dropzone-label{display:flex;align-items:center;gap:6px;justify-content:center;font-size:.68rem;color:var(--muted);padding:4px 0 8px}
+.dropzone-label svg{width:13px;height:13px;flex-shrink:0;opacity:.8}
 @keyframes girar{to{transform:rotate(360deg)}}
 .spinner{display:inline-block;width:13px;height:13px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:girar .7s linear infinite;vertical-align:-2px;margin-right:7px}
 .btn-ghost .spinner{border-color:var(--border);border-top-color:var(--text)}
@@ -405,9 +409,12 @@ button:disabled{opacity:.7;cursor:wait}
 
 <div class="card">
   <div class="card-titulo"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>Importar PDF gerado pelo site</div>
-  <div class="import-row">
-    <input type="file" id="arquivoPdf" accept="application/pdf">
-    <button class="btn-ghost btn-sm" id="btnImportarPdf" onclick="importarPdf()">Importar</button>
+  <div class="dropzone" id="dropzonePdf">
+    <div class="dropzone-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>Arraste o PDF aqui, ou escolha o arquivo</div>
+    <div class="import-row">
+      <input type="file" id="arquivoPdf" accept="application/pdf">
+      <button class="btn-ghost btn-sm" id="btnImportarPdf" onclick="importarPdf()">Importar</button>
+    </div>
   </div>
   <div class="progress-bar" id="progressoPdf"><div class="fill"></div></div>
   <div class="hint" id="hintPdf">Lê o texto do PDF e preenche a fila automaticamente. Confira sempre antes de imprimir — em etiquetas muito pequenas (5,7x1,9cm, 3,2x2,5cm) o nome pode vir cortado/incompleto, corrija manualmente se precisar.</div>
@@ -415,9 +422,12 @@ button:disabled{opacity:.7;cursor:wait}
 
 <div class="card">
   <div class="card-titulo"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>Importar print screen de outro sistema (IA)</div>
-  <div class="import-row">
-    <input type="file" id="arquivoImagem" accept="image/*">
-    <button class="btn-ghost btn-sm" id="btnImportarImagem" onclick="importarImagem()">Importar</button>
+  <div class="dropzone" id="dropzoneImagem">
+    <div class="dropzone-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>Arraste a imagem aqui, ou escolha o arquivo</div>
+    <div class="import-row">
+      <input type="file" id="arquivoImagem" accept="image/*">
+      <button class="btn-ghost btn-sm" id="btnImportarImagem" onclick="importarImagem()">Importar</button>
+    </div>
   </div>
   <div class="progress-bar" id="progressoImagem"><div class="fill"></div></div>
   <div class="hint" id="hintImagem">Print de qualquer OT/tabela de produção — a IA identifica itens, variantes (cor/modelo) e quantidades. <b>Sempre revise antes de imprimir</b> — a IA pode interpretar algo errado; use "mesclar" abaixo se ela separar o mesmo item em duas linhas.</div>
@@ -610,6 +620,38 @@ async function importarImagem(){
     pararCarregamento(btn, progresso, hint);
   }
 }
+
+// arrastar um arquivo pra cima da dropzone joga ele no <input type=file> correspondente
+// (via DataTransfer, o mesmo truque que qualquer upload por drag-and-drop usa) e já
+// dispara a importação — sem isso, drag-and-drop só teria efeito visual, sem soltar o
+// arquivo em lugar nenhum de verdade.
+function configurarDropzone(zonaId, inputId, aceita, aoSoltar){
+  const zona = document.getElementById(zonaId);
+  const input = document.getElementById(inputId);
+  ['dragenter','dragover'].forEach(evento => zona.addEventListener(evento, e => {
+    e.preventDefault(); e.stopPropagation();
+    zona.classList.add('arrastando');
+  }));
+  ['dragleave','drop'].forEach(evento => zona.addEventListener(evento, e => {
+    e.preventDefault(); e.stopPropagation();
+    if (evento === 'dragleave' && zona.contains(e.relatedTarget)) return; // saiu pra um filho, não pra fora
+    zona.classList.remove('arrastando');
+  }));
+  zona.addEventListener('drop', e => {
+    const arquivo = e.dataTransfer.files[0];
+    if (!arquivo) return;
+    if (!aceita(arquivo)) { aviso('Tipo de arquivo não aceito aqui.','erro'); return; }
+    const dt = new DataTransfer();
+    dt.items.add(arquivo);
+    input.files = dt.files;
+    aoSoltar();
+  });
+}
+configurarDropzone('dropzonePdf', 'arquivoPdf', f => f.type === 'application/pdf', importarPdf);
+configurarDropzone('dropzoneImagem', 'arquivoImagem', f => f.type.startsWith('image/'), importarImagem);
+// sem isso, soltar um arquivo fora das dropzones (por pouco que seja) faz o Chrome abrir
+// o arquivo direto na aba, saindo do painel
+['dragover','drop'].forEach(evento => window.addEventListener(evento, e => e.preventDefault()));
 
 let revItens=[], revCabecalho=null;
 function abrirRevisao(itens, cabecalhoSugerido){
