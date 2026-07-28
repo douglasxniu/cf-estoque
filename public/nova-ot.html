@@ -183,7 +183,7 @@ select option{background:var(--surface-2)}
   <button class="btn btn-ghost" style="flex:1" onclick="cancelarPagina()">Cancelar</button>
   <button class="btn btn-ghost" style="flex:1" onclick="confirmar(true)" id="btnEmail">Enviar email</button>
   <button class="btn btn-ghost" style="flex:1" onclick="gerarEtiquetas()" id="btnEtiquetas">Gerar Etiquetas</button>
-  <button class="btn btn-ghost" style="flex:1" onclick="gerarEtiquetaTermica()" id="btnEtiquetaTermica" title="PDF 10x15cm pra etiquetadora térmica">Etiqueta Térmica</button>
+  <button class="btn btn-ghost" style="flex:1" onclick="enviarParaZebra()" id="btnImprimirZebra" title="Manda os itens direto pro painel de etiquetas térmicas (localhost:4000) nesta máquina, pra revisar/editar e imprimir">🖨 Imprimir na Zebra</button>
   <button class="btn btn-primary" style="flex:2" onclick="confirmar(false)" id="btnGerarOt">Gerar OT e PDF</button>
 </div>
 
@@ -570,12 +570,39 @@ async function gerarEtiquetas(){
     itens:itens.map(l=>({nome:l.nome,local:l.local,obs:l.obs,unitIdx:l.unitIdx,unitTotal:l.unitTotal}))
   })}).catch(()=>{});
 }
-async function gerarEtiquetaTermica(){
+// URL fixa em localhost — o print-agent só roda na máquina conectada à impressora por USB,
+// então esse botão só funciona ali mesmo. Os dados vão embutidos na própria URL (não via
+// fetch em segundo plano) porque o navegador bloqueia silenciosamente fetch() de uma
+// página HTTPS pra um destino HTTP ("mixed content"), mesmo sendo localhost — só uma
+// navegação de verdade (abrir a URL) é permitida; é o próprio localhost:4000, já em HTTP
+// nos dois lados, que manda os dados pro backend dele (ver importarDaQueryString no
+// server.js).
+const PRINT_AGENT_URL = 'http://localhost:4000';
+
+async function enviarParaZebra(){
   const v=validarParaEtiquetas();
   if(v.erro){await niuAlert(v.erro);return;}
-  const {ot,nomeOt,local}=v;
-  const itens=montarLabelsItens(ot,nomeOt,local);
-  await imprimirEtiquetaTermica(itens,`etiqueta-termica-${ot}.pdf`);
+  const {ot,nomeOt}=v;
+  // não usa montarLabelsItens aqui — aquele já expande em uma entrada por unidade física
+  // (unitIdx/unitTotal), mas a fila do print-agent guarda por item com quantidade (é o
+  // próprio servidor que expande na hora de gerar o PDF), então manda no formato dele.
+  const itens=carrinho.map(c=>({
+    nome:c.nome,
+    local:c.local||v.local,
+    obs:c.obs||'',
+    quantidade:UNIDADES_CONTAVEIS.includes(c.unidade)?Math.max(1,Math.round(c.qty)):1
+  }));
+  const json = JSON.stringify({ot,nomeOt,itens});
+  const dados = btoa(unescape(encodeURIComponent(json))); // base64 seguro pra UTF-8 (acentos)
+  // <a> clicado é tratado como navegação de verdade pelo navegador — window.open() direto
+  // às vezes cai no bloqueador de pop-up dependendo do contexto do clique
+  const link = document.createElement('a');
+  link.href = `${PRINT_AGENT_URL}/?dados=${encodeURIComponent(dados)}`;
+  link.target = '_blank';
+  link.rel = 'noopener';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
 }
 
 function gerarPDF({ot,nome,solic,setor,local,obs,data}){

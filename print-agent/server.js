@@ -129,6 +129,22 @@ app.post('/api/fila/lote', (req, res) => {
   res.json({ ...estado(), adicionados: validos.length });
 });
 
+// recebe os itens direto da tela de editar OT (botão "Imprimir na Zebra") — vêm de um
+// formulário já preenchido pelo usuário, não de leitura automática (IA/PDF), então não
+// passa pelo popup de revisão como as importações. Substitui a fila atual em vez de somar
+// (a fila representa uma OT só de cada vez; misturar com o que já estava lá ia confundir).
+app.post('/api/fila/substituir', (req, res) => {
+  const { ot, nomeOt, itens } = req.body || {};
+  const validos = (Array.isArray(itens) ? itens : []).filter(it => it && String(it.nome || '').trim());
+  if (!validos.length) return res.status(400).json({ error: 'Nenhum item válido recebido.' });
+  cabecalho = { ot: ot || '', nomeOt: nomeOt || '' };
+  fila = validos.map(it => ({
+    nome: String(it.nome).trim(), local: it.local || '', obs: it.obs || '',
+    quantidade: Math.max(1, Math.min(500, parseInt(it.quantidade, 10) || 1))
+  }));
+  res.json(estado());
+});
+
 // mescla várias linhas da fila numa só, somando as quantidades — útil quando a IA (ou
 // importação de PDF) separa o mesmo item em duas linhas por engano
 app.post('/api/fila/mesclar', (req, res) => {
@@ -714,7 +730,30 @@ async function imprimirSoQr(){
     botaoLivre(btn);
   }
 }
-carregar();
+// recebe itens vindos de fora (ex: botão "Imprimir na Zebra" na tela de editar OT do
+// Estoque, que roda em HTTPS) — o navegador bloqueia fetch() em segundo plano de uma
+// página HTTPS pra um destino HTTP mesmo sendo localhost ("mixed content"), então em vez
+// de mandar os dados via fetch, aquele botão só faz uma navegação normal (permitida) pra
+// esta URL com os dados codificados na query string; aqui, já dentro do próprio localhost
+// (http → http, sem bloqueio), é que os dados são de fato enviados pro backend.
+async function importarDaQueryString(){
+  const params = new URLSearchParams(location.search);
+  const dados = params.get('dados');
+  if (!dados) return;
+  history.replaceState(null, '', location.pathname);
+  try {
+    const json = JSON.parse(decodeURIComponent(escape(atob(dados))));
+    const r = await fetch('/api/fila/substituir', {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(json)
+    });
+    const d = await r.json();
+    if (!r.ok) { aviso('Erro ao receber itens da OT: '+(d.error||r.status),'erro'); return; }
+    aviso('Itens da OT '+(json.ot||'')+' recebidos — confira antes de imprimir.','sucesso');
+  } catch(e) {
+    aviso('Não consegui interpretar os dados recebidos: '+e.message,'erro');
+  }
+}
+importarDaQueryString().then(carregar);
 </script>
 </body></html>`);
 });
