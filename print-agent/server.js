@@ -189,14 +189,18 @@ async function publicarResumoDaOt() {
 // quanto só pra gerar/salvar o PDF.
 async function montarLabelsDaFila({ comQr, tamanho }) {
   const labels = [];
+  // publica o resumo (e manda o link em CADA etiqueta de item, não só na de QR dedicada,
+  // se ela existir) sempre que tiver OT preenchida — não só quando "incluir como primeira
+  // etiqueta" está marcado, já que agora o link também aparece no cabeçalho de toda etiqueta
+  const urlResumo = cabecalho.ot ? `${SITE_URL}/etiqueta-resumo.html?ot=${encodeURIComponent(cabecalho.ot)}` : null;
+  if (urlResumo) await publicarResumoDaOt();
   if (comQr && cabecalho.ot && podeIncluirQrNoLote(tamanho)) {
-    await publicarResumoDaOt();
-    labels.push({ tipoQr: true, ot: cabecalho.ot, nomeOt: cabecalho.nomeOt, url: `${SITE_URL}/etiqueta-resumo.html?ot=${encodeURIComponent(cabecalho.ot)}` });
+    labels.push({ tipoQr: true, ot: cabecalho.ot, nomeOt: cabecalho.nomeOt, url: urlResumo });
   }
   fila.forEach(l => {
     const total = l.quantidade || 1;
     for (let i = 1; i <= total; i++) {
-      labels.push({ ot: cabecalho.ot, nomeOt: cabecalho.nomeOt, nome: l.nome, local: l.local, obs: l.obs, unitIdx: i, unitTotal: total });
+      labels.push({ ot: cabecalho.ot, nomeOt: cabecalho.nomeOt, nome: l.nome, local: l.local, obs: l.obs, unitIdx: i, unitTotal: total, qrResumoUrl: urlResumo });
     }
   });
   return labels;

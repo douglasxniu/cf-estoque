@@ -537,10 +537,14 @@ const UNIDADES_CONTAVEIS=['un','pç','cx','rolo'];
 // marcadas 1/5, 2/5...); unidades de medida contínua (m, kg) ficam com etiqueta única.
 function montarLabelsItens(ot,nomeOt,local){
   const labels=[];
+  // mesmo link da etiqueta de QR dedicada, mas em toda etiqueta de item também (cabeçalho,
+  // em tamanho menor) — essas OTs são reais (criadas aqui no Dashboard), então aponta pro
+  // resumo de verdade com status de cada item, não pro resumo genérico do print-agent
+  const qrResumoUrl = ot ? `${location.origin}/ot-resumo.html?ot=${encodeURIComponent(ot)}` : null;
   carrinho.forEach(c=>{
     const total=UNIDADES_CONTAVEIS.includes(c.unidade)?Math.max(1,Math.round(c.qty)):1;
     for(let i=1;i<=total;i++){
-      labels.push({ot,nomeOt,nome:c.nome,local:c.local||local,obs:c.obs,unitIdx:i,unitTotal:total});
+      labels.push({ot,nomeOt,nome:c.nome,local:c.local||local,obs:c.obs,unitIdx:i,unitTotal:total,qrResumoUrl});
     }
   });
   return labels;

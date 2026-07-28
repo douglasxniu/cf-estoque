@@ -2,12 +2,19 @@
 // em vez de um download separado por etiqueta. Usado pela aba "QR Codes" e pelo
 // "Imprimir todas" do modal de Unidades.
 
-function qrDataUrl(url, cell = 6) {
-  const qr = qrcode(0, 'M'); qr.addData(url); qr.make();
+// nível de correção de erro 'L' (~7%, o mínimo) em vez de 'M' — pra uma URL curta como a
+// nossa, mantém a versão do QR na menor possível, com módulos maiores/mais simples. Numa
+// etiquetadora térmica de baixa definição, módulo maior importa mais pra leitura do celular
+// do que resiliência a dano físico (o problema aqui é resolução de impressão, não sujeira).
+// margin = quantos módulos de zona de silêncio (borda branca) entram na própria imagem.
+function qrDataUrl(url, cell = 6, margin = 2) {
+  const qr = qrcode(0, 'L'); qr.addData(url); qr.make();
   const mc = qr.getModuleCount();
-  const cv = document.createElement('canvas'); cv.width = cv.height = mc * cell;
+  const total = mc + margin * 2;
+  const cv = document.createElement('canvas'); cv.width = cv.height = total * cell;
   const cx = cv.getContext('2d');
-  for (let r = 0; r < mc; r++) for (let c = 0; c < mc; c++) { cx.fillStyle = qr.isDark(r, c) ? '#000' : '#fff'; cx.fillRect(c * cell, r * cell, cell, cell); }
+  cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height);
+  for (let r = 0; r < mc; r++) for (let c = 0; c < mc; c++) { if (qr.isDark(r, c)) { cx.fillStyle = '#000'; cx.fillRect((c + margin) * cell, (r + margin) * cell, cell, cell); } }
   return cv.toDataURL('image/png');
 }
 
@@ -270,17 +277,31 @@ async function construirEtiquetaTermicaPDF(labels) {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); doc.setTextColor(100, 100, 100);
     doc.text(EMPRESA_NOME_CURTO, headerX, headerY);
 
+    // QR pequeno de resumo da OT no canto superior direito — mesmo link da etiqueta de QR
+    // dedicada, em toda etiqueta de item também. 15x15mm: menor que isso, o celular tem
+    // dificuldade de ler na resolução da impressora térmica.
+    let larguraColunaDireita = 0;
+    let alturaColunaDireita = 0;
+    if (lab.qrResumoUrl) {
+      const qrSize = 15;
+      const qrX = W - pad - qrSize, qrY = 2;
+      doc.addImage(qrDataUrl(lab.qrResumoUrl, 5), 'PNG', qrX, qrY, qrSize, qrSize);
+      larguraColunaDireita = qrSize;
+      alturaColunaDireita = qrY + qrSize;
+    }
+
     // indicador de unidade: quadradinhos preenchidos até a posição atual e vazios depois,
     // com o número sempre junto embaixo — cai pra um badge numérico sozinho acima de 8
-    // unidades, onde a fileira de quadrados ficaria ilegível/apertada
+    // unidades, onde a fileira de quadrados ficaria ilegível/apertada. Fica embaixo do QR
+    // (mesma coluna à direita) quando o QR existe.
     const totalUnidades = lab.unitTotal ?? 1;
     const idxAtual = lab.unitIdx ?? (idx + 1);
-    let larguraColunaDireita = 0;
+    const topoContador = lab.qrResumoUrl ? alturaColunaDireita + 1.5 : 2.1;
     if (totalUnidades <= 8) {
       const quad = 1.9, gap = 0.7;
       const n = totalUnidades;
       const largura = n * quad + (n - 1) * gap;
-      const qx = W - pad - largura, qy = 2.1;
+      const qx = W - pad - largura, qy = topoContador;
       const corPreenchido = totalUnidades > 1 ? [216, 90, 48] : [140, 140, 140];
       for (let i = 0; i < n; i++) {
         const x = qx + i * (quad + gap);
@@ -294,17 +315,19 @@ async function construirEtiquetaTermicaPDF(labels) {
       }
       doc.setFont('helvetica', 'bold'); doc.setFontSize(6); doc.setTextColor(...corPreenchido);
       doc.text(`${idxAtual}/${totalUnidades}`, W - pad, qy + quad + 2.6, { align: 'right' });
-      larguraColunaDireita = largura;
+      larguraColunaDireita = Math.max(larguraColunaDireita, largura);
+      alturaColunaDireita = (qy + quad + 2.6);
     } else {
       const textoContador = `${idxAtual}/${totalUnidades}`;
       doc.setFont('helvetica', 'bold'); doc.setFontSize(8);
       const contadorW = doc.getTextWidth(textoContador) + 4, contadorH = 5;
-      const contadorX = W - pad - contadorW, contadorY = 2;
+      const contadorX = W - pad - contadorW, contadorY = topoContador;
       doc.setFillColor(216, 90, 48);
       doc.roundedRect(contadorX, contadorY, contadorW, contadorH, 1.2, 1.2, 'F');
       doc.setTextColor(255, 255, 255);
       doc.text(textoContador, contadorX + contadorW / 2, contadorY + contadorH / 2 + 1.1, { align: 'center' });
-      larguraColunaDireita = contadorW;
+      larguraColunaDireita = Math.max(larguraColunaDireita, contadorW);
+      alturaColunaDireita = contadorY + contadorH;
     }
 
     // número da OT e nome do trabalho em linhas separadas, cada uma com fonte responsiva
@@ -319,12 +342,14 @@ async function construirEtiquetaTermicaPDF(labels) {
     if (lab.nomeOt) {
       ultimaLinhaCabecalhoY = otY + 4.6;
       doc.setFont('helvetica', 'bold'); doc.setTextColor(95, 95, 95);
-      const nomeOtResp = fonteResponsiva(doc, String(lab.nomeOt), maxW, 8.5, 6);
+      const nomeOtResp = fonteResponsiva(doc, String(lab.nomeOt), otMaxW, 8.5, 6);
       doc.setFontSize(nomeOtResp.fonte);
       doc.text(nomeOtResp.texto, pad, ultimaLinhaCabecalhoY);
     }
 
-    const dividerY = ultimaLinhaCabecalhoY + 2.6;
+    // a divisória precisa ficar abaixo de qualquer coisa no cabeçalho — tanto o texto da
+    // esquerda quanto a coluna da direita (bem mais alta quando tem QR)
+    const dividerY = Math.max(ultimaLinhaCabecalhoY + 2.6, alturaColunaDireita + 2);
     doc.setDrawColor(215, 213, 205); doc.setLineWidth(0.25);
     doc.line(pad, dividerY, W - pad, dividerY);
 

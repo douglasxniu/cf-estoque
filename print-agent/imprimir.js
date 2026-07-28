@@ -126,7 +126,7 @@ function desenharEtiquetaGrande(doc, lab, W, H, opts, y0 = 0) {
   doc.text(`Patrimônio ${EMPRESA_NOME}`, pad, rodapeY, { maxWidth: maxW });
 }
 
-function desenharEtiquetaMedia(doc, lab, W, H, opts = {}, y0 = 0) {
+async function desenharEtiquetaMedia(doc, lab, W, H, opts = {}, y0 = 0) {
   const pad = 4, maxW = W - 2 * pad;
 
   // cabeçalho: só a logomarca (opcional) + o nome curto da empresa, sem repetir "niu" (o
@@ -146,18 +146,35 @@ function desenharEtiquetaMedia(doc, lab, W, H, opts = {}, y0 = 0) {
   doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); doc.setTextColor(100, 100, 100);
   doc.text('Experience Agency', headerX, headerY);
 
+  // QR pequeno de resumo da OT no canto superior direito — mesmo link da etiqueta de QR
+  // dedicada, só que em toda etiqueta de item também (pra quem já tem a peça em mãos poder
+  // ver o resumo sem precisar procurar a etiqueta de resumo separada). 15x15mm: menor que
+  // isso, testes mostraram que o celular tem dificuldade de ler na resolução da impressora
+  // térmica — módulo físico do QR precisa ficar grande o bastante.
+  let larguraColunaDireita = 0;
+  let alturaColunaDireita = 0;
+  if (lab.qrResumoUrl) {
+    const qrSize = 15;
+    const qrX = W - pad - qrSize, qrY = y0 + 2;
+    const qrImg = await gerarQrDataUrl(lab.qrResumoUrl);
+    doc.addImage(qrImg, 'PNG', qrX, qrY, qrSize, qrSize);
+    larguraColunaDireita = qrSize;
+    alturaColunaDireita = qrY + qrSize - y0;
+  }
+
   // indicador de unidade: em vez de um número solto, quadradinhos preenchidos até a
   // posição atual e vazios depois — mostra de cara "esse item faz parte de um grupo de
   // outros X" sem precisar ler texto. Cai pra um badge numérico só em lotes muito grandes
-  // (mais de 8 unidades), onde uma fileira de quadradinhos ficaria ilegível/apertada.
+  // (mais de 8 unidades), onde uma fileira de quadradinhos ficaria ilegível/apertada. Fica
+  // embaixo do QR (mesma coluna à direita) quando o QR existe.
   const totalUnidades = lab.unitTotal ?? 1;
   const idxAtual = lab.unitIdx ?? 1;
-  let larguraColunaDireita = 0;
+  const topoContador = y0 + (lab.qrResumoUrl ? alturaColunaDireita + 1.5 : 2.1);
   if (totalUnidades <= 8) {
     const quad = 1.9, gap = 0.7;
     const n = totalUnidades;
     const largura = n * quad + (n - 1) * gap;
-    const qx = W - pad - largura, qy = y0 + 2.1;
+    const qx = W - pad - largura, qy = topoContador;
     const corPreenchido = totalUnidades > 1 ? [216, 90, 48] : [140, 140, 140];
     for (let i = 0; i < n; i++) {
       const x = qx + i * (quad + gap);
@@ -173,25 +190,27 @@ function desenharEtiquetaMedia(doc, lab, W, H, opts = {}, y0 = 0) {
     // continua sempre presente junto, embaixo dos quadradinhos
     doc.setFont('helvetica', 'bold'); doc.setFontSize(6); doc.setTextColor(...corPreenchido);
     doc.text(`${idxAtual}/${totalUnidades}`, W - pad, qy + quad + 2.6, { align: 'right' });
-    larguraColunaDireita = largura;
+    larguraColunaDireita = Math.max(larguraColunaDireita, largura);
+    alturaColunaDireita = (qy + quad + 2.6) - y0;
   } else {
     const textoContador = `${idxAtual}/${totalUnidades}`;
     doc.setFont('helvetica', 'bold'); doc.setFontSize(8);
     const contadorW = doc.getTextWidth(textoContador) + 4, contadorH = 5;
-    const contadorX = W - pad - contadorW, contadorY = y0 + 2;
+    const contadorX = W - pad - contadorW, contadorY = topoContador;
     doc.setFillColor(216, 90, 48);
     doc.roundedRect(contadorX, contadorY, contadorW, contadorH, 1.2, 1.2, 'F');
     doc.setTextColor(255, 255, 255);
     doc.text(textoContador, contadorX + contadorW / 2, contadorY + contadorH / 2 + 1.1, { align: 'center' });
-    larguraColunaDireita = contadorW;
+    larguraColunaDireita = Math.max(larguraColunaDireita, contadorW);
+    alturaColunaDireita = (contadorY + contadorH) - y0;
   }
 
   // número da OT e nome do trabalho em linhas separadas (não "OT - Nome" numa linha só) —
   // nome de trabalho pode crescer bastante no futuro, e numa linha só ou ele empurra a OT
   // pra fora ou trunca cedo demais. Cada linha encolhe a própria fonte pra caber inteira em
-  // vez de truncar (só recorre a reticências se nem a fonte mínima couber). A linha da OT
-  // reserva a largura da coluna do indicador de unidade (quadradinhos/badge) acima dela;
-  // o nome do trabalho já fica abaixo dessa faixa, então usa a largura toda.
+  // vez de truncar (só recorre a reticências se nem a fonte mínima couber). As duas linhas
+  // reservam a largura da coluna à direita (QR/quadradinhos/badge), que agora pode ser bem
+  // mais alta que o texto por causa do QR — não afeta a posição Y das linhas, só a largura.
   const otY = y0 + 9;
   const otMaxW = maxW - larguraColunaDireita - 2;
   doc.setFont('helvetica', 'bold'); doc.setTextColor(25, 25, 25);
@@ -203,12 +222,14 @@ function desenharEtiquetaMedia(doc, lab, W, H, opts = {}, y0 = 0) {
   if (lab.nomeOt) {
     ultimaLinhaCabecalhoY = otY + 4.6;
     doc.setFont('helvetica', 'bold'); doc.setTextColor(95, 95, 95);
-    const nomeOtResp = fonteResponsiva(doc, String(lab.nomeOt), maxW, 8.5, 6);
+    const nomeOtResp = fonteResponsiva(doc, String(lab.nomeOt), otMaxW, 8.5, 6);
     doc.setFontSize(nomeOtResp.fonte);
     doc.text(nomeOtResp.texto, pad, ultimaLinhaCabecalhoY);
   }
 
-  const dividerY = ultimaLinhaCabecalhoY + 2.6;
+  // a divisória precisa ficar abaixo de QUALQUER coisa no cabeçalho — tanto o texto da
+  // esquerda (OT/nome) quanto a coluna da direita (que fica bem mais alta quando tem QR)
+  const dividerY = Math.max(ultimaLinhaCabecalhoY + 2.6, y0 + alturaColunaDireita + 2);
   doc.setDrawColor(215, 213, 205); doc.setLineWidth(0.25);
   doc.line(pad, dividerY, W - pad, dividerY);
 
@@ -244,8 +265,13 @@ function desenharEtiquetaPequena(doc, lab, W, H, y0 = 0) {
   }
 }
 
+// errorCorrectionLevel 'L' (~7% de recuperação, o mínimo da especificação) em vez do 'M'
+// padrão da lib — pra uma URL curta como a nossa, isso mantém a versão do QR na menor
+// possível, com módulos maiores/mais simples. Numa impressora térmica de baixa definição,
+// um módulo maior importa mais pra leitura do celular do que a resiliência a dano físico
+// (o problema aqui é resolução de impressão, não etiqueta suja/rasgada).
 async function gerarQrDataUrl(url) {
-  return QRCode.toDataURL(url, { margin: 1, width: 300, color: { dark: '#000000', light: '#ffffff' } });
+  return QRCode.toDataURL(url, { margin: 2, width: 300, errorCorrectionLevel: 'L', color: { dark: '#000000', light: '#ffffff' } });
 }
 
 // etiqueta especial com QR "Resumo da OT" — pensada como uma etiqueta de identificação/
@@ -322,7 +348,7 @@ async function gerarPDF(labels, opts = {}) {
 
     if (lab.tipoQr) await desenharEtiquetaQr(doc, lab, W, subH, nivel, y0);
     else if (nivel === 'grande') desenharEtiquetaGrande(doc, lab, W, subH, opts, y0);
-    else if (nivel === 'media') desenharEtiquetaMedia(doc, lab, W, subH, opts, y0);
+    else if (nivel === 'media') await desenharEtiquetaMedia(doc, lab, W, subH, opts, y0);
     else desenharEtiquetaPequena(doc, lab, W, subH, y0);
   }
 
