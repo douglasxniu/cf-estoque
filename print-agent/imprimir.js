@@ -248,8 +248,10 @@ async function gerarQrDataUrl(url) {
   return QRCode.toDataURL(url, { margin: 1, width: 300, color: { dark: '#000000', light: '#ffffff' } });
 }
 
-// etiqueta especial com QR "Resumo da OT" — o quanto de texto ao lado do QR muda com o
-// tamanho; nos formatos pequenos (pequena) é só o QR, sem texto (não cabe/não precisa).
+// etiqueta especial com QR "Resumo da OT" — pensada como uma etiqueta de identificação/
+// selo postal pra colar do lado de fora de uma caixa/embalagem: precisa dar pra ler o
+// número da OT e o nome do trabalho de longe, sem precisar escanear nada. O QR é só o
+// complemento (link pro resumo completo), não o protagonista.
 async function desenharEtiquetaQr(doc, lab, W, H, nivel, y0 = 0) {
   const qrImg = await gerarQrDataUrl(lab.url);
   if (nivel === 'pequena') {
@@ -257,18 +259,37 @@ async function desenharEtiquetaQr(doc, lab, W, H, nivel, y0 = 0) {
     doc.addImage(qrImg, 'PNG', (W - qrSize) / 2, y0 + (H - qrSize) / 2, qrSize, qrSize);
     return;
   }
-  const pad = nivel === 'grande' ? 4 : 3;
-  const qrSize = Math.min(W * 0.42, H - 2 * pad);
-  doc.addImage(qrImg, 'PNG', pad, y0 + (H - qrSize) / 2, qrSize, qrSize);
+  const pad = nivel === 'grande' ? 5 : 4;
+  const qrSize = nivel === 'grande' ? Math.min(W * 0.36, H - 2 * pad) : Math.min(W * 0.34, H - 2 * pad);
+  const qrY = y0 + pad;
+  doc.addImage(qrImg, 'PNG', pad, qrY, qrSize, qrSize);
+
   const tx = pad + qrSize + pad, tMaxW = W - qrSize - 3 * pad;
-  let ty = y0 + H / 2 - (nivel === 'grande' ? 3 : 1);
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(nivel === 'grande' ? 11 : 8.5); doc.setTextColor(15, 15, 15);
-  doc.text(String(lab.titulo || 'Resumo da OT'), tx, ty, { maxWidth: tMaxW });
-  if (nivel === 'grande') {
-    ty += 6;
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(90, 90, 90);
-    doc.text('Aponte a câmera para ver o resumo', tx, ty, { maxWidth: tMaxW });
+
+  // "OT" como legenda pequena (igual etiqueta de correio: "Nº DE RASTREIO", "REMETENTE"
+  // etc.), o número em si é que precisa ter destaque de verdade
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(nivel === 'grande' ? 7 : 6); doc.setTextColor(140, 140, 140);
+  doc.text('ORDEM DE TRABALHO', tx, y0 + pad + (nivel === 'grande' ? 3.5 : 3), { maxWidth: tMaxW });
+
+  doc.setFont('helvetica', 'bold'); doc.setTextColor(20, 20, 20);
+  const otResp = fonteResponsiva(doc, String(lab.ot || ''), tMaxW, nivel === 'grande' ? 20 : 15, nivel === 'grande' ? 12 : 9);
+  doc.setFontSize(otResp.fonte);
+  const otY = y0 + pad + (nivel === 'grande' ? 12 : 9.5);
+  doc.text(otResp.texto, tx, otY);
+
+  let ultimaY = otY;
+  if (lab.nomeOt) {
+    doc.setFont('helvetica', 'bold'); doc.setTextColor(70, 70, 70);
+    const nomeResp = fonteResponsiva(doc, String(lab.nomeOt), tMaxW, nivel === 'grande' ? 11 : 8.5, nivel === 'grande' ? 8 : 6.5);
+    doc.setFontSize(nomeResp.fonte);
+    ultimaY = otY + (nivel === 'grande' ? 6.5 : 5);
+    doc.text(nomeResp.texto, tx, ultimaY);
   }
+
+  // legenda do QR: ancorada no fundo da etiqueta (não colada no texto acima, que varia de
+  // tamanho) — cabe embaixo do QR ou ao lado do texto, o que sobrar de espaço
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(nivel === 'grande' ? 7.5 : 6); doc.setTextColor(120, 120, 120);
+  doc.text('Aponte a câmera para ver os itens', tx, Math.max(ultimaY + (nivel === 'grande' ? 6 : 4.5), qrY + qrSize - 1.5), { maxWidth: tMaxW });
 }
 
 // labels: array de N {ot, nomeOt, nome, local, obs, unitIdx, unitTotal} — no tamanho de

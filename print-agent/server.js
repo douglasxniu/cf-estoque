@@ -191,7 +191,7 @@ async function montarLabelsDaFila({ comQr, tamanho }) {
   const labels = [];
   if (comQr && cabecalho.ot && podeIncluirQrNoLote(tamanho)) {
     await publicarResumoDaOt();
-    labels.push({ tipoQr: true, titulo: `OT ${cabecalho.ot}`, url: `${SITE_URL}/etiqueta-resumo.html?ot=${encodeURIComponent(cabecalho.ot)}` });
+    labels.push({ tipoQr: true, ot: cabecalho.ot, nomeOt: cabecalho.nomeOt, url: `${SITE_URL}/etiqueta-resumo.html?ot=${encodeURIComponent(cabecalho.ot)}` });
   }
   fila.forEach(l => {
     const total = l.quantidade || 1;
@@ -240,7 +240,7 @@ app.post('/api/imprimir-qr', async (req, res) => {
   if (!cabecalho.ot) return res.status(400).json({ error: 'Preencha a OT no cabeçalho antes.' });
   try {
     if (fila.length) await publicarResumoDaOt();
-    const labels = [{ tipoQr: true, titulo: `OT ${cabecalho.ot}`, url: `${SITE_URL}/etiqueta-resumo.html?ot=${encodeURIComponent(cabecalho.ot)}` }];
+    const labels = [{ tipoQr: true, ot: cabecalho.ot, nomeOt: cabecalho.nomeOt, url: `${SITE_URL}/etiqueta-resumo.html?ot=${encodeURIComponent(cabecalho.ot)}` }];
     const arquivo = await imprimir(labels, { tamanho: req.body.tamanho });
     res.json({ ok: true, arquivo });
   } catch (e) {
@@ -288,6 +288,9 @@ app.get('/', (req, res) => {
 }}
 *{box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;max-width:720px;margin:0 auto;padding:28px 20px 70px;background:var(--bg);color:var(--text);transition:background .15s,color .15s}
+#neuralBg{position:fixed;inset:0;z-index:0;pointer-events:none;display:block;opacity:0;transition:opacity .6s ease}
+#neuralBg.visible{opacity:1}
+.brand,.card,.footer-actions,.eco-links{position:relative;z-index:1}
 h1{font-size:1.15rem;margin:0 0 2px;letter-spacing:-.01em;font-weight:700}
 h2{font-weight:700}
 strong{font-weight:600}
@@ -377,6 +380,7 @@ button:disabled{opacity:.7;cursor:wait}
 .check-row input{width:auto;margin:0;flex-shrink:0}
 </style></head>
 <body>
+<canvas id="neuralBg"></canvas>
 <script>
 (function(){
   var salvo = localStorage.getItem('etTema');
@@ -814,6 +818,97 @@ async function importarDaQueryString(){
   }
 }
 importarDaQueryString().then(carregar);
+
+(function initNeuralBg(){
+  const canvas=document.getElementById('neuralBg');
+  const ctx=canvas.getContext('2d');
+  let width,height,particles,rafId=null;
+  const mouse={x:null,y:null,radius:170};
+  const PARTICLE_COUNT=50;
+  const LINK_DIST=120;
+
+  function primaryColor(){
+    const v=getComputedStyle(document.documentElement).getPropertyValue('--primary').trim();
+    return v||'#5b8cff';
+  }
+  function hexToRgb(hex){
+    const m=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return m?[parseInt(m[1],16),parseInt(m[2],16),parseInt(m[3],16)]:[91,140,255];
+  }
+
+  function resize(){ width=canvas.width=window.innerWidth; height=canvas.height=window.innerHeight; }
+  window.addEventListener('resize',resize);
+  resize();
+
+  class Particle{
+    constructor(){
+      this.x=Math.random()*width; this.y=Math.random()*height;
+      this.vx=(Math.random()-0.5)*0.6; this.vy=(Math.random()-0.5)*0.6;
+      this.r=2.2; this.phase=Math.random()*Math.PI*2;
+    }
+    update(mouse){
+      this.x+=this.vx; this.y+=this.vy;
+      if(this.x<0||this.x>width) this.vx*=-1;
+      if(this.y<0||this.y>height) this.vy*=-1;
+      if(mouse.x!==null){
+        const dx=this.x-mouse.x, dy=this.y-mouse.y;
+        const dist=Math.sqrt(dx*dx+dy*dy);
+        const repelRadius=100;
+        if(dist<repelRadius && dist>0.01){
+          const force=(repelRadius-dist)/repelRadius;
+          this.x+=(dx/dist)*force*5; this.y+=(dy/dist)*force*5;
+        }
+      }
+    }
+  }
+
+  particles=Array.from({length:PARTICLE_COUNT},()=>new Particle());
+
+  window.addEventListener('mousemove',(e)=>{ mouse.x=e.clientX; mouse.y=e.clientY; });
+  window.addEventListener('mouseout',()=>{ mouse.x=null; mouse.y=null; });
+
+  function frame(){
+    if(document.hidden){ rafId=null; return; }
+    const [r,g,b]=hexToRgb(primaryColor());
+    const now=performance.now();
+    ctx.clearRect(0,0,width,height);
+
+    for(let i=0;i<particles.length;i++){
+      const p=particles[i];
+      p.update(mouse);
+      const twinkle=0.85+0.15*Math.sin(now/450+p.phase);
+      ctx.fillStyle='rgba('+r+','+g+','+b+','+Math.min(1,0.95*twinkle)+')';
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+
+      for(let j=i+1;j<particles.length;j++){
+        const q=particles[j];
+        const dx=p.x-q.x, dy=p.y-q.y;
+        const dist=Math.sqrt(dx*dx+dy*dy);
+        if(dist<LINK_DIST){
+          ctx.strokeStyle='rgba('+r+','+g+','+b+','+(0.7*(1-dist/LINK_DIST))+')';
+          ctx.lineWidth=0.9;
+          ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(q.x,q.y); ctx.stroke();
+        }
+      }
+      if(mouse.x!==null){
+        const dx=p.x-mouse.x, dy=p.y-mouse.y;
+        const dist=Math.sqrt(dx*dx+dy*dy);
+        if(dist<mouse.radius){
+          ctx.strokeStyle='rgba('+r+','+g+','+b+','+Math.min(1,(1-dist/mouse.radius))+')';
+          ctx.lineWidth=1.2;
+          ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(mouse.x,mouse.y); ctx.stroke();
+        }
+      }
+    }
+    rafId=requestAnimationFrame(frame);
+  }
+
+  canvas.classList.add('visible');
+  rafId=requestAnimationFrame(frame);
+  document.addEventListener('visibilitychange',()=>{
+    if(!document.hidden && !rafId) rafId=requestAnimationFrame(frame);
+  });
+})();
 </script>
 </body></html>`);
 });

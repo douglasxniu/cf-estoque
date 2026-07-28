@@ -226,14 +226,36 @@ async function construirEtiquetaTermicaPDF(labels) {
 
   const doc = new jsPDF({ unit: 'mm', format: [W, H], orientation: W > H ? 'landscape' : 'portrait', compress: true });
 
+  // pensada como etiqueta de identificação/selo postal pra colar do lado de fora de uma
+  // caixa: OT e nome do trabalho precisam dar pra ler de longe, sem escanear nada — o QR é
+  // só o complemento (link pro resumo completo).
   function desenharQr(lab, idx) {
     const qrImg = qrDataUrl(lab.url, 5);
-    const qrSize = Math.min(W * 0.42, H - 2 * pad);
-    doc.addImage(qrImg, 'PNG', pad, (H - qrSize) / 2, qrSize, qrSize);
+    const qrSize = Math.min(W * 0.34, H - 2 * pad);
+    const qrY = pad;
+    doc.addImage(qrImg, 'PNG', pad, qrY, qrSize, qrSize);
     const tx = pad + qrSize + pad, tMaxW = W - qrSize - 3 * pad;
-    let ty = H / 2 - 1;
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(15, 15, 15);
-    doc.text(String(lab.titulo || 'Resumo da OT'), tx, ty, { maxWidth: tMaxW });
+
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(6); doc.setTextColor(140, 140, 140);
+    doc.text('ORDEM DE TRABALHO', tx, pad + 3, { maxWidth: tMaxW });
+
+    doc.setFont('helvetica', 'bold'); doc.setTextColor(20, 20, 20);
+    const otResp = fonteResponsiva(doc, String(lab.ot || ''), tMaxW, 15, 9);
+    doc.setFontSize(otResp.fonte);
+    const otY = pad + 9.5;
+    doc.text(otResp.texto, tx, otY);
+
+    let ultimaY = otY;
+    if (lab.nomeOt) {
+      doc.setFont('helvetica', 'bold'); doc.setTextColor(70, 70, 70);
+      const nomeResp = fonteResponsiva(doc, String(lab.nomeOt), tMaxW, 8.5, 6.5);
+      doc.setFontSize(nomeResp.fonte);
+      ultimaY = otY + 5;
+      doc.text(nomeResp.texto, tx, ultimaY);
+    }
+
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(6); doc.setTextColor(120, 120, 120);
+    doc.text('Aponte a câmera para ver os itens', tx, Math.max(ultimaY + 4.5, qrY + qrSize - 1.5), { maxWidth: tMaxW });
   }
 
   function desenharItem(lab, idx) {

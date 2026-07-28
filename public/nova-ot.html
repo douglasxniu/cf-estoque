@@ -560,7 +560,7 @@ async function gerarEtiquetas(){
   if(v.erro){await niuAlert(v.erro);return;}
   const {ot,nomeOt,local}=v;
   const itens=montarLabelsItens(ot,nomeOt,local);
-  const labels=[{tipoQr:true,titulo:`OT ${ot}`,url:`${location.origin}/ot-resumo.html?ot=${encodeURIComponent(ot)}`},...itens];
+  const labels=[{tipoQr:true,ot,nomeOt,url:`${location.origin}/ot-resumo.html?ot=${encodeURIComponent(ot)}`},...itens];
   await imprimirEtiquetaTermica(labels,`etiquetas-${ot}.pdf`);
 
   // registra na fila de impressão térmica (preparação pra automação futura — não bloqueia
