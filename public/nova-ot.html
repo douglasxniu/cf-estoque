@@ -33,6 +33,18 @@ select option{background:var(--surface-2)}
 .btn-primary:hover{filter:brightness(1.1)}
 .btn-ghost{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
 .btn-ghost:hover{background:var(--surface)}
+.tema-header{display:flex;align-items:center;gap:8px;padding:14px 2px 8px;margin-top:4px;border-top:1px solid var(--border);font-weight:800;font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;color:var(--primary)}
+.tema-header:first-child{border-top:none;margin-top:0}
+.tema-count{font-weight:600;font-size:.7rem;color:var(--muted);background:var(--surface-2);border:1px solid var(--border);border-radius:20px;padding:2px 9px;text-transform:none;letter-spacing:0}
+.tema-add-btn{margin-left:auto;background:none;border:1px solid var(--border);color:var(--primary);font-weight:700;font-size:.72rem;padding:4px 10px;border-radius:8px;cursor:pointer;text-transform:none;letter-spacing:0}
+.tema-add-btn:hover{background:var(--surface-hover)}
+.tema-body{min-height:6px}
+.tema-vazio-hint{text-align:center;padding:16px;margin-bottom:12px;color:var(--muted);font-size:.82rem;background:var(--surface);border:1.5px dashed var(--border);border-radius:12px}
+.tema-ativo-chip{display:inline-flex;align-items:center;gap:8px;font-size:.78rem;color:var(--primary);background:rgba(91,140,255,.1);border:1px solid rgba(91,140,255,.3);border-radius:20px;padding:5px 6px 5px 12px;margin-bottom:10px}
+.tema-ativo-chip button{background:none;border:none;color:inherit;cursor:pointer;font-size:.8rem;padding:2px 6px;border-radius:50%}
+.tema-ativo-chip button:hover{background:rgba(91,140,255,.18)}
+.item-row{cursor:grab}
+.item-row:active{cursor:grabbing}
 .item-row{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:12px;position:relative}
 .item-row.estoque-item{border-color:rgba(91,140,255,.4);background:linear-gradient(135deg,rgba(91,140,255,.04),var(--surface))}
 .item-row.extra-item{border-color:rgba(251,191,36,.3);background:linear-gradient(135deg,rgba(251,191,36,.04),var(--surface))}
@@ -152,6 +164,7 @@ select option{background:var(--surface-2)}
 
   <div class="card">
     <label>Buscar no estoque</label>
+    <div id="temaAtivoIndicator"></div>
     <div class="add-item-wrap">
       <div class="search-wrap">
         <input id="busca" placeholder="Digite nome, categoria ou código..." autocomplete="off">
@@ -175,6 +188,9 @@ select option{background:var(--surface-2)}
     <div class="catalogo-grid" id="catalogoGrid"></div>
   </div>
 
+  <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+    <button type="button" class="btn btn-ghost" onclick="criarTema()" style="padding:8px 14px">＋ Novo tema / capítulo</button>
+  </div>
   <div id="itensList"></div>
 
 </div>
@@ -207,8 +223,7 @@ let itensEstoque=[], carrinho=[];
 // preencher data de hoje
 document.getElementById('otData').value=new Date().toISOString().slice(0,10);
 
-const anoOt=new Date().getFullYear();
-document.getElementById('otPrefixo').textContent=`OT-${anoOt}-`;
+document.getElementById('otPrefixo').textContent='OT-';
 
 // Modo edição: ?editar=OT-2026-0037 reaproveita esta mesma tela (catálogo, filtros, item
 // livre, etc.) pra editar uma OT já existente, em vez do modal simplificado do painel.
@@ -289,7 +304,7 @@ document.getElementById('otDigitos').addEventListener('change', async e=>{
     return;
   }
   v=v.padStart(4,'0');
-  const candidato=`OT-${anoOt}-${v}`;
+  const candidato=`OT-${v}`;
   e.target.value=v;
   if(candidato===numAtual){ msg.textContent=''; return; }
 
@@ -375,25 +390,23 @@ async function adicionarDoEstoque(id){
     if(existente.qty>=limite){ await niuAlert('Quantidade em estoque esgotada.'); return; }
     existente.qty++;
   } else {
-    carrinho.push({_id:id,_estoque:true,nome:it.nome,qty:1,unidade:it.unidade,local:'',obs:'',maxQty:it.quantidade,modelo:it.modelo,voltagem:it.voltagem});
+    carrinho.push({_id:id,_estoque:true,nome:it.nome,qty:1,unidade:it.unidade,local:temaAtivo,obs:'',maxQty:it.quantidade,modelo:it.modelo,voltagem:it.voltagem});
   }
   renderCatalogo();
   render();
 }
 
 function adicionarItemExtra(){
-  carrinho.push({_id:'x'+Date.now(),_estoque:false,nome:'',qty:1,unidade:'un',local:'',obs:''});
+  carrinho.push({_id:'x'+Date.now(),_estoque:false,nome:'',qty:1,unidade:'un',local:temaAtivo,obs:''});
   render();
 }
 
 function remover(idx){ carrinho.splice(idx,1); render(); renderCatalogo(); }
 
-function render(){
-  document.getElementById('counter').textContent=carrinho.length;
-  const icons={led:'💡',transf:'⚡',cabo:'🔌',lamp:'🔆',reat:'🔋',ferr:'🔧'};
+function itemRowHtml(c,i){
   const iconFor=n=>{const l=n?.toLowerCase()||'';return l.includes('led')?'💡':l.includes('transf')?'⚡':l.includes('cabo')?'🔌':l.includes('lamp')||l.includes('t8')?'🔆':l.includes('reat')?'🔋':l.includes('ferr')?'🔧':'📦';};
-  document.getElementById('itensList').innerHTML = carrinho.length?carrinho.map((c,i)=>`
-    <div class="item-row ${c._estoque?'estoque-item':'extra-item'}">
+  return `
+    <div class="item-row ${c._estoque?'estoque-item':'extra-item'}" data-idx="${i}" draggable="true" ondragstart="iniciarArrasto(${i})" ondragend="itemArrastadoIdx=null">
       <button class="remove-btn" onclick="remover(${i})">Remover</button>
       <div class="item-row-header">
         <div class="item-icon ${c._estoque?'':'extra'}">${iconFor(c.nome)}</div>
@@ -420,18 +433,111 @@ function render(){
           </select>
         </div>
         <div style="grid-column:1/-1">
-          <label>Local de uso específico</label>
-          <input value="${esc(c.local)}" oninput="carrinho[${i}].local=this.value" placeholder="Opcional — difere do local geral da OT">
-        </div>
-        <div style="grid-column:1/-1">
           <label>Observação / detalhe do item</label>
           <input value="${esc(c.obs)}" oninput="carrinho[${i}].obs=this.value" placeholder="Ex: cor, voltagem, modelo, comprimento específico...">
         </div>
+        <div style="grid-column:1/-1">
+          <label>TEMA</label>
+          <input value="${esc(c.local)}" oninput="carrinho[${i}].local=this.value" onchange="render()" list="temasList" placeholder="Ex: GREY GOOSE, ST GERMAIN — agrupa os itens do mesmo tema numa seção só">
+        </div>
       </div>
-    </div>`).join(''):'<div style="text-align:center;padding:24px;color:var(--muted);font-size:.9rem;background:var(--surface);border:1px dashed var(--border);border-radius:14px">Nenhum item adicionado. Use a busca acima ou adicione um item livre.</div>';
+    </div>`;
+}
+function adicionarItemExtraNoTema(tema){
+  carrinho.push({_id:'x'+Date.now(),_estoque:false,nome:'',qty:1,unidade:'un',local:tema||'',obs:''});
+  temasVazios=temasVazios.filter(t=>t!==tema);
+  temaAtivo=tema||'';
+  render();
+}
+function definirTemaAtivo(t){ temaAtivo=t||''; render(); }
+let temasRecolhidos=new Set();
+let temasVazios=[];
+let itemArrastadoIdx=null;
+let temaAtivo='';
+function toggleTema(chave){
+  if(temasRecolhidos.has(chave)) temasRecolhidos.delete(chave); else temasRecolhidos.add(chave);
+  render();
+}
+function renomearTema(chaveAntiga){
+  const novoNome=prompt('Renomear tema "'+chaveAntiga+'" para:',chaveAntiga);
+  if(novoNome===null) return;
+  const novo=novoNome.trim();
+  carrinho.forEach(c=>{ if((c.local||'').trim()===chaveAntiga) c.local=novo; });
+  temasVazios=temasVazios.map(t=>t===chaveAntiga?novo:t);
+  if(temasRecolhidos.has(chaveAntiga)){ temasRecolhidos.delete(chaveAntiga); temasRecolhidos.add(novo); }
+  if(temaAtivo===chaveAntiga) temaAtivo=novo;
+  render();
+}
+function criarTema(){
+  const nome=prompt('Nome do novo tema/capítulo (ex: GREY GOOSE, ST GERMAIN):');
+  if(!nome) return;
+  const t=nome.trim();
+  if(!t) return;
+  if(!temasVazios.includes(t)) temasVazios.push(t);
+  temaAtivo=t;
+  render();
+}
+function removerTemaVazio(chave){
+  temasVazios=temasVazios.filter(t=>t!==chave);
+  if(temaAtivo===chave) temaAtivo='';
+  render();
+}
+function iniciarArrasto(i){ itemArrastadoIdx=i; }
+function soltarNoTema(ev,chave){
+  ev.preventDefault();
+  if(itemArrastadoIdx===null) return;
+  carrinho[itemArrastadoIdx].local=chave;
+  itemArrastadoIdx=null;
+  render();
+}
+function render(){
+  document.getElementById('counter').textContent=carrinho.length;
+  const indEl=document.getElementById('temaAtivoIndicator');
+  if(indEl){
+    indEl.innerHTML=temaAtivo
+      ? `<div class="tema-ativo-chip">Adicionando itens em: <b>${esc(temaAtivo)}</b> <button type="button" onclick="definirTemaAtivo('')" title="Parar de adicionar neste tema">✕</button></div>`
+      : '';
+  }
+  const listEl=document.getElementById('itensList');
+  const grupos=[]; const grupoIdx={};
+  carrinho.forEach((c,i)=>{
+    const chave=(c.local||'').trim();
+    if(!(chave in grupoIdx)){ grupoIdx[chave]=grupos.length; grupos.push({chave,idxs:[]}); }
+    grupos[grupoIdx[chave]].idxs.push(i);
+  });
+  temasVazios.forEach(t=>{ if(!(t in grupoIdx)){ grupoIdx[t]=grupos.length; grupos.push({chave:t,idxs:[]}); } });
+  grupos.sort((a,b)=>a.chave===''?-1:b.chave===''?1:0);
+  if(!grupos.length){
+    listEl.innerHTML='<div style="text-align:center;padding:24px;color:var(--muted);font-size:.9rem;background:var(--surface);border:1px dashed var(--border);border-radius:14px">Nenhum item adicionado. Use a busca acima, adicione um item livre, ou crie um tema/capítulo.</div>';
+    return;
+  }
+  listEl.innerHTML=grupos.map(g=>{
+    const corpo=g.idxs.length
+      ? g.idxs.map(i=>itemRowHtml(carrinho[i],i)).join('')
+      : (g.chave?'<div class="tema-vazio-hint">Arraste um item pra cá, ou use "＋ item neste tema"</div>':'');
+    if(!g.chave){
+      return `<div class="tema-body" ondragover="event.preventDefault()" ondrop="soltarNoTema(event,'')">${corpo}</div>`;
+    }
+    const recolhido=temasRecolhidos.has(g.chave);
+    const chaveJs=esc(g.chave).replace(/'/g,"\\'");
+    const header=`<div class="tema-header" ondragover="event.preventDefault()" ondrop="soltarNoTema(event,'${chaveJs}')">
+      <span class="tema-toggle" onclick="toggleTema('${chaveJs}')" style="cursor:pointer">${recolhido?'▸':'▾'} ${esc(g.chave)}</span>
+      <span class="tema-count">${g.idxs.length} ${g.idxs.length===1?'item':'itens'}</span>
+      <button type="button" class="tema-add-btn" onclick="renomearTema('${chaveJs}')" title="Renomear este tema (atualiza todos os itens dele)">✎ renomear</button>
+      ${!g.idxs.length?`<button type="button" class="tema-add-btn" onclick="removerTemaVazio('${chaveJs}')" title="Remover este tema vazio">✕ remover</button>`:''}
+      <button type="button" class="tema-add-btn" onclick="adicionarItemExtraNoTema('${chaveJs}')">＋ item neste tema</button>
+    </div>`;
+    const corpoHtml=recolhido?'':`<div class="tema-body" ondragover="event.preventDefault()" ondrop="soltarNoTema(event,'${chaveJs}')">${corpo}</div>`;
+    return header + corpoHtml;
+  }).join('') + '<div style="display:flex;justify-content:flex-end;margin-top:8px"><button type="button" class="btn btn-ghost" onclick="criarTema()" style="padding:8px 14px">＋ Novo tema / capítulo</button></div>';
+  const temas=[...new Set([...carrinho.map(c=>(c.local||'').trim()),...temasVazios].filter(Boolean))];
+  const dl=document.createElement('datalist');
+  dl.id='temasList';
+  dl.innerHTML=temas.map(t=>`<option value="${esc(t)}">`).join('');
+  listEl.appendChild(dl);
 }
 function renderNome(i,v){
-  const el=document.querySelector(`#itensList .item-row:nth-child(${i+1}) .item-nome-display`);
+  const el=document.querySelector(`#itensList .item-row[data-idx="${i}"] .item-nome-display`);
   if(el) el.innerHTML=v||'<span style="color:var(--muted);font-weight:400">Novo item</span>'+'<span class="tag-extra">Item livre</span>';
 }
 render();

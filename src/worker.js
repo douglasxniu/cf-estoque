@@ -525,13 +525,12 @@ export default {
         "DELETE FROM projetos WHERE criado_em < datetime('now','-2 hours') AND numero NOT IN (SELECT DISTINCT ot FROM solicitacoes)"
       ).run();
 
-      const year = new Date().getFullYear();
       for (let tentativa = 0; tentativa < 30; tentativa++) {
         const { results } = await env.DB.prepare(
           "SELECT COUNT(*) as total FROM projetos WHERE numero LIKE ?"
-        ).bind(`OT-${year}-%`).all();
+        ).bind(`OT-%`).all();
         const seq = String((results[0]?.total || 0) + 1 + tentativa).padStart(4, "0");
-        const candidato = `OT-${year}-${seq}`;
+        const candidato = `OT-${seq}`;
         try {
           const r = await env.DB.prepare(
             "INSERT INTO projetos (numero, nome, setor) VALUES (?, ?, ?)"

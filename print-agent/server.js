@@ -898,8 +898,8 @@ importarDaQueryString().then(carregar);
         const dx=p.x-mouse.x, dy=p.y-mouse.y;
         const dist=Math.sqrt(dx*dx+dy*dy);
         if(dist<mouse.radius){
-          ctx.strokeStyle='rgba('+r+','+g+','+b+','+Math.min(1,(1-dist/mouse.radius))+')';
-          ctx.lineWidth=1.2;
+          ctx.strokeStyle='rgba('+r+','+g+','+b+','+Math.min(1,0.4*(1-dist/mouse.radius))+')';
+          ctx.lineWidth=0.8;
           ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(mouse.x,mouse.y); ctx.stroke();
         }
       }
