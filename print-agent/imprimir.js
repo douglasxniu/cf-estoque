@@ -105,12 +105,16 @@ function desenharEtiquetaGrande(doc, lab, W, H, opts, y0 = 0) {
   doc.text(`${lab.unitIdx ?? 1}/${lab.unitTotal ?? 1}`, W - pad, ty, { align: 'right' });
 
   ty += 5.5;
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(15, 15, 15);
-  doc.text(linhaUnica(doc, String(lab.nome || ''), maxW), pad, ty);
+  doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 15, 15);
+  const nomeResp = fonteResponsiva(doc, String(lab.nome || ''), maxW, 13, 8);
+  doc.setFontSize(nomeResp.fonte);
+  doc.text(nomeResp.texto, pad, ty);
 
   ty += 5;
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(40, 40, 40);
-  doc.text(linhaUnica(doc, String(lab.local || ''), maxW), pad, ty);
+  doc.setFont('helvetica', 'normal'); doc.setTextColor(40, 40, 40);
+  const localResp = fonteResponsiva(doc, String(lab.local || ''), maxW, 9.5, 7);
+  doc.setFontSize(localResp.fonte);
+  doc.text(localResp.texto, pad, ty);
 
   if (lab.obs) {
     ty += 4.5;
@@ -236,8 +240,14 @@ async function desenharEtiquetaMedia(doc, lab, W, H, opts = {}, y0 = 0) {
   // corpo: nome do item, local e observação — o bloco fica centralizado no espaço que
   // sobra abaixo do cabeçalho (não colado no topo), pra aproveitar bem o resto da etiqueta.
   const linhas = [];
-  linhas.push({ texto: linhaUnica(doc, String(lab.nome || ''), maxW), fonte: 14, bold: true, cor: [15, 15, 15], altura: 6.8 });
-  if (lab.local) linhas.push({ texto: linhaUnica(doc, String(lab.local), maxW), fonte: 10, cor: [55, 55, 55], altura: 6 });
+  doc.setFont('helvetica', 'bold');
+  const nomeResp = fonteResponsiva(doc, String(lab.nome || ''), maxW, 14, 8);
+  linhas.push({ texto: nomeResp.texto, fonte: nomeResp.fonte, bold: true, cor: [15, 15, 15], altura: 6.8 });
+  if (lab.local) {
+    doc.setFont('helvetica', 'normal');
+    const localResp = fonteResponsiva(doc, String(lab.local), maxW, 10, 7);
+    linhas.push({ texto: localResp.texto, fonte: localResp.fonte, cor: [55, 55, 55], altura: 6 });
+  }
   if (lab.obs) linhas.push({ texto: linhaUnica(doc, String(lab.obs), maxW), fonte: 8.5, italic: true, cor: [110, 110, 110], altura: 5.5 });
 
   const totalH = linhas.reduce((s, l) => s + l.altura, 0);
@@ -257,11 +267,15 @@ function desenharEtiquetaPequena(doc, lab, W, H, y0 = 0) {
   // sem espaço pra cabeçalho/rodapé/observação — só o essencial: nome e local
   const pad = 2, maxW = W - 2 * pad;
   const fonteNome = W < 40 ? 8 : 9.5;
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(fonteNome); doc.setTextColor(15, 15, 15);
-  doc.text(linhaUnica(doc, String(lab.nome || ''), maxW), pad, y0 + H * 0.42);
+  doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 15, 15);
+  const nomeResp = fonteResponsiva(doc, String(lab.nome || ''), maxW, fonteNome, 5.5);
+  doc.setFontSize(nomeResp.fonte);
+  doc.text(nomeResp.texto, pad, y0 + H * 0.42);
   if (lab.local) {
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(fonteNome - 2); doc.setTextColor(70, 70, 70);
-    doc.text(linhaUnica(doc, String(lab.local), maxW), pad, y0 + H * 0.72);
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(70, 70, 70);
+    const localResp = fonteResponsiva(doc, String(lab.local), maxW, fonteNome - 2, 5);
+    doc.setFontSize(localResp.fonte);
+    doc.text(localResp.texto, pad, y0 + H * 0.72);
   }
 }
 
@@ -318,6 +332,51 @@ async function desenharEtiquetaQr(doc, lab, W, H, nivel, y0 = 0) {
   doc.text('Aponte a câmera para ver os itens', tx, Math.max(ultimaY + (nivel === 'grande' ? 6 : 4.5), qrY + qrSize - 1.5), { maxWidth: tMaxW });
 }
 
+// etiqueta de identificação de uma unidade física serializada do estoque — mesmo espírito
+// "selo postal" da etiqueta de resumo da OT (desenharEtiquetaQr), só que sem nenhuma
+// referência a OT: nome do item bem legível + nº de série + QR pro link público da unidade
+// (unidade.html?uid=...), que é o mesmo link que o leitor de QR (scan.html) já sabe ler pra
+// vincular a peça física a uma solicitação em aberto.
+async function desenharEtiquetaUnidade(doc, lab, W, H, nivel, y0 = 0) {
+  const qrImg = await gerarQrDataUrl(lab.url);
+  if (nivel === 'pequena') {
+    const qrSize = Math.min(W, H) * 0.9;
+    doc.addImage(qrImg, 'PNG', (W - qrSize) / 2, y0 + (H - qrSize) / 2, qrSize, qrSize);
+    return;
+  }
+  const pad = nivel === 'grande' ? 5 : 4;
+  const qrSize = nivel === 'grande' ? Math.min(W * 0.36, H - 2 * pad) : Math.min(W * 0.34, H - 2 * pad);
+  const qrY = y0 + pad;
+  doc.addImage(qrImg, 'PNG', pad, qrY, qrSize, qrSize);
+
+  const tx = pad + qrSize + pad, tMaxW = W - qrSize - 3 * pad;
+
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(nivel === 'grande' ? 7 : 6); doc.setTextColor(140, 140, 140);
+  doc.text('ITEM DE ESTOQUE', tx, y0 + pad + (nivel === 'grande' ? 3.5 : 3), { maxWidth: tMaxW });
+
+  doc.setFont('helvetica', 'bold'); doc.setTextColor(20, 20, 20);
+  const nomeResp = fonteResponsiva(doc, String(lab.nome || ''), tMaxW, nivel === 'grande' ? 15 : 11, nivel === 'grande' ? 9 : 7);
+  doc.setFontSize(nomeResp.fonte);
+  const nomeY = y0 + pad + (nivel === 'grande' ? 11 : 8.5);
+  doc.text(nomeResp.texto, tx, nomeY, { maxWidth: tMaxW });
+
+  let ultimaY = nomeY;
+  if (lab.serial) {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(nivel === 'grande' ? 7 : 6); doc.setTextColor(140, 140, 140);
+    const serialLabelY = nomeY + (nivel === 'grande' ? 5.5 : 4.5);
+    doc.text('Nº DE SÉRIE', tx, serialLabelY, { maxWidth: tMaxW });
+
+    doc.setFont('helvetica', 'bold'); doc.setTextColor(20, 20, 20);
+    const serialResp = fonteResponsiva(doc, String(lab.serial), tMaxW, nivel === 'grande' ? 12 : 9, nivel === 'grande' ? 8 : 6);
+    doc.setFontSize(serialResp.fonte);
+    ultimaY = serialLabelY + (nivel === 'grande' ? 5 : 4);
+    doc.text(serialResp.texto, tx, ultimaY, { maxWidth: tMaxW });
+  }
+
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(nivel === 'grande' ? 7.5 : 6); doc.setTextColor(120, 120, 120);
+  doc.text('Aponte a câmera para ver detalhes', tx, Math.max(ultimaY + (nivel === 'grande' ? 6 : 4.5), qrY + qrSize - 1.5), { maxWidth: tMaxW });
+}
+
 // labels: array de N {ot, nomeOt, nome, local, obs, unitIdx, unitTotal} — no tamanho de
 // opts.tamanho (chave de TAMANHOS, padrão 100x150). Uma entrada {tipoQr:true, titulo, url}
 // vira uma etiqueta de QR em vez de item normal. Quando o tamanho tem porPagina > 1 (hoje
@@ -347,6 +406,7 @@ async function gerarPDF(labels, opts = {}) {
     if (posNaPagina > 0) linhaPicote(doc, y0, W);
 
     if (lab.tipoQr) await desenharEtiquetaQr(doc, lab, W, subH, nivel, y0);
+    else if (lab.tipoUnidade) await desenharEtiquetaUnidade(doc, lab, W, subH, nivel, y0);
     else if (nivel === 'grande') desenharEtiquetaGrande(doc, lab, W, subH, opts, y0);
     else if (nivel === 'media') await desenharEtiquetaMedia(doc, lab, W, subH, opts, y0);
     else desenharEtiquetaPequena(doc, lab, W, subH, y0);

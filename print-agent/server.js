@@ -23,8 +23,11 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 
 
 // OT/nome do projeto são um cabeçalho único pra toda a fila, preenchido uma vez só —
 // não é um campo por item.
-let cabecalho = { ot: '', nomeOt: '' };
-let fila = []; // [{nome, local, obs, quantidade}]
+// tipo 'ot': fila normal de itens de uma OT. tipo 'unidades': fila de unidades físicas
+// serializadas (só QR pro link público da unidade + nome + série, sem conceito de OT) —
+// mesma fila/tela, só muda o que é exibido e como as etiquetas são montadas.
+let cabecalho = { ot: '', nomeOt: '', tipo: 'ot' };
+let fila = []; // [{nome, local, obs, quantidade}] (tipo 'ot') ou [{nome, local: serial, obs: url}] (tipo 'unidades')
 
 function ipsLocais() {
   const nets = os.networkInterfaces();
@@ -48,7 +51,7 @@ app.get('/api/estado', (req, res) => res.json(estado()));
 
 app.post('/api/cabecalho', (req, res) => {
   const { ot, nomeOt } = req.body || {};
-  cabecalho = { ot: ot || '', nomeOt: nomeOt || '' };
+  cabecalho = { ot: ot || '', nomeOt: nomeOt || '', tipo: 'ot' };
   res.json(estado());
 });
 
@@ -85,7 +88,7 @@ app.delete('/api/fila/:idx', (req, res) => {
   res.json(estado());
 });
 
-app.delete('/api/fila', (req, res) => { fila = []; res.json(estado()); });
+app.delete('/api/fila', (req, res) => { fila = []; cabecalho.tipo = 'ot'; res.json(estado()); });
 
 // importa um PDF já gerado por este sistema — NÃO cai direto na fila, volta pro cliente
 // pra revisão/edição num popup antes de confirmar (ver POST /api/fila/lote).
@@ -134,14 +137,25 @@ app.post('/api/fila/lote', (req, res) => {
 // passa pelo popup de revisão como as importações. Substitui a fila atual em vez de somar
 // (a fila representa uma OT só de cada vez; misturar com o que já estava lá ia confundir).
 app.post('/api/fila/substituir', (req, res) => {
-  const { ot, nomeOt, itens } = req.body || {};
+  const { ot, nomeOt, tipo, itens } = req.body || {};
+  const modoUnidades = tipo === 'unidades';
   const validos = (Array.isArray(itens) ? itens : []).filter(it => it && String(it.nome || '').trim());
   if (!validos.length) return res.status(400).json({ error: 'Nenhum item válido recebido.' });
-  cabecalho = { ot: ot || '', nomeOt: nomeOt || '' };
-  fila = validos.map(it => ({
-    nome: String(it.nome).trim(), local: it.local || '', obs: it.obs || '',
-    quantidade: Math.max(1, Math.min(500, parseInt(it.quantidade, 10) || 1))
-  }));
+  if (modoUnidades) {
+    // etiqueta de unidade não tem OT — nome/serial/url guardados nos mesmos campos
+    // (nome/local/obs) que a fila de OT já usa, só interpretados diferente na hora de montar
+    // as etiquetas (ver montarLabelsDaFila)
+    cabecalho = { ot: '', nomeOt: '', tipo: 'unidades' };
+    fila = validos.map(it => ({
+      nome: String(it.nome).trim(), local: it.serial || '', obs: it.url || '', quantidade: 1
+    }));
+  } else {
+    cabecalho = { ot: ot || '', nomeOt: nomeOt || '', tipo: 'ot' };
+    fila = validos.map(it => ({
+      nome: String(it.nome).trim(), local: it.local || '', obs: it.obs || '',
+      quantidade: Math.max(1, Math.min(500, parseInt(it.quantidade, 10) || 1))
+    }));
+  }
   res.json(estado());
 });
 
@@ -188,6 +202,10 @@ async function publicarResumoDaOt() {
 // opcionalmente com o QR de resumo como primeira etiqueta — usado tanto pra imprimir
 // quanto só pra gerar/salvar o PDF.
 async function montarLabelsDaFila({ comQr, tamanho }) {
+  if (cabecalho.tipo === 'unidades') {
+    // sem OT, sem resumo público — cada linha já é uma unidade física, uma etiqueta cada
+    return fila.map(l => ({ tipoUnidade: true, nome: l.nome, serial: l.local, url: l.obs }));
+  }
   const labels = [];
   // publica o resumo (e manda o link em CADA etiqueta de item, não só na de QR dedicada,
   // se ela existir) sempre que tiver OT preenchida — não só quando "incluir como primeira
@@ -228,7 +246,8 @@ app.post('/api/gerar-pdf', async (req, res) => {
     const labels = await montarLabelsDaFila({ comQr: req.body.comQr, tamanho });
     const doc = await gerarPDF(labels, { comLogo: !!req.body.comLogo, tamanho });
     const buffer = Buffer.from(doc.output('arraybuffer'));
-    const nome = `etiquetas${cabecalho.ot ? '-' + cabecalho.ot.replace(/[^\w-]/g, '') : ''}-${Date.now()}.pdf`;
+    const prefixo = cabecalho.tipo === 'unidades' ? 'unidades' : ('etiquetas' + (cabecalho.ot ? '-' + cabecalho.ot.replace(/[^\w-]/g, '') : ''));
+    const nome = `${prefixo}-${Date.now()}.pdf`;
     res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="${nome}"` });
     res.send(buffer);
   } catch (e) {
@@ -459,7 +478,7 @@ button:disabled{opacity:.7;cursor:wait}
   <div class="hint" id="hintImagem">Print de qualquer OT/tabela de produção — a IA identifica itens, variantes (cor/modelo) e quantidades. <b>Sempre revise antes de imprimir</b> — a IA pode interpretar algo errado; use "mesclar" abaixo se ela separar o mesmo item em duas linhas.</div>
 </div>
 
-<div class="card">
+<div class="card" id="cardOt">
   <div class="card-titulo"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><circle cx="7" cy="7" r="1"/></svg>OT — cabeçalho da fila</div>
   <div class="row2">
     <input id="ot" placeholder="OT-2026-0057" onchange="salvarCabecalho()">
@@ -467,7 +486,12 @@ button:disabled{opacity:.7;cursor:wait}
   </div>
 </div>
 
-<div class="card">
+<div class="card" id="avisoModoUnidades" style="display:none">
+  <div class="card-titulo" style="margin-bottom:0"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M15 3v18"/></svg>Etiquetas de unidade física</div>
+  <div class="hint" style="margin-top:6px">Cada linha é uma peça individual já cadastrada no Estoque — o QR aponta pra ela (leitura pelo Leitor QR do Estoque vincula a peça a uma solicitação). Não é possível adicionar itens manualmente aqui.</div>
+</div>
+
+<div class="card" id="cardAdicionar">
   <div class="card-titulo"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Adicionar item</div>
   <label>Nome do item *</label>
   <input id="nome" placeholder="Transformador 24V 400W">
@@ -486,10 +510,10 @@ button:disabled{opacity:.7;cursor:wait}
     <span class="counter" id="contador">0</span>
   </div>
   <div id="lista"></div>
-  <button class="btn-ghost btn-sm" style="width:100%;margin-top:10px" onclick="mesclarSelecionadas()">Mesclar selecionadas</button>
+  <button class="btn-ghost btn-sm" id="btnMesclar" style="width:100%;margin-top:10px" onclick="mesclarSelecionadas()">Mesclar selecionadas</button>
 </div>
 
-<div class="card">
+<div class="card" id="cardResumoQr">
   <div class="card-titulo"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h.01M14 18h.01M18 14h.01M18 18h.01"/></svg>QR de resumo da OT</div>
   <label class="check-row">
     <input type="checkbox" id="comQr">
@@ -526,20 +550,26 @@ let filaAtual=[];
 async function carregar(){
   const r = await fetch('/api/estado').then(r=>r.json());
   filaAtual = r.fila;
+  const modoUnidades = r.cabecalho.tipo === 'unidades';
+  document.getElementById('cardOt').style.display = modoUnidades ? 'none' : '';
+  document.getElementById('cardAdicionar').style.display = modoUnidades ? 'none' : '';
+  document.getElementById('cardResumoQr').style.display = modoUnidades ? 'none' : '';
+  document.getElementById('btnMesclar').style.display = modoUnidades ? 'none' : '';
+  document.getElementById('avisoModoUnidades').style.display = modoUnidades ? '' : 'none';
   if(document.activeElement.id!=='ot') document.getElementById('ot').value = r.cabecalho.ot || '';
   if(document.activeElement.id!=='nomeOt') document.getElementById('nomeOt').value = r.cabecalho.nomeOt || '';
-  document.getElementById('contador').textContent = filaAtual.length + ' itens · ' + r.total + ' etiquetas';
+  document.getElementById('contador').textContent = filaAtual.length + (modoUnidades ? ' unidade(s)' : ' itens · ' + r.total + ' etiquetas');
   document.getElementById('lista').innerHTML = filaAtual.length ? filaAtual.map((l,i)=>\`
     <div class="item">
       <div class="item-view">
-        <input type="checkbox" class="chk-mesclar" data-i="\${i}" style="width:auto;margin:0 4px 0 0;flex-shrink:0">
-        <div class="info"><b>\${esc(l.nome)} \${l.quantidade>1?'×'+l.quantidade:''}</b><span>\${l.local?esc(l.local):'—'}\${l.obs?' · '+esc(l.obs):''}</span></div>
+        <input type="checkbox" class="chk-mesclar" data-i="\${i}" style="width:auto;margin:0 4px 0 0;flex-shrink:0" \${modoUnidades?'disabled':''}>
+        <div class="info"><b>\${esc(l.nome)} \${!modoUnidades && l.quantidade>1?'×'+l.quantidade:''}</b><span>\${modoUnidades ? 'Série: '+esc(l.local||'—') : (l.local?esc(l.local):'—')+(l.obs?' · '+esc(l.obs):'')}</span></div>
         <div class="acoes">
-          <button class="btn-sm ed" onclick="toggleEdit(\${i})">editar</button>
+          \${modoUnidades?'':\`<button class="btn-sm ed" onclick="toggleEdit(\${i})">editar</button>\`}
           <button class="btn-sm rm" onclick="remover(\${i})">remover</button>
         </div>
       </div>
-      <div class="item-edit" id="edit-\${i}">
+      \${modoUnidades?'':\`<div class="item-edit" id="edit-\${i}">
         <input id="e-nome-\${i}" placeholder="Nome do item" value="\${esc(l.nome)}">
         <div class="row2">
           <input id="e-local-\${i}" placeholder="Local" value="\${esc(l.local)}">
@@ -547,7 +577,7 @@ async function carregar(){
         </div>
         <input id="e-obs-\${i}" placeholder="Observação" value="\${esc(l.obs)}">
         <button class="btn-primary btn-sm" onclick="salvarEdicao(\${i})">Salvar</button>
-      </div>
+      </div>\`}
     </div>\`).join('') : '<div class="empty">Nenhuma etiqueta na fila ainda.</div>';
 }
 
@@ -815,8 +845,10 @@ async function importarDaQueryString(){
       method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(json)
     });
     const d = await r.json();
-    if (!r.ok) { aviso('Erro ao receber itens da OT: '+(d.error||r.status),'erro'); return; }
-    aviso('Itens da OT '+(json.ot||'')+' recebidos — confira antes de imprimir.','sucesso');
+    if (!r.ok) { aviso('Erro ao receber itens: '+(d.error||r.status),'erro'); return; }
+    aviso(json.tipo === 'unidades'
+      ? (json.itens||[]).length+' unidade(s) recebida(s) — confira antes de imprimir.'
+      : 'Itens da OT '+(json.ot||'')+' recebidos — confira antes de imprimir.', 'sucesso');
   } catch(e) {
     aviso('Não consegui interpretar os dados recebidos: '+e.message,'erro');
   }

@@ -86,7 +86,13 @@ input::placeholder{color:var(--muted-2)}
     <div class="scan-line"></div>
     <div id="status">aguardando...</div>
   </div>
+  <div style="display:flex;align-items:center;gap:6px;margin-top:10px;font-size:.72rem;color:var(--muted)">
+    <span style="width:7px;height:7px;border-radius:50%;background:#34d399;flex-shrink:0"></span>
+    Leitor físico (USB/Bluetooth) pronto — basta escanear, sem precisar clicar em nada
+  </div>
 </div>
+<input id="hidScanInput" type="text" autocomplete="off" aria-hidden="true"
+  style="position:fixed;top:-9999px;left:-9999px;opacity:0;width:1px;height:1px;pointer-events:none">
 
 <div id="app"><div class="empty">Leia um QR Code para começar</div></div>
 <div class="toast" id="toast"></div>
@@ -114,6 +120,32 @@ let unidadeAtual=null, pendentesCandidatos=[];
 let scanInt=null, lastScan=0, detector=null, scanning=false, carrinho=[];
 
 const esc=s=>String(s??'').replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
+
+/* ===== LEITOR FÍSICO (Zebra DS22 etc, modo teclado USB/Bluetooth) =====
+   O aparelho não fala com o navegador por nenhuma API — ele "digita" o texto do QR onde
+   estiver o foco do teclado, seguido de Enter. Este input fica sempre em foco, invisível,
+   captando essas leituras e mandando pro mesmo handleQR() que a câmera já usa — sem duplicar
+   lógica de roteamento (OT abre modal, item abre ficha, etc.). Refoca sozinho sempre que o
+   usuário clica fora de um campo de formulário de verdade, pra nunca perder uma leitura. */
+function refocarLeitorFisico(){
+  const ae=document.activeElement;
+  const editando=ae&&ae!==document.body&&ae.id!=='hidScanInput'&&(ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.tagName==='SELECT');
+  if(!editando) document.getElementById('hidScanInput')?.focus({preventScroll:true});
+}
+document.addEventListener('DOMContentLoaded',()=>{
+  const hid=document.getElementById('hidScanInput');
+  hid.addEventListener('keydown',e=>{
+    if(e.key!=='Enter') return;
+    e.preventDefault();
+    const val=hid.value.trim();
+    hid.value='';
+    if(val) handleQR(val);
+  });
+  document.addEventListener('click',refocarLeitorFisico);
+  window.addEventListener('focus',refocarLeitorFisico);
+  refocarLeitorFisico();
+  setInterval(refocarLeitorFisico,1500);
+});
 
 function toast(m,t='ok'){
   beep(t);

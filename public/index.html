@@ -1470,7 +1470,7 @@ async function abrirModalUnidades(item){
     ${unidades.length ? `
     <div style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
       <span class="small">${unidades.length} unidade(s) registada(s)</span>
-      <button class="btn sec" onclick="imprimirTodasUnidades(${item.id})">Imprimir todas</button>
+      <button class="btn sec" onclick="imprimirTodasUnidades(${item.id})">🖨 Imprimir na Zebra</button>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px">
       ${unidades.map(u=>`
@@ -1480,7 +1480,7 @@ async function abrirModalUnidades(item){
           <div style="font-size:.65rem;color:${u.status==='disponivel'?'var(--ok)':'var(--warn)'}">
             ${u.status==='disponivel'?'Disponível':u.ot||u.status}
           </div>
-          <button class="btn sec" data-a="imprimir-unidade" data-uid="${u.id}" data-serial="${esc(u.serial)}" data-nome="${esc(item.nome)}" style="width:100%;font-size:.68rem;padding:4px;margin-top:6px">Imprimir QR</button>
+          <button class="btn sec" data-a="imprimir-unidade" data-uid="${u.id}" data-serial="${esc(u.serial)}" data-nome="${esc(item.nome)}" style="width:100%;font-size:.68rem;padding:4px;margin-top:6px">🖨 Imprimir na Zebra</button>
         </div>`).join('')}
     </div>` : '<div class="empty">Nenhuma unidade gerada ainda.</div>'}
   `;
@@ -1579,29 +1579,39 @@ document.getElementById('qrImprimirSelecionadas').addEventListener('click', ()=>
   imprimirEtiquetasEmLote(labels, `etiquetas-${new Date().toISOString().slice(0,10)}.pdf`);
 });
 
-async function imprimirUnidade(uid, serial, nome){
-  if(typeof window.jspdf==='undefined'){await niuAlert('PDF não carregou.');return;}
-  const {jsPDF}=window.jspdf;
-  const doc=new jsPDF({unit:'mm',format:[50,60]});
-  const img=document.getElementById('qr-'+uid)?.querySelector('img');
-  if(img) doc.addImage(img.src,'PNG',5,5,40,40);
-  doc.setFontSize(7);doc.setFont('helvetica','bold');doc.setTextColor(20,20,20);
-  doc.text(nome,25,49,{align:'center',maxWidth:44});
-  doc.setFontSize(6.5);doc.text(serial,25,54,{align:'center'});
-  doc.save(`etiqueta-${serial}.pdf`);
+// IP direto (não hostname mDNS) da máquina onde o print-agent roda — ver nota igual em
+// nova-ot.html. Sujeito a mudar se o DHCP reatribuir o endereço.
+const PRINT_AGENT_URL = 'http://192.168.23.185:4000';
+
+function enviarUnidadesParaZebra(itensUnidade){
+  if(!itensUnidade.length){ toast('Nenhuma unidade para imprimir'); return; }
+  const json = JSON.stringify({ tipo:'unidades', itens: itensUnidade });
+  const dados = btoa(unescape(encodeURIComponent(json))); // base64 seguro pra UTF-8 (acentos)
+  // <a> clicado é navegação de verdade — window.open() direto pode cair no bloqueador
+  // de pop-up dependendo do contexto do clique
+  const link = document.createElement('a');
+  link.href = `${PRINT_AGENT_URL}/?dados=${encodeURIComponent(dados)}`;
+  link.target = '_blank';
+  link.rel = 'noopener';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+function imprimirUnidade(uid, serial, nome){
+  enviarUnidadesParaZebra([{ nome, serial, url:`${location.origin}/unidade.html?uid=${uid}` }]);
 }
 
 function imprimirTodasUnidades(itemId){
   const item=itens.find(it=>it.id==itemId);
-  const labels=[];
+  const itensUnidade=[];
   document.querySelectorAll(`[id^="qr-"]`).forEach(wrap=>{
     const uid=wrap.id.replace('qr-','');
     const serialEl=wrap.nextElementSibling;
     const serial=serialEl?.textContent||uid;
-    labels.push({ url:`${location.origin}/unidade.html?uid=${uid}`, titulo:item?.nome||'', subtitulo:serial });
+    itensUnidade.push({ nome:item?.nome||'', serial, url:`${location.origin}/unidade.html?uid=${uid}` });
   });
-  if(!labels.length){ toast('Nenhuma unidade para imprimir'); return; }
-  imprimirEtiquetasEmLote(labels, `unidades-${(item?.nome||'item').replace(/\s+/g,'-')}.pdf`, {cols:3, rows:5});
+  enviarUnidadesParaZebra(itensUnidade);
 }
 
 function abrirQROT(ot){
