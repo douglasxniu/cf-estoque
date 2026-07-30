@@ -43,6 +43,16 @@ select option{background:var(--surface-2)}
 .tema-ativo-chip{display:inline-flex;align-items:center;gap:8px;font-size:.78rem;color:var(--primary);background:rgba(91,140,255,.1);border:1px solid rgba(91,140,255,.3);border-radius:20px;padding:5px 6px 5px 12px;margin-bottom:10px}
 .tema-ativo-chip button{background:none;border:none;color:inherit;cursor:pointer;font-size:.8rem;padding:2px 6px;border-radius:50%}
 .tema-ativo-chip button:hover{background:rgba(91,140,255,.18)}
+.canal-feed{max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;margin-bottom:12px;padding-right:2px}
+.canal-item{display:flex;gap:10px;font-size:.84rem;line-height:1.4}
+.canal-avatar{width:26px;height:26px;border-radius:50%;background:var(--surface-2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:.68rem;font-weight:800;color:var(--primary);flex-shrink:0}
+.canal-item.evento{color:var(--muted);font-size:.78rem;align-items:center}
+.canal-item.evento .canal-avatar{width:20px;height:20px;background:none;border:none;color:var(--muted-2)}
+.canal-item.mensagem .canal-bubble{background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:8px 12px;flex:1}
+.canal-autor{font-weight:800;color:var(--text);margin-right:6px}
+.canal-hora{color:var(--muted);font-size:.72rem;font-weight:500}
+.canal-compose{display:flex;gap:8px;align-items:flex-end;border-top:1px solid var(--border);padding-top:12px}
+.canal-compose textarea{resize:none;min-height:40px}
 .item-row{cursor:grab}
 .item-row:active{cursor:grabbing}
 .item-row{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:12px;position:relative}
@@ -56,6 +66,10 @@ select option{background:var(--surface-2)}
 .remove-btn{position:absolute;top:14px;right:14px;background:var(--surface2);border:1px solid var(--border);color:var(--muted);cursor:pointer;font-size:.78rem;padding:4px 9px;border-radius:8px;transition:.15s}
 .remove-btn:hover{color:var(--danger);border-color:rgba(248,113,113,.4);background:rgba(248,113,113,.08)}
 .item-fields{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+/* a linha inteira é draggable="true" (arrastar item pra outro tema) — sem isso, tentar
+   selecionar texto com o mouse dentro dos campos dispara o arrasto da linha em vez de
+   selecionar o texto */
+.item-fields input,.item-fields select,.item-fields textarea{-webkit-user-drag:none;user-select:text}
 .tag-estoque{display:inline-flex;align-items:center;background:rgba(91,140,255,.12);color:var(--primary);font-size:.62rem;font-weight:800;padding:2px 9px;border-radius:20px;margin-left:8px;vertical-align:middle;border:1px solid rgba(91,140,255,.2)}
 .tag-extra{display:inline-flex;align-items:center;background:rgba(251,191,36,.1);color:var(--warn);font-size:.62rem;font-weight:800;padding:2px 9px;border-radius:20px;margin-left:8px;vertical-align:middle;border:1px solid rgba(251,191,36,.2)}
 .search-wrap{position:relative;margin-bottom:10px}
@@ -85,7 +99,11 @@ select option{background:var(--surface-2)}
 .catalogo-card .qtd{font-size:.7rem;color:var(--muted)}
 .catalogo-card .ok-tag{font-size:.68rem;color:var(--primary);font-weight:800;margin-top:5px}
 .catalogo-empty{grid-column:1/-1;text-align:center;padding:20px;color:var(--muted);font-size:.85rem}
+.eco-links{display:flex;gap:8px;flex-wrap:wrap;padding:10px 16px 0}
+.eco-links a{display:inline-flex;align-items:center;gap:5px;font-size:.72rem;font-weight:600;color:var(--muted);background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:5px 10px;text-decoration:none}
+.eco-links a:hover{color:var(--text);background:var(--surface-hover)}
 </style>
+<script src="/macroview-widget.js" defer></script>
 </head>
 <body>
 
@@ -106,6 +124,15 @@ select option{background:var(--surface-2)}
     <svg class="ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
   </button>
 </header>
+
+<div class="eco-links">
+  <a href="/scan.html" title="Leitor QR">🔲 Leitor QR</a>
+  <a href="/checkout.html" title="Checkout de Entrega">📦 Checkout</a>
+  <a href="#" onclick="abrirMacroView();return false" title="Visão cruzada de uma OT">🔭 MacroView</a>
+  <a href="http://192.168.23.185:4000" target="_blank" title="Etiquetas Térmicas (print-agent)">🖨 Etiquetas Térmicas</a>
+  <a href="https://niumapas.pages.dev" target="_blank" title="Mapa de Instalação">🗺 Mapa</a>
+  <a href="https://niukanban.pages.dev" target="_blank" title="Kanban de Produção">🗂 Kanban</a>
+</div>
 
 <div class="page">
 
@@ -155,6 +182,17 @@ select option{background:var(--surface-2)}
     <div>
       <label>Observações gerais</label>
       <textarea id="otObs" rows="2" placeholder="Notas adicionais sobre esta OT..."></textarea>
+    </div>
+  </div>
+
+  <div class="section-label">
+    Canal <span class="counter" id="canalCounter" style="display:none">0</span>
+  </div>
+  <div class="card" id="canalCard">
+    <div id="canalFeed" class="canal-feed"><div style="text-align:center;padding:16px;color:var(--muted);font-size:.82rem">Salve ou abra uma OT existente pra ver o canal.</div></div>
+    <div class="canal-compose">
+      <textarea id="canalInput" rows="1" placeholder="Escreva uma observação sobre esta OT…"></textarea>
+      <button class="btn btn-primary" id="canalEnviar" style="width:auto;padding:10px 16px">Enviar</button>
     </div>
   </div>
 
@@ -210,6 +248,8 @@ select option{background:var(--surface-2)}
 <script>
 const API='/api';
 const esc=s=>String(s??'').replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
+// unidades "de peça" (contáveis, sempre inteiro) vs "de medida" (m, kg — aceitam fração)
+const UNIDADES_CONTAVEIS=['un','pç','cx','rolo'];
 
 // Esta página quase sempre é aberta numa aba nova (window.open a partir do painel), onde
 // history.back() não tem pra onde voltar. Fecha a aba; se o navegador não deixar (ex: página
@@ -291,8 +331,67 @@ async function init(){
       document.getElementById('otNumMsg').textContent='Erro ao reservar número — recarregue a página.';
     }
   }
+  carregarCanal();
 }
 init();
+
+/* ===== CANAL (eventos automáticos + observações escritas por alguém, por OT) ===== */
+let canalInterval=null;
+function iniciaisDe(nome){
+  const partes=(nome||'?').trim().split(/\s+/).filter(Boolean);
+  if(!partes.length) return '?';
+  return (partes[0][0]+(partes[1]?partes[1][0]:'')).toUpperCase();
+}
+function horaRelativaCanal(dataStr){
+  const d=new Date(dataStr.replace(' ','T')+'Z');
+  const diffMin=Math.round((Date.now()-d.getTime())/60000);
+  if(diffMin<1) return 'agora';
+  if(diffMin<60) return `há ${diffMin} min`;
+  const diffH=Math.round(diffMin/60);
+  if(diffH<24) return `há ${diffH}h`;
+  return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+}
+async function carregarCanal(){
+  const ot=document.getElementById('otNum').value.trim();
+  const feed=document.getElementById('canalFeed');
+  const counter=document.getElementById('canalCounter');
+  if(!ot){ feed.innerHTML='<div style="text-align:center;padding:16px;color:var(--muted);font-size:.82rem">Salve ou abra uma OT existente pra ver o canal.</div>'; return; }
+  let eventos=[];
+  try{ eventos=await fetch(`${API}/ot/${encodeURIComponent(ot)}/eventos`).then(r=>r.ok?r.json():[]); }catch(e){}
+  counter.style.display='inline-block';
+  counter.textContent=eventos.length;
+  feed.innerHTML = eventos.length ? eventos.map(ev=>{
+    if(ev.tipo==='mensagem'){
+      return `<div class="canal-item mensagem">
+        <div class="canal-avatar">${esc(iniciaisDe(ev.autor))}</div>
+        <div class="canal-bubble"><span class="canal-autor">${esc(ev.autor||'Anónimo')}</span><span class="canal-hora">${horaRelativaCanal(ev.criado_em)}</span><div>${esc(ev.texto)}</div></div>
+      </div>`;
+    }
+    return `<div class="canal-item evento">
+      <div class="canal-avatar">•</div>
+      <div><b>${esc(ot)}</b> ${esc(ev.texto)}${ev.autor&&ev.autor!=='Sistema'?' — '+esc(ev.autor):''} <span class="canal-hora">${horaRelativaCanal(ev.criado_em)}</span></div>
+    </div>`;
+  }).join('') : '<div style="text-align:center;padding:16px;color:var(--muted);font-size:.82rem">Nenhum evento ainda nesta OT.</div>';
+  feed.scrollTop=feed.scrollHeight;
+}
+async function enviarMensagemCanal(){
+  const ot=document.getElementById('otNum').value.trim();
+  const input=document.getElementById('canalInput');
+  const texto=input.value.trim();
+  if(!ot){ await niuAlert('Salve a OT antes de escrever no canal.'); return; }
+  if(!texto) return;
+  input.value='';
+  try{
+    const r=await fetch(`${API}/ot/${encodeURIComponent(ot)}/eventos`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({texto})});
+    if(!r.ok){ const d=await r.json().catch(()=>({})); throw new Error(d.error||'falha'); }
+    await carregarCanal();
+  }catch(e){ await niuAlert('Erro ao enviar: '+e.message); input.value=texto; }
+}
+document.getElementById('canalEnviar').addEventListener('click', enviarMensagemCanal);
+document.getElementById('canalInput').addEventListener('keydown', e=>{
+  if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); enviarMensagemCanal(); }
+});
+if(!canalInterval) canalInterval=setInterval(carregarCanal, 15000);
 
 document.getElementById('otDigitos').addEventListener('change', async e=>{
   const numAtual=document.getElementById('otNum').value;
@@ -363,19 +462,23 @@ function renderCatalogo(){
   );
   if(!found.length){ wrap.innerHTML='<div class="catalogo-empty">Nenhum item encontrado.</div>'; return; }
   wrap.innerHTML=found.map(i=>{
-    const noCarrinhoItem=carrinho.find(c=>c._id==i.id);
+    // o mesmo item pode ter uma linha em cada tema (ex: "Bucha" em Calhas E em Forro) —
+    // o limite de estoque é compartilhado entre todas essas linhas, então soma tudo aqui
+    // em vez de olhar só a primeira que achar
+    const linhasDoItem=carrinho.filter(c=>c._id==i.id);
+    const totalPedido=linhasDoItem.reduce((s,c)=>s+c.qty,0);
     const semEstoque=i.quantidade<=0;
     // maxQty já soma estoque livre + quantidade que essa mesma OT já tem reservada (modo edição);
     // pra itens novos ainda sem maxQty, o limite é só o estoque livre atual.
-    const limite=noCarrinhoItem?.maxQty ?? i.quantidade;
-    const esgotadoNoCarrinho=noCarrinhoItem && noCarrinhoItem.qty>=limite;
+    const limite=linhasDoItem[0]?.maxQty ?? i.quantidade;
+    const esgotadoNoCarrinho=linhasDoItem.length && totalPedido>=limite;
     const bloqueado=semEstoque||esgotadoNoCarrinho;
     return `
-    <div class="catalogo-card ${noCarrinhoItem?'added':''} ${bloqueado&&!noCarrinhoItem?'sem-estoque':''} ${esgotadoNoCarrinho?'maxed':''}" ${!bloqueado?`onclick="adicionarDoEstoque(${i.id})"`:''}>
+    <div class="catalogo-card ${linhasDoItem.length?'added':''} ${bloqueado&&!linhasDoItem.length?'sem-estoque':''} ${esgotadoNoCarrinho?'maxed':''}" ${!bloqueado?`onclick="adicionarDoEstoque(${i.id})"`:''}>
       <span class="cat">${esc(i.categoria)}</span>
       <div class="nome">${esc(i.nome)}</div>
       <div class="qtd">${semEstoque?'Sem estoque':`${i.quantidade} ${esc(i.unidade)} disponível`}</div>
-      ${noCarrinhoItem?`<div class="ok-tag">✓ ${noCarrinhoItem.qty} no pedido${!bloqueado?' · clique pra +1':''}</div>`:''}
+      ${linhasDoItem.length?`<div class="ok-tag">✓ ${totalPedido} no pedido${!bloqueado?' · clique pra +1':''}</div>`:''}
     </div>`;
   }).join('');
 }
@@ -384,10 +487,14 @@ busca.addEventListener('input', renderCatalogo);
 async function adicionarDoEstoque(id){
   const it=itensEstoque.find(i=>i.id==id);
   if(!it) return;
-  const existente=carrinho.find(c=>c._id==id);
+  // uma linha de carrinho por (item, tema) — o mesmo item pode aparecer em temas diferentes,
+  // mas o limite de estoque é compartilhado entre todas as linhas dele, não por linha
+  const linhasDoItem=carrinho.filter(c=>c._id==id);
+  const limite=linhasDoItem[0]?.maxQty ?? it.quantidade;
+  const totalPedido=linhasDoItem.reduce((s,c)=>s+c.qty,0);
+  if(totalPedido>=limite){ await niuAlert('Quantidade em estoque esgotada.'); return; }
+  const existente=linhasDoItem.find(c=>(c.local||'')===(temaAtivo||''));
   if(existente){
-    const limite=existente.maxQty ?? it.quantidade;
-    if(existente.qty>=limite){ await niuAlert('Quantidade em estoque esgotada.'); return; }
     existente.qty++;
   } else {
     carrinho.push({_id:id,_estoque:true,nome:it.nome,qty:1,unidade:it.unidade,local:temaAtivo,obs:'',maxQty:it.quantidade,modelo:it.modelo,voltagem:it.voltagem});
@@ -403,10 +510,19 @@ function adicionarItemExtra(){
 
 function remover(idx){ carrinho.splice(idx,1); render(); renderCatalogo(); }
 
+// unidade contável (un/pç/cx/rolo) só aceita inteiro — evita que o spinner nativo do
+// input number (passo 0.1 nas unidades de medida) deixe "1,1", "1,2"... numa peça
+function ajustarQty(idx,valor){
+  const c=carrinho[idx]; if(!c) return;
+  let v=parseFloat(valor)||1;
+  if(UNIDADES_CONTAVEIS.includes(c.unidade)) v=Math.max(1,Math.round(v));
+  c.qty=v;
+}
+
 function itemRowHtml(c,i){
   const iconFor=n=>{const l=n?.toLowerCase()||'';return l.includes('led')?'💡':l.includes('transf')?'⚡':l.includes('cabo')?'🔌':l.includes('lamp')||l.includes('t8')?'🔆':l.includes('reat')?'🔋':l.includes('ferr')?'🔧':'📦';};
   return `
-    <div class="item-row ${c._estoque?'estoque-item':'extra-item'}" data-idx="${i}" draggable="true" ondragstart="iniciarArrasto(${i})" ondragend="itemArrastadoIdx=null">
+    <div class="item-row ${c._estoque?'estoque-item':'extra-item'}" data-idx="${i}" draggable="true" ondragstart="iniciarArrasto(${i},event)" ondragend="itemArrastadoIdx=null">
       <button class="remove-btn" onclick="remover(${i})">Remover</button>
       <div class="item-row-header">
         <div class="item-icon ${c._estoque?'':'extra'}">${iconFor(c.nome)}</div>
@@ -424,11 +540,11 @@ function itemRowHtml(c,i){
         </div>`:''}
         <div>
           <label>Quantidade</label>
-          <input type="number" min="0.1" step="0.1" ${c.maxQty?`max="${c.maxQty}"`:''}  value="${c.qty}" oninput="carrinho[${i}].qty=parseFloat(this.value)||1">
+          <input type="number" min="${UNIDADES_CONTAVEIS.includes(c.unidade)?'1':'0.1'}" step="${UNIDADES_CONTAVEIS.includes(c.unidade)?'1':'0.1'}" ${c.maxQty?`max="${c.maxQty}"`:''} value="${c.qty}" oninput="ajustarQty(${i},this.value)">
         </div>
         <div>
           <label>Unidade</label>
-          <select onchange="carrinho[${i}].unidade=this.value">
+          <select onchange="carrinho[${i}].unidade=this.value;ajustarQty(${i},carrinho[${i}].qty);render()">
             ${['un','m','cx','rolo','pç','kg'].map(u=>`<option ${u===c.unidade?'selected':''}>${u}</option>`).join('')}
           </select>
         </div>
@@ -482,7 +598,13 @@ function removerTemaVazio(chave){
   if(temaAtivo===chave) temaAtivo='';
   render();
 }
-function iniciarArrasto(i){ itemArrastadoIdx=i; }
+function iniciarArrasto(i,event){
+  // clique começou dentro de um campo de digitar (ex: selecionando texto) — não é uma
+  // tentativa de mover o item pra outro tema, cancela o arrasto da linha inteira
+  const alvo=event?.target;
+  if(alvo&&(alvo.tagName==='INPUT'||alvo.tagName==='TEXTAREA'||alvo.tagName==='SELECT')){ event.preventDefault(); return; }
+  itemArrastadoIdx=i;
+}
 function soltarNoTema(ev,chave){
   ev.preventDefault();
   if(itemArrastadoIdx===null) return;
@@ -638,7 +760,7 @@ async function confirmar(apenasEmail=false){
 // Unidades "de peça" (contáveis) geram uma etiqueta por unidade física (ex: 5 transformadores
 // = 5 etiquetas, cada uma marcada 1/5, 2/5...). Unidades de medida contínua (m, kg) geram só
 // uma etiqueta pro item inteiro — não faz sentido uma etiqueta por metro de cabo.
-const UNIDADES_CONTAVEIS=['un','pç','cx','rolo'];
+// (UNIDADES_CONTAVEIS já declarada no topo do script, reaproveitada aqui)
 // expande o carrinho em uma etiqueta por unidade física (5 transformadores = 5 entradas,
 // marcadas 1/5, 2/5...); unidades de medida contínua (m, kg) ficam com etiqueta única.
 function montarLabelsItens(ot,nomeOt,local){

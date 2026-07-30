@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>Checkout de Entrega · Estoque</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="/theme.js"></script>
+<script src="/dialogs.js"></script>
+<link rel="stylesheet" href="/theme.css">
+<script src="/auth-gate.js"></script>
+<style>
+:root{--brd:var(--border);--r:16px}
+*{margin:0;padding:0}
+body{font-size:14.5px;min-height:100vh;padding:12px 12px 90px}
+.g{background:var(--surface);border:1px solid var(--brd);border-radius:var(--r);backdrop-filter:blur(10px) saturate(130%);box-shadow:var(--shadow-card)}
+header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
+header a{text-decoration:none;display:flex;align-items:center;gap:10px}
+.sub{font-size:.75rem;color:var(--muted)}
+.card{padding:14px;margin-bottom:10px}
+.btn{border:none;border-radius:12px;padding:13px;font-weight:700;cursor:pointer;font-size:.9rem;width:100%;font-family:inherit;margin-bottom:8px}
+.btn-cam{background:linear-gradient(135deg,#f5a623,#d6890a);color:#1f2937}
+.btn-ok{background:linear-gradient(135deg,var(--ok),#059669);color:#fff}
+.btn-sec{background:var(--surface-hover);color:var(--text);border:1px solid var(--brd)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+#camBox{display:none;position:relative;border-radius:var(--r);overflow:hidden;margin-bottom:10px;aspect-ratio:4/3;background:#000}
+#camBox video{width:100%;height:100%;object-fit:cover;display:block}
+#camBox canvas{display:none}
+.scan-line{position:absolute;left:5%;right:5%;height:2px;background:linear-gradient(90deg,transparent,var(--primary),transparent);animation:sl 1.8s linear infinite}
+@keyframes sl{0%{top:15%}50%{top:85%}100%{top:15%}}
+#status{position:absolute;bottom:6px;left:6px;background:rgba(0,0,0,.65);color:#fff;font-size:.62rem;padding:3px 8px;border-radius:6px}
+.empty{color:var(--muted);text-align:center;padding:20px;font-size:.85rem}
+.toast{position:fixed;bottom:70px;left:50%;transform:translateX(-50%) translateY(8px);background:rgba(20,22,30,.95);color:#fff;padding:11px 20px;border-radius:30px;font-weight:600;font-size:.82rem;opacity:0;transition:.25s;z-index:99;border:1px solid var(--brd);white-space:nowrap}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+label{font-size:.72rem;color:var(--muted);font-weight:700;display:block;margin-bottom:4px;margin-top:10px}
+input{width:100%;padding:11px 12px;border:1px solid var(--brd);border-radius:10px;background:var(--surface-2);color:var(--text);font-size:.9rem;font-family:inherit}
+input:focus{outline:none;border-color:var(--primary)}
+input::placeholder{color:var(--muted-2)}
+.item-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--brd)}
+.item-row:last-child{border-bottom:none}
+.item-row .info{flex:1;min-width:0}
+.item-row b{display:block;font-size:.88rem}
+.item-row span{font-size:.72rem;color:var(--muted)}
+.item-row .rm{background:none;border:none;color:var(--danger);font-size:1.1rem;cursor:pointer;padding:4px 8px}
+.counter{background:var(--primary);color:#fff;font-size:.7rem;font-weight:800;border-radius:20px;padding:1px 8px}
+.hint{font-size:.72rem;color:var(--muted);margin-top:8px;line-height:1.5}
+.eco-links{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.eco-links a{display:inline-flex;align-items:center;gap:5px;font-size:.68rem;font-weight:600;color:var(--muted);background:var(--surface-hover);border:1px solid var(--brd);border-radius:8px;padding:5px 9px;text-decoration:none}
+.eco-links a:hover{color:var(--text)}
+</style>
+<script src="/macroview-widget.js" defer></script>
+</head>
+<body>
+
+<header>
+  <a href="/index.html">
+    <svg width="70" height="20" viewBox="0 0 36.4 10.22" fill="currentColor" style="color:var(--text)">
+      <rect x="16.96" y="0" width="2.47" height="10.22"/>
+      <path d="M22.04,4.83V0h2.47v4.74c0,2.09.6,3.1,1.88,3.1s2.8-.77,4.53-2.03l2.98-2.06V0h2.5v10.22h-2.32c0-1.13,0-2.86.06-3.99-3.99,2.68-5.78,3.99-8.14,3.99-2.53,0-3.96-1.64-3.96-5.39"/>
+      <path d="M14.36,5.39v4.83h-2.47v-4.74c0-2.09-.6-3.1-1.88-3.1s-2.8.77-4.53,2.03l-2.98,2.06v3.76H0V0h2.32c0,1.13,0,2.86-.06,3.99C6.26,1.31,8.05,0,10.4,0c2.53,0,3.96,1.64,3.96,5.39"/>
+    </svg>
+    <div><div style="font-weight:800;color:var(--text);font-size:.95rem">Estoque Elétrica</div><div class="sub">Checkout de Entrega</div></div>
+  </a>
+  <button class="theme-toggle" title="Alternar tema" aria-label="Alternar tema claro/escuro">
+    <svg class="ic-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    <svg class="ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+  </button>
+</header>
+
+<div class="eco-links">
+  <a href="/nova-ot.html" title="Nova OT">➕ Nova OT</a>
+  <a href="/scan.html" title="Leitor QR">🔲 Leitor QR</a>
+  <a href="#" onclick="abrirMacroView();return false" title="Visão cruzada de uma OT">🔭 MacroView</a>
+  <a href="http://192.168.23.185:4000" target="_blank" title="Etiquetas Térmicas (print-agent)">🖨 Etiquetas</a>
+  <a href="https://niumapas.pages.dev" target="_blank" title="Mapa de Instalação">🗺 Mapa</a>
+  <a href="https://niukanban.pages.dev" target="_blank" title="Kanban de Produção">🗂 Kanban</a>
+</div>
+
+<div class="card g">
+  <button class="btn btn-cam" id="btnCam">Ativar câmera</button>
+  <div id="camBox">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="canvas"></canvas>
+    <div class="scan-line"></div>
+    <div id="status">aguardando...</div>
+  </div>
+  <label>Leitor físico (USB/Bluetooth)</label>
+  <input id="hidScanInput" type="text" autocomplete="off" placeholder="Clique em «Iniciar leitura» e escaneie a peça">
+  <button class="btn btn-sec" id="btnIniciarLeitor" style="margin-top:8px">▶ Iniciar leitura</button>
+  <div class="hint">Escaneie cada peça pronta pra saída — só aceita QR de unidade física (etiqueta colada na peça). Cada leitura entra na lista abaixo, uma vez cada.</div>
+</div>
+
+<div class="card g">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+    <b style="font-size:.9rem">Peças escaneadas</b>
+    <span class="counter" id="contador">0</span>
+  </div>
+  <div id="lista"><div class="empty">Nenhuma peça escaneada ainda.</div></div>
+</div>
+
+<div class="card g">
+  <label style="margin-top:0">Retirado por</label>
+  <input id="retiradoPor" placeholder="Nome de quem está levando o material">
+  <button class="btn btn-ok" id="btnGerar" style="margin-top:14px" disabled>Gerar guia de transporte</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="/vendor/jsQR.js"></script>
+<script>
+const API='/api';
+const esc=s=>String(s??'').replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
+let itensCheckout=[]; // [{uid,nome,serial,ot}]
+let camOn=false, scanInt=null, detector=null, scanning=false, lastScan=0;
+
+function toast(m,t){
+  const el=document.getElementById('toast');
+  el.textContent=m; el.className='toast show'+(t?' '+t:'');
+  setTimeout(()=>el.classList.remove('show'),2600);
+}
+
+async function processarUid(uid){
+  if(itensCheckout.some(i=>i.uid==uid)){ toast('Essa peça já está na lista','err'); return; }
+  const r=await fetch(`${API}/resolver?uid=${encodeURIComponent(uid)}`).then(r=>r.json()).catch(()=>null);
+  if(!r||r.tipo!=='unidade'){ toast('QR não é de uma unidade física','err'); return; }
+  const u=r.unidade;
+  itensCheckout.push({ uid, nome:u.nome, serial:u.serial, ot:u.ot||'' });
+  toast('✓ '+u.nome+' adicionado');
+  render();
+}
+
+function render(){
+  document.getElementById('contador').textContent=itensCheckout.length;
+  document.getElementById('lista').innerHTML = itensCheckout.length ? itensCheckout.map((it,i)=>`
+    <div class="item-row">
+      <div class="info"><b>${esc(it.nome)}</b><span>${esc(it.serial)}${it.ot?' · OT '+esc(it.ot):' · sem OT vinculada'}</span></div>
+      <button class="rm" onclick="removerItem(${i})" title="Remover">✕</button>
+    </div>`).join('') : '<div class="empty">Nenhuma peça escaneada ainda.</div>';
+  document.getElementById('btnGerar').disabled = itensCheckout.length===0;
+}
+function removerItem(i){ itensCheckout.splice(i,1); render(); }
+
+/* ===== câmera ===== */
+document.getElementById('btnCam').addEventListener('click', async ()=>{
+  if(camOn){ stopCam(); return; }
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}});
+    const v=document.getElementById('video');
+    v.srcObject=stream;
+    document.getElementById('camBox').style.display='block';
+    document.getElementById('btnCam').textContent='Parar câmera';
+    camOn=true;
+    if('BarcodeDetector' in window){ try{detector=new BarcodeDetector({formats:['qr_code']});}catch(e){detector=null;} }
+    v.oncanplay=()=>{ if(!scanInt) scanInt=setInterval(doScan,250); };
+    await v.play().catch(()=>{});
+  }catch(e){ toast('Câmera: '+e.message,'err'); }
+});
+function stopCam(){
+  const v=document.getElementById('video');
+  if(v.srcObject) v.srcObject.getTracks().forEach(t=>t.stop());
+  v.srcObject=null;
+  document.getElementById('camBox').style.display='none';
+  document.getElementById('btnCam').textContent='Ativar câmera';
+  camOn=false;
+  if(scanInt){clearInterval(scanInt);scanInt=null;}
+}
+async function doScan(){
+  if(!camOn||scanning) return;
+  const v=document.getElementById('video'),st=document.getElementById('status');
+  if(v.readyState<2||v.videoWidth===0) return;
+  scanning=true;
+  const now=Date.now();
+  let val=null;
+  try{
+    if(detector){ const r=await detector.detect(v).catch(()=>[]); if(r.length) val=r[0].rawValue; }
+    if(!val&&typeof jsQR!=='undefined'){
+      const c=document.getElementById('canvas');
+      c.width=v.videoWidth;c.height=v.videoHeight;
+      const ctx=c.getContext('2d'); ctx.drawImage(v,0,0);
+      const d=ctx.getImageData(0,0,c.width,c.height);
+      const qr=jsQR(d.data,d.width,d.height,{inversionAttempts:'attemptBoth'});
+      if(qr) val=qr.data;
+    }
+    if(st) st.textContent=val?'✓ QR detetado!':'aguardando...';
+    if(val&&now-lastScan>1500){
+      lastScan=now;
+      try{ const u=new URL(val).searchParams.get('uid'); if(u) processarUid(u); }catch(e){}
+    }
+  }catch(e){}
+  scanning=false;
+}
+
+/* ===== leitor físico (mesmo mecanismo do Leitor QR) ===== */
+const MAPA_LEITOR_FISICO = { 'Ç': ':', '-': '/', "'": '-', '_': '?', '+': '=' };
+function corrigirCharsLeitorFisico(texto) {
+  return texto.replace(/[Ç\-'_+]/g, c => MAPA_LEITOR_FISICO[c] ?? c);
+}
+function iniciarLeitorFisico(){
+  const hid=document.getElementById('hidScanInput');
+  hid.value=''; hid.focus({preventScroll:true});
+  toast('Leitor pronto — escaneie agora');
+}
+document.getElementById('btnIniciarLeitor').addEventListener('click', iniciarLeitorFisico);
+document.getElementById('hidScanInput').addEventListener('keydown', e=>{
+  if(e.key!=='Enter') return;
+  e.preventDefault();
+  const hid=document.getElementById('hidScanInput');
+  const val=corrigirCharsLeitorFisico(hid.value.trim());
+  hid.value='';
+  if(!val) return;
+  try{ const u=new URL(val).searchParams.get('uid'); if(u) processarUid(u); else toast('QR não é de uma unidade física','err'); }
+  catch(e){ toast('Não consegui ler esse QR','err'); }
+});
+
+/* ===== gerar guia ===== */
+document.getElementById('btnGerar').addEventListener('click', async ()=>{
+  const btn=document.getElementById('btnGerar');
+  btn.disabled=true; btn.textContent='Gerando...';
+  const ots=[...new Set(itensCheckout.map(i=>i.ot).filter(Boolean))];
+  const r=await fetch(`${API}/checkout`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    ot: ots.length===1?ots[0]:'',
+    retiradoPor: document.getElementById('retiradoPor').value.trim(),
+    itens: itensCheckout
+  })}).then(r=>r.json()).catch(()=>null);
+  if(!r?.ok){ toast('Erro ao gerar a guia','err'); btn.disabled=false; btn.textContent='Gerar guia de transporte'; return; }
+  location.href = `/guia-transporte.html?id=${r.id}`;
+});
+</script>
+</body>
+</html>

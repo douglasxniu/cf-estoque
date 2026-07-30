@@ -89,3 +89,16 @@ CREATE TABLE etiquetas_resumo (
   itens_json TEXT NOT NULL,
   atualizado_em TEXT DEFAULT (datetime('now'))
 );
+
+-- Checkout de entrega: lista de unidades físicas escaneadas na hora de retirar/entregar
+-- material já pronto, vira uma "guia de transporte" pública e imprimível (GET
+-- /api/checkout/:id, sem login — pra quem retira levar impresso ou mostrar no celular). Ver
+-- migration_checkouts.sql.
+CREATE TABLE checkouts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ot TEXT,
+  retirado_por TEXT,
+  itens_json TEXT NOT NULL,
+  criado_por TEXT,
+  criado_em TEXT DEFAULT (datetime('now'))
+);

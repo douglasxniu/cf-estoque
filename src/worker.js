@@ -26,7 +26,12 @@ const PUBLIC_ROUTES = [
   { method: "GET", path: "/api/auth/status" },
   { method: "POST", path: "/api/auth/bootstrap" },
   { method: "POST", path: "/api/auth/login" },
-  { method: "POST", path: "/api/etiquetas-resumo" }
+  { method: "POST", path: "/api/etiquetas-resumo" },
+  // resolvedor de OT e sugestões de busca precisam ser públicos: o popup do MacroView é
+  // embutido em Mapa/Kanban/print-agent (domínios diferentes, sem o token de login do
+  // Estoque) — não expõem nada que /api/ot/:ot e /api/etiquetas-resumo/:ot já não expusessem
+  { method: "GET", path: "/api/resolver" },
+  { method: "GET", path: "/api/ot/sugestoes" }
 ];
 // GET /api/ot/:ot e GET /api/unidades/:id precisam ser públicos: são acessados pelo QR
 // físico colado no item / link do email, sem que quem lê tenha o token de admin.
@@ -34,7 +39,9 @@ const PUBLIC_ROUTE_PATTERNS = [
   { method: "GET", pattern: /^\/api\/ot\/[^/]+$/ },
   { method: "GET", pattern: /^\/api\/unidades\/\d+$/ },
   { method: "GET", pattern: /^\/api\/itens\/\d+\/imagem$/ },
-  { method: "GET", pattern: /^\/api\/etiquetas-resumo\/.+$/ }
+  { method: "GET", pattern: /^\/api\/etiquetas-resumo\/.+$/ },
+  // guia de transporte impressa/mostrada pra quem retira o material — sem login
+  { method: "GET", pattern: /^\/api\/checkout\/\d+$/ }
 ];
 
 function isPublicRoute(path, method) {
@@ -124,6 +131,18 @@ async function usuarioAtual(request, env) {
     return { uid: 0, nome: "Admin", papel: "admin", legado: true };
   }
   return null;
+}
+
+// Registra uma linha no canal de eventos/mensagens de uma OT — usado tanto pelos hooks
+// automáticos (mudança de quantidade, item adicionado/removido, aprovação/devolução) quanto
+// pela mensagem escrita por alguém. Nunca deve derrubar a operação principal se falhar.
+async function registrarEvento(env, ot, texto, autor, tipo = "evento") {
+  if (!ot) return;
+  try {
+    await env.DB.prepare(
+      "INSERT INTO ot_eventos (ot, tipo, autor, texto) VALUES (?, ?, ?, ?)"
+    ).bind(ot, tipo, autor || "Sistema", texto).run();
+  } catch (e) { /* não interrompe a operação principal por causa do log */ }
 }
 
 async function enviarEmail(env, { item, quantidade, unidade, ot, solicitante, setor }) {
@@ -500,7 +519,7 @@ export default {
     // ---------- PROJETOS ----------
     if (path === "/api/projetos" && method === "GET") {
       const { results } = await env.DB.prepare(
-        "SELECT numero, nome, setor, status, criado_em FROM projetos ORDER BY criado_em DESC"
+        "SELECT numero, nome, setor, descricao, status, criado_em FROM projetos ORDER BY criado_em DESC"
       ).all();
       return json(results);
     }
@@ -511,11 +530,15 @@ export default {
       if (numeroManual) {
         try {
           const r = await env.DB.prepare(
-            "INSERT INTO projetos (numero, nome, setor) VALUES (?, ?, ?)"
-          ).bind(numeroManual, b.nome || "", b.setor || "").run();
+            "INSERT INTO projetos (numero, nome, setor, descricao) VALUES (?, ?, ?, ?)"
+          ).bind(numeroManual, b.nome || "", b.setor || "", b.descricao || "").run();
           return json({ id: r.meta.last_row_id, numero: numeroManual });
         } catch (e) {
-          return json({ error: `Projeto ${numeroManual} já existe` }, 409);
+          // já existe — devolve os dados dela pra quem chamou poder "conectar" em vez de só falhar
+          const existente = await env.DB.prepare(
+            "SELECT numero, nome, descricao, status FROM projetos WHERE numero = ?"
+          ).bind(numeroManual).first();
+          return json({ error: `A OT ${numeroManual} já existe`, existente }, 409);
         }
       }
       // Limpeza oportunista: libera números reservados (ex: página "Nova OT" aberta e
@@ -533,8 +556,8 @@ export default {
         const candidato = `OT-${seq}`;
         try {
           const r = await env.DB.prepare(
-            "INSERT INTO projetos (numero, nome, setor) VALUES (?, ?, ?)"
-          ).bind(candidato, b.nome || "", b.setor || "").run();
+            "INSERT INTO projetos (numero, nome, setor, descricao) VALUES (?, ?, ?, ?)"
+          ).bind(candidato, b.nome || "", b.setor || "", b.descricao || "").run();
           return json({ id: r.meta.last_row_id, numero: candidato });
         } catch (e) { /* número já reservado por outra requisição concorrente; tenta o próximo */ }
       }
@@ -556,8 +579,8 @@ export default {
       const b = await request.json();
       const numero = decodeURIComponent(projetoMatch[1]);
       await env.DB.prepare(
-        "UPDATE projetos SET nome = COALESCE(?, nome), setor = COALESCE(?, setor), status = COALESCE(?, status) WHERE numero = ?"
-      ).bind(b.nome ?? null, b.setor ?? null, b.status ?? null, numero).run();
+        "UPDATE projetos SET nome = COALESCE(?, nome), setor = COALESCE(?, setor), status = COALESCE(?, status), descricao = COALESCE(?, descricao) WHERE numero = ?"
+      ).bind(b.nome ?? null, b.setor ?? null, b.status ?? null, b.descricao ?? null, numero).run();
       if (b.solicitante) {
         await env.DB.prepare("UPDATE solicitacoes SET solicitante = ? WHERE ot = ?").bind(b.solicitante, numero).run();
       }
@@ -659,6 +682,13 @@ export default {
         "SELECT item_nome, quantidade FROM solicitacoes WHERE ot = ? ORDER BY id"
       ).bind(ot).all();
       await enviarEmailLote(env, { ot, nome: projeto.nome, solicitante, setor, itens: itensOt.map(i => ({ item: i.item_nome, quantidade: i.quantidade })) });
+      const usrLote = await usuarioAtual(request, env);
+      const autorLote = usrLote?.nome || solicitante;
+      if (resultado.length === 1) {
+        await registrarEvento(env, ot, `Adicionou ${resultado[0].quantidade} ${resultado[0].item}`, autorLote);
+      } else if (resultado.length > 1) {
+        await registrarEvento(env, ot, `Adicionou ${resultado.length} itens (${resultado.map(r => r.item).join(", ")})`, autorLote);
+      }
       return json({ ok: true, ids: idsInseridos });
     }
 
@@ -724,6 +754,10 @@ export default {
       const sol = await env.DB.prepare("SELECT * FROM solicitacoes WHERE id = ?").bind(delSolMatch[1]).first();
       if (sol) await devolverSolicitacao(env, sol);
       await env.DB.prepare("DELETE FROM solicitacoes WHERE id = ?").bind(delSolMatch[1]).run();
+      if (sol) {
+        const usrDel = await usuarioAtual(request, env);
+        await registrarEvento(env, sol.ot, `Removeu ${sol.quantidade} ${sol.item_nome}`, usrDel?.nome);
+      }
       return json({ ok: true });
     }
 
@@ -747,12 +781,29 @@ export default {
       await env.DB.prepare(
         "UPDATE solicitacoes SET item_nome = COALESCE(?, item_nome), quantidade = COALESCE(?, quantidade), local_uso = COALESCE(?, local_uso) WHERE id = ?"
       ).bind(b.item_nome ?? null, b.quantidade ?? null, b.local_uso ?? null, patchSolMatch[1]).run();
+
+      const usr = await usuarioAtual(request, env);
+      const nomeItem = b.item_nome ?? sol.item_nome;
+      if (b.quantidade != null && b.quantidade !== sol.quantidade) {
+        await registrarEvento(env, sol.ot, `Alterada a quantidade de ${nomeItem} para ${b.quantidade}`, usr?.nome);
+      }
+      if (b.item_nome != null && b.item_nome !== sol.item_nome) {
+        await registrarEvento(env, sol.ot, `Item renomeado de "${sol.item_nome}" para "${b.item_nome}"`, usr?.nome);
+      }
+      if (b.local_uso != null && b.local_uso !== sol.local_uso) {
+        await registrarEvento(env, sol.ot, `Local de uso de ${nomeItem} alterado para "${b.local_uso || '—'}"`, usr?.nome);
+      }
       return json({ ok: true });
     }
 
     const aprovMatch = path.match(/^\/api\/solicitacoes\/(\d+)\/aprovar$/);
     if (aprovMatch && method === "PATCH") {
-      await env.DB.prepare("UPDATE solicitacoes SET status='aprovado' WHERE id=? AND status='pendente'").bind(aprovMatch[1]).run();
+      const solAprov = await env.DB.prepare("SELECT * FROM solicitacoes WHERE id = ?").bind(aprovMatch[1]).first();
+      const upd = await env.DB.prepare("UPDATE solicitacoes SET status='aprovado' WHERE id=? AND status='pendente'").bind(aprovMatch[1]).run();
+      if (solAprov && upd.meta.changes > 0) {
+        const usrAprov = await usuarioAtual(request, env);
+        await registrarEvento(env, solAprov.ot, `Entrega registada: ${solAprov.quantidade} ${solAprov.item_nome}`, usrAprov?.nome);
+      }
       return json({ ok: true });
     }
 
@@ -760,6 +811,10 @@ export default {
     if (solMatch && method === "PATCH") {
       const sol = await env.DB.prepare("SELECT * FROM solicitacoes WHERE id = ?").bind(solMatch[1]).first();
       if (sol) await devolverSolicitacao(env, sol);
+      if (sol) {
+        const usrDev = await usuarioAtual(request, env);
+        await registrarEvento(env, sol.ot, `Devolveu ao estoque: ${sol.quantidade} ${sol.item_nome}`, usrDev?.nome);
+      }
       return json({ ok: true });
     }
 
@@ -804,12 +859,66 @@ export default {
       return json({ ok: true });
     }
 
+    // busca solta enquanto o usuário digita (autocompletar do MacroView) — dá pra achar por
+    // número OU pelo nome do trabalho, junta candidatos de solicitacoes/projetos/etiquetas_
+    // resumo e devolve uma lista curta já sem duplicar a mesma OT. Precisa vir ANTES do
+    // /api/ot/:ot logo abaixo, senão aquele intercepta "sugestoes" como se fosse um número
+    // de OT e essa rota nunca é alcançada.
+    if (path === "/api/ot/sugestoes" && method === "GET") {
+      const q = (url.searchParams.get("q") || "").trim();
+      if (q.length < 2) return json({ sugestoes: [] });
+      const termo = `%${q}%`;
+      const [solic, proj, resumo] = await Promise.all([
+        env.DB.prepare("SELECT DISTINCT s.ot AS ot, p.nome AS nome FROM solicitacoes s LEFT JOIN projetos p ON s.ot = p.numero WHERE s.ot LIKE ? LIMIT 8").bind(termo).all(),
+        env.DB.prepare("SELECT numero AS ot, nome FROM projetos WHERE numero LIKE ? OR nome LIKE ? LIMIT 8").bind(termo, termo).all(),
+        env.DB.prepare("SELECT ot, nome_ot AS nome FROM etiquetas_resumo WHERE ot LIKE ? OR nome_ot LIKE ? LIMIT 8").bind(termo, termo).all()
+      ]);
+      const vistos = new Map();
+      for (const row of [...solic.results, ...proj.results, ...resumo.results]) {
+        if (!row.ot || vistos.has(row.ot)) continue;
+        vistos.set(row.ot, { ot: row.ot, nome: row.nome || "" });
+      }
+      return json({ sugestoes: [...vistos.values()].slice(0, 8) });
+    }
+
     const otGetMatch = path.match(/^\/api\/ot\/(.+)$/);
     if (otGetMatch && method === "GET") {
       const ot = decodeURIComponent(otGetMatch[1]);
       const { results } = await env.DB.prepare(
         "SELECT s.*, i.modelo AS item_modelo, i.voltagem AS item_voltagem, p.nome AS projeto_nome FROM solicitacoes s LEFT JOIN itens i ON s.item_id = i.id LEFT JOIN projetos p ON s.ot = p.numero WHERE s.ot=? ORDER BY s.id"
       ).bind(ot).all();
+      return json(results);
+    }
+
+    // ---------- CANAL DE EVENTOS/MENSAGENS POR OT ----------
+    // Feed único cronológico por OT, misturando eventos automáticos (registrados pelos hooks
+    // acima) com observações escritas por alguém — estilo canal de trabalho.
+    const eventosOtMatch = path.match(/^\/api\/ot\/([^/]+)\/eventos$/);
+    if (eventosOtMatch && method === "GET") {
+      const ot = decodeURIComponent(eventosOtMatch[1]);
+      const { results } = await env.DB.prepare(
+        "SELECT * FROM ot_eventos WHERE ot = ? ORDER BY id"
+      ).bind(ot).all();
+      return json(results);
+    }
+    if (eventosOtMatch && method === "POST") {
+      const ot = decodeURIComponent(eventosOtMatch[1]);
+      const b = await request.json().catch(() => null);
+      const texto = (b?.texto || "").trim();
+      if (!texto) return json({ error: "Mensagem vazia" }, 400);
+      const usrMsg = await usuarioAtual(request, env);
+      await registrarEvento(env, ot, texto.slice(0, 1000), usrMsg?.nome || b?.autor || "Anónimo", "mensagem");
+      return json({ ok: true });
+    }
+
+    // feed global (todas as OTs) usado pelo sino de notificações do painel — mesmo padrão de
+    // /api/notificacoes (polling com "since"), pra também virar notificação, não só ficar
+    // visível dentro da OT.
+    if (path === "/api/eventos" && method === "GET") {
+      const since = url.searchParams.get("since") || "1970-01-01";
+      const { results } = await env.DB.prepare(
+        "SELECT * FROM ot_eventos WHERE criado_em > ? ORDER BY criado_em DESC LIMIT 20"
+      ).bind(since).all();
       return json(results);
     }
 
@@ -843,6 +952,158 @@ export default {
       const row = await env.DB.prepare("SELECT * FROM etiquetas_resumo WHERE ot=?").bind(ot).first();
       if (!row) return json({ error: "não encontrado" }, 404);
       return json({ ot: row.ot, nomeOt: row.nome_ot, itens: JSON.parse(row.itens_json), atualizadoEm: row.atualizado_em });
+    }
+
+    // O número de OT em produção convive em pelo menos 3 formatos diferentes na mesma
+    // coluna (ex: "OT-0011", "OT-2026-0383", "0360 Montras GG Soares") — comparar string
+    // exata falha na maioria das vezes. ultimoNumeroOT() extrai o ÚLTIMO grupo de dígitos da
+    // string (o "0383" de "OT-2026-0383", o "69" de "OT-69") e compara como número, o que
+    // ignora prefixo "OT", ano embutido e zeros à esquerda de uma vez só.
+    function ultimoNumeroOT(bruto) {
+      const t = String(bruto || "").trim();
+      const m = t.match(/(\d{1,6})(?!.*\d)/);
+      return m ? parseInt(m[1], 10) : null;
+    }
+
+    // busca uma OT tolerando os formatos inconsistentes já gravados: tenta bater exato
+    // primeiro (mais rápido, cobre o caso comum de já estar digitado certinho); se não achar
+    // nada, procura candidatos por LIKE no número e confirma casando ultimoNumeroOT — assim
+    // "0383" encontra "OT-2026-0383" sem precisar reescrever nada armazenado.
+    async function buscarOtTolerante(env, entradaOt) {
+      const consultaSolic = ot => env.DB.prepare(
+        "SELECT s.*, i.modelo AS item_modelo, i.voltagem AS item_voltagem, p.nome AS projeto_nome FROM solicitacoes s LEFT JOIN itens i ON s.item_id = i.id LEFT JOIN projetos p ON s.ot = p.numero WHERE s.ot=? ORDER BY s.id"
+      ).bind(ot).all().then(r => r.results);
+
+      let solicitacoes = await consultaSolic(entradaOt);
+      let resumoRow = await env.DB.prepare("SELECT * FROM etiquetas_resumo WHERE ot=?").bind(entradaOt).first();
+      let otCanonica = entradaOt;
+
+      if (!solicitacoes.length && !resumoRow) {
+        const numeroAlvo = ultimoNumeroOT(entradaOt);
+        if (numeroAlvo !== null) {
+          const [{ results: candSolic }, { results: candResumo }] = await Promise.all([
+            env.DB.prepare("SELECT DISTINCT ot FROM solicitacoes WHERE ot LIKE ?").bind(`%${numeroAlvo}%`).all(),
+            env.DB.prepare("SELECT ot FROM etiquetas_resumo WHERE ot LIKE ?").bind(`%${numeroAlvo}%`).all()
+          ]);
+          const bateuSolic = candSolic.find(c => ultimoNumeroOT(c.ot) === numeroAlvo);
+          const bateuResumo = candResumo.find(c => ultimoNumeroOT(c.ot) === numeroAlvo);
+          if (bateuSolic) { otCanonica = bateuSolic.ot; solicitacoes = await consultaSolic(otCanonica); }
+          if (bateuResumo) {
+            otCanonica = bateuResumo.ot;
+            resumoRow = await env.DB.prepare("SELECT * FROM etiquetas_resumo WHERE ot=?").bind(otCanonica).first();
+          }
+        }
+      }
+      return { ot: otCanonica, solicitacoes, resumoRow };
+    }
+
+    // busca ao vivo no board do Kanban (fetch server-to-server, sem problema de CORS) —
+    // devolve os cartões cujo número de OT casa com o pedido, já com coluna/status/flag de
+    // atrasado. Board inteiro é público (GET /api/kanban, sem auth), então não precisa de
+    // token nenhum aqui. Falha silenciosa (devolve null) se o Kanban estiver fora do ar —
+    // o resolvedor não deve quebrar por causa de outro sistema.
+    async function buscarStatusKanban(ot) {
+      try {
+        const alvo = ultimoNumeroOT(ot);
+        if (alvo === null) return null;
+        const r = await fetch("https://niukanban.pages.dev/api/kanban");
+        if (!r.ok) return null;
+        const board = await r.json();
+        const cartoes = [];
+        for (const otBoard of board.ots || []) {
+          for (const card of otBoard.cards || []) {
+            if (!card.ot || ultimoNumeroOT(card.ot) !== alvo) continue;
+            const coluna = (otBoard.columns || []).find(c => c.id === card.columnId);
+            cartoes.push({
+              titulo: card.title, status: card.status,
+              coluna: coluna ? coluna.name : card.columnId,
+              blocked: !!card.blocked, updatedAt: card.updatedAt || null
+            });
+          }
+        }
+        return cartoes;
+      } catch { return null; }
+    }
+
+    // ---------- RESOLVEDOR DE QR (ponto único de identificação) ----------
+    // Recebe a URL crua de QUALQUER QR já gerado pelo sistema (OT real, OT só publicada
+    // pelo print-agent, unidade física, item de catálogo) e devolve já classificado —
+    // { tipo, ... }. Cada leitor (scan.html, físico ou câmera, e qualquer um futuro) chama
+    // só isto em vez de reimplementar essa cadeia de tentativas em cada lugar que lê QR.
+    if (path === "/api/resolver" && method === "GET") {
+      // aceita tanto a URL crua de um QR (?url=https://.../etiqueta-resumo.html?ot=...) quanto
+      // os parâmetros já soltos (?ot=... direto) — o segundo é só conveniência pra quem já
+      // sabe o que está procurando (ex: mostrarOTModal, que só tem o número da OT em mãos)
+      const bruto = url.searchParams.get("url");
+      let params = url.searchParams;
+      if (bruto) {
+        try { params = new URL(bruto, url.origin).searchParams; }
+        catch { return json({ tipo: "desconhecido" }); }
+      }
+      const ot = params.get("ot");
+      const uid = params.get("uid");
+      const id = params.get("id");
+
+      if (ot) {
+        const { ot: otCanonica, solicitacoes: results, resumoRow } = await buscarOtTolerante(env, ot);
+        // busca o Kanban pela OT já resolvida (não a que foi digitada) — importante quando o
+        // usuário digitou "0383" e a canônica achada foi "OT-2026-0383"
+        const kanban = await buscarStatusKanban(otCanonica);
+        const impressao = resumoRow
+          ? { nomeOt: resumoRow.nome_ot, itens: JSON.parse(resumoRow.itens_json), atualizadoEm: resumoRow.atualizado_em }
+          : null;
+
+        if (results.length) return json({ tipo: "ot", ot: otCanonica, itens: results, impressao, kanban });
+        if (resumoRow) return json({ tipo: "ot-impressao", ot: resumoRow.ot, nomeOt: resumoRow.nome_ot, itens: JSON.parse(resumoRow.itens_json), atualizadoEm: resumoRow.atualizado_em, kanban });
+        if (kanban && kanban.length) return json({ tipo: "ot-kanban", ot: otCanonica, kanban });
+      }
+      if (uid) {
+        const u = await env.DB.prepare(
+          "SELECT u.*, i.nome, i.categoria, i.voltagem, i.modelo, i.unidade, i.codigo, s.ot, s.solicitante, s.setor, s.local_uso " +
+          "FROM unidades u JOIN itens i ON i.id=u.item_id " +
+          "LEFT JOIN solicitacao_unidades su ON su.unidade_id = u.id AND su.devolvido_em IS NULL " +
+          "LEFT JOIN solicitacoes s ON s.id = su.solicitacao_id WHERE u.id=?"
+        ).bind(uid).first();
+        if (u) return json({ tipo: "unidade", unidade: u });
+      }
+      if (id) {
+        const it = await env.DB.prepare("SELECT * FROM itens WHERE id=?").bind(id).first();
+        if (it) return json({ tipo: "item", item: it });
+      }
+      return json({ tipo: "desconhecido" });
+    }
+
+    // ---------- CHECKOUT DE ENTREGA (guia de transporte) ----------
+    // Escaneia N unidades físicas prontas pra saírem e gera um registro imutável — a "guia
+    // de transporte" pública que quem retira leva impressa ou mostra no celular. Criar exige
+    // login (só quem está liberando o material); ler não (o destinatário raramente tem
+    // conta no sistema).
+    if (path === "/api/checkout" && method === "POST") {
+      const b = await request.json().catch(() => null);
+      const itens = Array.isArray(b?.itens) ? b.itens.slice(0, 200).map(it => ({
+        uid: it?.uid ?? null,
+        nome: String(it?.nome || "").slice(0, 200),
+        serial: String(it?.serial || "").slice(0, 100),
+        ot: String(it?.ot || "").slice(0, 60)
+      })).filter(it => it.nome) : [];
+      if (!itens.length) return json({ error: "nenhum item válido" }, 400);
+      const ot = typeof b?.ot === "string" ? b.ot.trim().slice(0, 60) : "";
+      const retiradoPor = typeof b?.retiradoPor === "string" ? b.retiradoPor.trim().slice(0, 120) : "";
+      const usuario = await usuarioAtual(request, env);
+      const r = await env.DB.prepare(
+        "INSERT INTO checkouts (ot, retirado_por, itens_json, criado_por) VALUES (?, ?, ?, ?)"
+      ).bind(ot, retiradoPor, JSON.stringify(itens), usuario?.nome || null).run();
+      return json({ ok: true, id: r.meta.last_row_id });
+    }
+
+    const checkoutMatch = path.match(/^\/api\/checkout\/(\d+)$/);
+    if (checkoutMatch && method === "GET") {
+      const row = await env.DB.prepare("SELECT * FROM checkouts WHERE id=?").bind(checkoutMatch[1]).first();
+      if (!row) return json({ error: "não encontrado" }, 404);
+      return json({
+        id: row.id, ot: row.ot, retiradoPor: row.retirado_por,
+        itens: JSON.parse(row.itens_json), criadoPor: row.criado_por, criadoEm: row.criado_em
+      });
     }
 
     // ---------- FILA DE IMPRESSÃO TÉRMICA (preparação — sem automação real ainda) ----------

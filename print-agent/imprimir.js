@@ -85,6 +85,30 @@ function fonteResponsiva(doc, texto, maxWidth, fonteMax, fonteMin) {
   return { fonte, texto: coube ? texto : linhaUnica(doc, texto, maxWidth) };
 }
 
+// pra observação, que pode crescer bastante — quebra em várias linhas de verdade (em vez de
+// forçar uma linha só), encolhendo a fonte primeiro se nem assim coubesse na altura
+// disponível. Só corta (na última linha) se nem a fonte mínima resolver, pra nunca vazar
+// pro que vem depois na etiqueta. Requer doc.setFont já configurado por quem chama.
+function textoMultiLinha(doc, texto, maxWidth, alturaMaxima, fonteMax, fonteMin, entrelinha = 1.15) {
+  const txt = String(texto || '');
+  let fonte = fonteMax;
+  doc.setFontSize(fonte);
+  let linhas = doc.splitTextToSize(txt, maxWidth);
+  let alturaLinha = fonte * 0.3528 * entrelinha; // pt -> mm, com folga de entrelinha
+  while (fonte > fonteMin && linhas.length * alturaLinha > alturaMaxima) {
+    fonte = Math.max(fonteMin, fonte - 0.5);
+    doc.setFontSize(fonte);
+    linhas = doc.splitTextToSize(txt, maxWidth);
+    alturaLinha = fonte * 0.3528 * entrelinha;
+  }
+  const maxLinhas = Math.max(1, Math.floor(alturaMaxima / alturaLinha));
+  if (linhas.length > maxLinhas) {
+    linhas = linhas.slice(0, maxLinhas);
+    linhas[maxLinhas - 1] = linhaUnica(doc, linhas[maxLinhas - 1], maxWidth);
+  }
+  return { linhas, fonte, alturaLinha, alturaTotal: linhas.length * alturaLinha };
+}
+
 function desenharEtiquetaGrande(doc, lab, W, H, opts, y0 = 0) {
   const pad = 4, maxW = W - 2 * pad;
   const logo = opts.comLogo ? carregarLogoBase64() : false;
@@ -118,8 +142,12 @@ function desenharEtiquetaGrande(doc, lab, W, H, opts, y0 = 0) {
 
   if (lab.obs) {
     ty += 4.5;
-    doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(100, 100, 100);
-    doc.text(linhaUnica(doc, String(lab.obs), maxW), pad, ty);
+    doc.setFont('helvetica', 'italic'); doc.setTextColor(100, 100, 100);
+    const alturaDisponivelObs = Math.max(3.5, (y0 + H) - ty - 7); // reserva ~7mm pro rodapé
+    const obsResp = textoMultiLinha(doc, lab.obs, maxW, alturaDisponivelObs, 8, 6);
+    doc.setFontSize(obsResp.fonte);
+    obsResp.linhas.forEach((linha, i) => doc.text(linha, pad, ty + i * obsResp.alturaLinha));
+    ty += (obsResp.linhas.length - 1) * obsResp.alturaLinha;
   }
 
   // rodapé fica ancorado no fundo, mas nunca mais perto do que 3.5mm da última linha de
@@ -248,7 +276,15 @@ async function desenharEtiquetaMedia(doc, lab, W, H, opts = {}, y0 = 0) {
     const localResp = fonteResponsiva(doc, String(lab.local), maxW, 10, 7);
     linhas.push({ texto: localResp.texto, fonte: localResp.fonte, cor: [55, 55, 55], altura: 6 });
   }
-  if (lab.obs) linhas.push({ texto: linhaUnica(doc, String(lab.obs), maxW), fonte: 8.5, italic: true, cor: [110, 110, 110], altura: 5.5 });
+  if (lab.obs) {
+    doc.setFont('helvetica', 'italic');
+    const alturaUsada = linhas.reduce((s, l) => s + l.altura, 0);
+    const alturaRestante = Math.max(5, ((y0 + H) - dividerY - 2) - alturaUsada);
+    const obsResp = textoMultiLinha(doc, lab.obs, maxW, alturaRestante, 8.5, 6.5);
+    obsResp.linhas.forEach(linha => {
+      linhas.push({ texto: linha, fonte: obsResp.fonte, italic: true, cor: [110, 110, 110], altura: obsResp.alturaLinha });
+    });
+  }
 
   const totalH = linhas.reduce((s, l) => s + l.altura, 0);
   const espacoDisponivel = (y0 + H) - dividerY - 2;
@@ -421,12 +457,60 @@ async function salvarPDF(labels, arquivo, opts) {
   return arquivo;
 }
 
+const CUPS_ERROR_LOG = '/var/log/cups/error_log';
+
+function extrairJobId(saidaLp) {
+  const m = /request id is (\S+)/.exec(saidaLp || '');
+  return m ? m[1] : null;
+}
+
+function jobAindaNaFila(jobId) {
+  try {
+    return execFileSync('/usr/bin/lpstat', ['-W', 'not-completed', '-o']).toString().includes(jobId);
+  } catch (e) {
+    return false;
+  }
+}
+
+// a falha de comunicação USB com esta impressora (recorrente, documentada no error_log do
+// CUPS — "Unable to send data to printer" / "Stopping unresponsive job") acontece DEPOIS do
+// `lp` já ter aceitado o trabalho na fila, então o comando em si não falha — precisamos
+// checar o destino real do job pra saber se ele foi de fato transmitido pra impressora.
+function erroDeComunicacaoRegistrado(numeroJob) {
+  try {
+    const log = fs.readFileSync(CUPS_ERROR_LOG, 'utf8');
+    const marcador = `[Job ${numeroJob}]`;
+    return log.includes(marcador) &&
+      (log.includes(marcador + ' Unable to send data to printer') || log.includes(marcador + ' Stopping unresponsive job'));
+  } catch (e) {
+    return false; // sem acesso ao log — não bloqueia a confirmação por causa disso
+  }
+}
+
+async function verificarImpressaoFisica(jobId, { tentativas = 6, intervaloMs = 800 } = {}) {
+  if (!jobId) return { confirmado: true }; // não conseguimos rastrear; não bloqueia por isso
+  const numeroJob = jobId.split('-').pop();
+  for (let i = 0; i < tentativas; i++) {
+    await new Promise(r => setTimeout(r, intervaloMs));
+    if (erroDeComunicacaoRegistrado(numeroJob)) {
+      return { confirmado: false, motivo: 'A impressora não respondeu (falha de comunicação USB) — o trabalho falhou. Verifique o cabo/conexão e tente novamente.' };
+    }
+    if (!jobAindaNaFila(jobId)) return { confirmado: true };
+  }
+  return { confirmado: false, motivo: 'A impressora está demorando mais que o esperado a responder — verifique a conexão e a fila (lpstat -o) antes de tentar de novo.' };
+}
+
 async function imprimir(labels, { salvarEm, comLogo, tamanho } = {}) {
   const arquivo = salvarEm || path.join(os.tmpdir(), `etiqueta-termica-${Date.now()}.pdf`);
   await salvarPDF(labels, arquivo, { comLogo, tamanho });
   // sem -o media/-o PageSize — usa o padrão atual da fila (o único que imprime de verdade
   // nesse driver, ver comentário no topo do arquivo) — "-n 1" explícito.
-  execFileSync('/usr/bin/lp', ['-d', PRINTER, '-n', '1', arquivo]);
+  const saidaLp = execFileSync('/usr/bin/lp', ['-d', PRINTER, '-n', '1', arquivo]).toString();
+  const verificacao = await verificarImpressaoFisica(extrairJobId(saidaLp));
+  if (!verificacao.confirmado) {
+    const erro = new Error(verificacao.motivo);
+    throw erro;
+  }
   return arquivo;
 }
 

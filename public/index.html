@@ -329,6 +329,7 @@ tr:hover td{background:rgba(255,255,255,.045)}
 }
 @media (min-width:601px){.bottom-nav{display:none}}
 </style>
+<script src="/macroview-widget.js" defer></script>
 </head>
 <body>
 <canvas id="neuralBg"></canvas>
@@ -358,6 +359,12 @@ tr:hover td{background:rgba(255,255,255,.045)}
       </a>
       <a href="/scan.html" target="_blank" style="text-decoration:none">
         <button class="nav-item" style="width:100%"><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h.01M14 18h.01M18 14h.01M18 18h.01"/></svg></span> Leitor QR</button>
+      </a>
+      <a href="/checkout.html" target="_blank" style="text-decoration:none" title="Escaneia as peças prontas e gera a guia de transporte de entrega">
+        <button class="nav-item" style="width:100%"><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 3h5v5"/><path d="M4 20 21 3"/><path d="M21 16v5h-5"/><path d="M15 15l6 6"/><path d="M4 4l5 5"/></svg></span> Checkout de Entrega</button>
+      </a>
+      <a href="#" onclick="abrirMacroView();return false" style="text-decoration:none" title="Visão cruzada de uma OT: material no Estoque, etapa no Kanban e etiquetas já impressas">
+        <button class="nav-item" style="width:100%"><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7Z"/></svg></span> MacroView</button>
       </a>
       <a href="http://192.168.23.185:4000" target="_blank" style="text-decoration:none" title="Painel de etiquetas térmicas — precisa do print-agent rodando no Mac da impressora e de estar na mesma rede Wi-Fi (IP fixo — se parar de funcionar, o Mac pode ter recebido outro IP do roteador)">
         <button class="nav-item" style="width:100%"><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></span> Etiquetas Térmicas</button>
@@ -561,25 +568,41 @@ function tempoRelativo(dataStr){
   return fmt(dataStr);
 }
 
+let ultimoCheckEventos=new Date(Date.now()-1000*60*60*24).toISOString().slice(0,19).replace('T',' ');
+
 async function checarNotificacoes(){
+  let houveNovas=false;
   try{
     const novas = await fetch(`${API}/notificacoes?since=${encodeURIComponent(ultimoCheck)}`).then(r=>r.json());
     if(novas.length){
+      houveNovas=true;
       novas.reverse().forEach(n=>{
-        notifs.unshift({ ...n, lida:false });
+        notifs.unshift({ ...n, tipo:'solicitacao', lida:false });
         toast(`Nova solicitação: ${n.item_nome} (${n.ot})`);
       });
-      ultimoCheck = new Date().toISOString().slice(0,19).replace('T',' ');
-      notifs = notifs.slice(0,40);
-      renderNotifNav();
-      renderNotifList();
-      document.getElementById('navNotif').classList.add('ring');
-      setTimeout(()=>document.getElementById('navNotif').classList.remove('ring'),500);
-      carregarTudo();
-    } else {
-      ultimoCheck = new Date().toISOString().slice(0,19).replace('T',' ');
     }
+    ultimoCheck = new Date().toISOString().slice(0,19).replace('T',' ');
   }catch(e){}
+  try{
+    // canal de OTs (observações + eventos automáticos) — mesmo sino, entrada diferenciada
+    const eventos = await fetch(`${API}/eventos?since=${encodeURIComponent(ultimoCheckEventos)}`).then(r=>r.json());
+    if(eventos.length){
+      houveNovas=true;
+      eventos.reverse().forEach(ev=>{
+        notifs.unshift({ id:'ev'+ev.id, tipo:'evento', ot:ev.ot, texto:ev.texto, autor:ev.autor, data:ev.criado_em, lida:false });
+        toast(`${ev.autor||'Sistema'} · ${ev.ot}: ${ev.texto}`);
+      });
+    }
+    ultimoCheckEventos = new Date().toISOString().slice(0,19).replace('T',' ');
+  }catch(e){}
+  if(houveNovas){
+    notifs = notifs.slice(0,40);
+    renderNotifNav();
+    renderNotifList();
+    document.getElementById('navNotif').classList.add('ring');
+    setTimeout(()=>document.getElementById('navNotif').classList.remove('ring'),500);
+    carregarTudo();
+  }
 }
 setInterval(checarNotificacoes, 8000);
 setInterval(()=>renderNotifList(), 30000); // atualiza "há X min"
@@ -595,18 +618,23 @@ function renderNotifNav(){
 
 function renderNotifList(){
   const wrap=document.getElementById('notifList');
-  wrap.innerHTML = notifs.length? notifs.map((n,i)=>`
+  wrap.innerHTML = notifs.length? notifs.map((n,i)=>{
+    const ehEvento = n.tipo==='evento';
+    return `
     <div class="notif-item ${n.lida?'':'unread'}" data-idx="${i}">
-      <div class="notif-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
+      <div class="notif-icon">${ehEvento
+        ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>'
+        : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>'}</div>
       <div class="notif-body">
-        <div class="notif-title">${esc(n.solicitante)} solicitou ${n.quantidade} ${esc(n.item_nome)}</div>
-        <div class="notif-meta">${esc(n.ot)} ${n.local_uso?'· Uso: '+esc(n.local_uso):''}${n.setor?' · '+esc(n.setor):''}</div>
+        <div class="notif-title">${ehEvento ? `${esc(n.autor||'Sistema')} · ${esc(n.texto)}` : `${esc(n.solicitante)} solicitou ${n.quantidade} ${esc(n.item_nome)}`}</div>
+        <div class="notif-meta">${esc(n.ot)} ${!ehEvento && n.local_uso?'· Uso: '+esc(n.local_uso):''}${!ehEvento && n.setor?' · '+esc(n.setor):''}</div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
         <span class="notif-time">${tempoRelativo(n.data)}</span>
         ${n.lida?'':'<span class="notif-dot"></span>'}
       </div>
-    </div>`).join('') : '<div class="empty">Nenhuma notificação ainda</div>';
+    </div>`;
+  }).join('') : '<div class="empty">Nenhuma notificação ainda</div>';
 }
 
 document.getElementById('notifList').addEventListener('click', e=>{

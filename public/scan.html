@@ -53,7 +53,11 @@ input{width:100%;padding:11px 12px;border:1px solid var(--brd);border-radius:10p
 input:focus{outline:none;border-color:var(--primary)}
 input::placeholder{color:var(--muted-2)}
 .citem{padding:10px;background:var(--surface-hover);border:1px solid var(--brd);border-radius:10px;margin-bottom:8px}
+.eco-links{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.eco-links a{display:inline-flex;align-items:center;gap:5px;font-size:.68rem;font-weight:600;color:var(--muted);background:var(--surface-hover);border:1px solid var(--brd);border-radius:8px;padding:5px 9px;text-decoration:none}
+.eco-links a:hover{color:var(--text)}
 </style>
+<script src="/macroview-widget.js" defer></script>
 </head>
 <body>
 
@@ -72,6 +76,15 @@ input::placeholder{color:var(--muted-2)}
   </button>
 </header>
 
+<div class="eco-links">
+  <a href="/nova-ot.html" title="Nova OT">➕ Nova OT</a>
+  <a href="/checkout.html" title="Checkout de Entrega">📦 Checkout</a>
+  <a href="#" onclick="abrirMacroView();return false" title="Visão cruzada de uma OT">🔭 MacroView</a>
+  <a href="http://192.168.23.185:4000" target="_blank" title="Etiquetas Térmicas (print-agent)">🖨 Etiquetas</a>
+  <a href="https://niumapas.pages.dev" target="_blank" title="Mapa de Instalação">🗺 Mapa</a>
+  <a href="https://niukanban.pages.dev" target="_blank" title="Kanban de Produção">🗂 Kanban</a>
+</div>
+
 <div class="tabs">
   <button class="tb active" onclick="setTab('consulta')">Consulta</button>
   <button class="tb" onclick="setTab('ot')">Entrega/Devolução</button>
@@ -86,13 +99,10 @@ input::placeholder{color:var(--muted-2)}
     <div class="scan-line"></div>
     <div id="status">aguardando...</div>
   </div>
-  <div style="display:flex;align-items:center;gap:6px;margin-top:10px;font-size:.72rem;color:var(--muted)">
-    <span style="width:7px;height:7px;border-radius:50%;background:#34d399;flex-shrink:0"></span>
-    Leitor físico (USB/Bluetooth) pronto — basta escanear, sem precisar clicar em nada
-  </div>
+  <label style="margin-top:14px">Leitor físico (USB/Bluetooth)</label>
+  <input id="hidScanInput" type="text" autocomplete="off" placeholder="Clique em «Iniciar leitura» e escaneie o código">
+  <button class="btn btn-sec" id="btnIniciarLeitor" style="margin-top:8px" onclick="iniciarLeitorFisico()">▶ Iniciar leitura</button>
 </div>
-<input id="hidScanInput" type="text" autocomplete="off" aria-hidden="true"
-  style="position:fixed;top:-9999px;left:-9999px;opacity:0;width:1px;height:1px;pointer-events:none">
 
 <div id="app"><div class="empty">Leia um QR Code para começar</div></div>
 <div class="toast" id="toast"></div>
@@ -123,27 +133,43 @@ const esc=s=>String(s??'').replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&am
 
 /* ===== LEITOR FÍSICO (Zebra DS22 etc, modo teclado USB/Bluetooth) =====
    O aparelho não fala com o navegador por nenhuma API — ele "digita" o texto do QR onde
-   estiver o foco do teclado, seguido de Enter. Este input fica sempre em foco, invisível,
-   captando essas leituras e mandando pro mesmo handleQR() que a câmera já usa — sem duplicar
-   lógica de roteamento (OT abre modal, item abre ficha, etc.). Refoca sozinho sempre que o
-   usuário clica fora de um campo de formulário de verdade, pra nunca perder uma leitura. */
+   estiver o foco do teclado, seguido de Enter. O campo #hidScanInput é onde essas teclas
+   precisam cair — botão "Iniciar leitura" foca nele explicitamente (auto-foco invisível
+   não se mostrou confiável). Depois de focado ele tenta se manter em foco sozinho (clique
+   fora de outro campo, intervalo periódico), mas o botão garante um jeito manual de
+   recuperar o foco se isso falhar.
+   Os caracteres de pontuação chegam trocados (leitor identificado como teclado ANSI/EUA
+   pelo macOS, mas o layout ativo do sistema é Português) — corrigirCharsLeitorFisico()
+   reverte isso antes de repassar pro mesmo handleQR() que a câmera já usa. */
+const MAPA_LEITOR_FISICO = { 'Ç': ':', '-': '/', "'": '-', '_': '?', '+': '=' };
+function corrigirCharsLeitorFisico(texto) {
+  return texto.replace(/[Ç\-'_+]/g, c => MAPA_LEITOR_FISICO[c] ?? c);
+}
+
+function iniciarLeitorFisico(){
+  const hid=document.getElementById('hidScanInput');
+  hid.value='';
+  hid.focus({preventScroll:true});
+  toast('Leitor pronto — escaneie agora');
+}
+
 function refocarLeitorFisico(){
   const ae=document.activeElement;
-  const editando=ae&&ae!==document.body&&ae.id!=='hidScanInput'&&(ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.tagName==='SELECT');
-  if(!editando) document.getElementById('hidScanInput')?.focus({preventScroll:true});
+  const hid=document.getElementById('hidScanInput');
+  const editando=ae&&ae!==document.body&&ae!==hid&&(ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.tagName==='SELECT');
+  if(!editando && document.activeElement!==hid) hid?.focus({preventScroll:true});
 }
 document.addEventListener('DOMContentLoaded',()=>{
   const hid=document.getElementById('hidScanInput');
   hid.addEventListener('keydown',e=>{
     if(e.key!=='Enter') return;
     e.preventDefault();
-    const val=hid.value.trim();
+    const val=corrigirCharsLeitorFisico(hid.value.trim());
     hid.value='';
     if(val) handleQR(val);
   });
   document.addEventListener('click',refocarLeitorFisico);
   window.addEventListener('focus',refocarLeitorFisico);
-  refocarLeitorFisico();
   setInterval(refocarLeitorFisico,1500);
 });
 
@@ -237,37 +263,72 @@ function handleQR(url){
     if(!uid&&!id&&!ot){toast('QR não reconhecido','err');return;}
     if(ot){ mostrarOTModal(ot); return; }
     if(tab==='carrinho'&&id&&!uid){adicionarCarrinho(id);return;}
-    if(uid){itemId=null;unitId=uid;}else{unitId=null;itemId=id;}
+    if(uid){
+      itemId=null;unitId=uid;
+      // unidade física lida: já troca pra aba "OT" sozinho, senão o card de vincular/devolver
+      // fica escondido atrás da aba "Consulta" até o usuário clicar manualmente
+      if(tab!=='ot') setTab('ot');
+    } else {
+      unitId=null;itemId=id;
+    }
     toast('QR lido!');
     carregarItem();
   }catch(e){toast('QR inválido','err');}
 }
 
+// resolvedor único: tenta a OT real (tabela solicitacoes) e, se não achar, cai pro resumo
+// publicado pelo print-agent (etiquetas_resumo) — a mesma etiqueta impressa pode vir de
+// qualquer uma das duas, dependendo de como a OT foi criada (ver GET /api/resolver)
 async function mostrarOTModal(ot){
   beep('ok');
   const overlay=document.getElementById('otModalOverlay');
   const body=document.getElementById('otModalBody');
   overlay.style.display='flex';
   body.innerHTML='<div class="empty">A carregar...</div>';
-  const items=await fetch(`${API}/ot/${encodeURIComponent(ot)}`).then(r=>r.json()).catch(()=>[]);
-  if(!items.length){body.innerHTML='<div class="empty">OT não encontrada.</div>';return;}
-  const first=items[0];
-  const devolvidos=items.filter(i=>i.status==='devolvido').length;
+  const r=await fetch(`${API}/resolver?ot=${encodeURIComponent(ot)}`).then(r=>r.json()).catch(()=>({tipo:'desconhecido'}));
   const iconFor=n=>{const l=n?.toLowerCase()||'';return l.includes('led')?'💡':l.includes('transf')?'⚡':l.includes('cabo')?'🔌':l.includes('lamp')?'🔆':'📦';};
+
+  if(r.tipo==='desconhecido'){body.innerHTML='<div class="empty">OT não encontrada.</div>';return;}
+
+  if(r.tipo==='ot'){
+    const items=r.itens, first=items[0];
+    const devolvidos=items.filter(i=>i.status==='devolvido').length;
+    body.innerHTML=`
+      <div style="font-size:.65rem;color:var(--muted);letter-spacing:.06em;font-weight:700">ORDEM DE TRABALHO</div>
+      <div style="font-size:1.5rem;font-weight:800;color:var(--primary);margin:2px 0 8px">${esc(ot)}</div>
+      <div style="font-size:.85rem;color:var(--muted);margin-bottom:2px">${esc(first.solicitante||'—')}${first.setor?' · '+esc(first.setor):''}</div>
+      <div style="font-size:.78rem;color:var(--muted);margin-bottom:14px">${devolvidos}/${items.length} devolvidos</div>
+      <div style="border-top:1px solid var(--border);padding-top:10px">
+        ${items.map(i=>`
+          <div style="display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
+            <span style="font-size:1.1rem">${iconFor(i.item_nome)}</span>
+            <div style="flex:1">
+              <div style="font-weight:700;font-size:.86rem">${esc(i.item_nome)}</div>
+              <div style="font-size:.74rem;color:var(--muted)">${i.quantidade} ${esc(i.unidade||'')}${i.local_uso?' · '+esc(i.local_uso):''}</div>
+            </div>
+            <span style="font-size:.65rem;font-weight:800;padding:2px 8px;border-radius:20px;align-self:flex-start;background:${i.status==='devolvido'?'rgba(52,211,153,.12)':i.status==='aprovado'?'rgba(91,140,255,.12)':'rgba(251,191,36,.12)'};color:${i.status==='devolvido'?'#34d399':i.status==='aprovado'?'#5b8cff':'#fbbf24'}">${i.status==='devolvido'?'Devolvido':i.status==='aprovado'?'Entregue':'Pendente'}</span>
+          </div>`).join('')}
+      </div>
+    `;
+    return;
+  }
+
+  // 'ot-impressao': só existe no print-agent, nunca foi criada em "Nova OT" — mesmo card,
+  // com um aviso discreto no lugar da barra de status/devoluções, já que aqui não há
+  // aprovação/entrega/devolução rastreada, só o que foi publicado na hora de imprimir
   body.innerHTML=`
     <div style="font-size:.65rem;color:var(--muted);letter-spacing:.06em;font-weight:700">ORDEM DE TRABALHO</div>
-    <div style="font-size:1.5rem;font-weight:800;color:var(--primary);margin:2px 0 8px">${ot}</div>
-    <div style="font-size:.85rem;color:var(--muted);margin-bottom:2px">${first.solicitante||'—'}${first.setor?' · '+first.setor:''}</div>
-    <div style="font-size:.78rem;color:var(--muted);margin-bottom:14px">${devolvidos}/${items.length} devolvidos</div>
+    <div style="font-size:1.5rem;font-weight:800;color:var(--primary);margin:2px 0 4px">${esc(r.ot)}</div>
+    ${r.nomeOt?`<div style="font-size:.85rem;color:var(--muted);margin-bottom:8px">${esc(r.nomeOt)}</div>`:''}
+    <div style="font-size:.68rem;font-weight:700;color:#fbbf24;background:rgba(251,191,36,.12);border-radius:8px;padding:6px 10px;margin-bottom:14px">⚠ OT não registada no Estoque — resumo do que foi impresso, sem aprovação/devolução</div>
     <div style="border-top:1px solid var(--border);padding-top:10px">
-      ${items.map(i=>`
+      ${r.itens.map(i=>`
         <div style="display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
-          <span style="font-size:1.1rem">${iconFor(i.item_nome)}</span>
+          <span style="font-size:1.1rem">${iconFor(i.nome)}</span>
           <div style="flex:1">
-            <div style="font-weight:700;font-size:.86rem">${i.item_nome}</div>
-            <div style="font-size:.74rem;color:var(--muted)">${i.quantidade} ${i.unidade||''}${i.local_uso?' · '+i.local_uso:''}</div>
+            <div style="font-weight:700;font-size:.86rem">${esc(i.nome)}</div>
+            <div style="font-size:.74rem;color:var(--muted)">${i.quantidade}${i.local?' · '+esc(i.local):''}${i.obs?' · '+esc(i.obs):''}</div>
           </div>
-          <span style="font-size:.65rem;font-weight:800;padding:2px 8px;border-radius:20px;align-self:flex-start;background:${i.status==='devolvido'?'rgba(52,211,153,.12)':i.status==='aprovado'?'rgba(91,140,255,.12)':'rgba(251,191,36,.12)'};color:${i.status==='devolvido'?'#34d399':i.status==='aprovado'?'#5b8cff':'#fbbf24'}">${i.status==='devolvido'?'Devolvido':i.status==='aprovado'?'Entregue':'Pendente'}</span>
         </div>`).join('')}
     </div>
   `;

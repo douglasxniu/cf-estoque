@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>MacroView · Estoque</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="/theme.js"></script>
+<script src="/dialogs.js"></script>
+<link rel="stylesheet" href="/theme.css">
+<script src="/auth-gate.js"></script>
+<style>
+:root{--brd:var(--border);--r:16px}
+*{margin:0;padding:0}
+body{font-size:14.5px;min-height:100vh;padding:12px 12px 60px}
+.wrap{max-width:640px;margin:0 auto}
+.g{background:var(--surface);border:1px solid var(--brd);border-radius:var(--r);backdrop-filter:blur(10px) saturate(130%);box-shadow:var(--shadow-card)}
+header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
+header a{text-decoration:none;display:flex;align-items:center;gap:10px}
+.sub{font-size:.75rem;color:var(--muted)}
+.card{padding:16px 18px;margin-bottom:12px}
+.search-row{display:flex;gap:8px}
+input{flex:1;padding:12px 14px;border:1px solid var(--brd);border-radius:10px;background:var(--surface-2);color:var(--text);font-size:.95rem;font-family:inherit}
+input:focus{outline:none;border-color:var(--primary)}
+input::placeholder{color:var(--muted-2)}
+.btn{border:none;border-radius:10px;padding:12px 18px;font-weight:700;cursor:pointer;font-size:.88rem;font-family:inherit;background:linear-gradient(135deg,var(--primary),var(--primary-2));color:#fff}
+.empty{color:var(--muted);text-align:center;padding:24px;font-size:.9rem}
+.eixo{margin-bottom:14px}
+.eixo-titulo{display:flex;align-items:center;gap:8px;font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:10px}
+.eixo-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.eixo-dot.estoque{background:#5b8cff}
+.eixo-dot.kanban{background:#b9820a}
+.eixo-dot.impressao{background:#8a8578}
+.linha{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--brd)}
+.linha:last-child{border-bottom:none}
+.linha b{font-size:.86rem;font-weight:700}
+.linha span{font-size:.72rem;color:var(--muted)}
+.badge{font-size:.65rem;font-weight:800;padding:3px 9px;border-radius:20px;white-space:nowrap}
+.badge.pendente{background:rgba(251,191,36,.14);color:var(--warn)}
+.badge.aprovado{background:rgba(52,211,153,.14);color:var(--ok)}
+.badge.devolvido{background:var(--surface-hover);color:var(--muted)}
+.badge.bloqueado{background:rgba(248,113,113,.14);color:var(--danger)}
+.na{color:var(--muted-2);font-style:italic;font-size:.82rem}
+.header-ot{font-size:1.3rem;font-weight:800;color:var(--primary);margin-bottom:2px}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(8px);background:rgba(20,22,30,.95);color:#fff;padding:11px 20px;border-radius:30px;font-weight:600;font-size:.82rem;opacity:0;transition:.25s;z-index:99;border:1px solid var(--brd);white-space:nowrap}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.eco-links{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.eco-links a{display:inline-flex;align-items:center;gap:5px;font-size:.68rem;font-weight:600;color:var(--muted);background:var(--surface-hover);border:1px solid var(--brd);border-radius:8px;padding:5px 9px;text-decoration:none}
+.eco-links a:hover{color:var(--text)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <a href="/index.html">
+    <svg width="70" height="20" viewBox="0 0 36.4 10.22" fill="currentColor" style="color:var(--text)">
+      <rect x="16.96" y="0" width="2.47" height="10.22"/>
+      <path d="M22.04,4.83V0h2.47v4.74c0,2.09.6,3.1,1.88,3.1s2.8-.77,4.53-2.03l2.98-2.06V0h2.5v10.22h-2.32c0-1.13,0-2.86.06-3.99-3.99,2.68-5.78,3.99-8.14,3.99-2.53,0-3.96-1.64-3.96-5.39"/>
+      <path d="M14.36,5.39v4.83h-2.47v-4.74c0-2.09-.6-3.1-1.88-3.1s-2.8.77-4.53,2.03l-2.98,2.06v3.76H0V0h2.32c0,1.13,0,2.86-.06,3.99C6.26,1.31,8.05,0,10.4,0c2.53,0,3.96,1.64,3.96,5.39"/>
+    </svg>
+    <div><div style="font-weight:800;color:var(--text);font-size:.95rem">Estoque Elétrica</div><div class="sub">MacroView — visão cruzada por OT</div></div>
+  </a>
+  <button class="theme-toggle" title="Alternar tema" aria-label="Alternar tema claro/escuro">
+    <svg class="ic-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    <svg class="ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+  </button>
+</header>
+
+<div class="eco-links">
+  <a href="/nova-ot.html" title="Nova OT">➕ Nova OT</a>
+  <a href="/scan.html" title="Leitor QR">🔲 Leitor QR</a>
+  <a href="/checkout.html" title="Checkout de Entrega">📦 Checkout</a>
+  <a href="http://192.168.23.185:4000" target="_blank" title="Etiquetas Térmicas (print-agent)">🖨 Etiquetas</a>
+  <a href="https://niumapas.pages.dev" target="_blank" title="Mapa de Instalação">🗺 Mapa</a>
+  <a href="https://niukanban.pages.dev" target="_blank" title="Kanban de Produção">🗂 Kanban</a>
+</div>
+
+<div class="card g">
+  <div class="search-row">
+    <input id="otInput" placeholder="Número da OT (ex: OT-0069)" autocomplete="off">
+    <button class="btn" id="btnBuscar">Buscar</button>
+  </div>
+</div>
+
+<div id="resultado"></div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API='/api';
+const esc=s=>String(s??'').replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
+function toast(m,t){
+  const el=document.getElementById('toast');
+  el.textContent=m; el.className='toast show'+(t?' '+t:'');
+  setTimeout(()=>el.classList.remove('show'),2600);
+}
+
+// junta os três eixos (Estoque/material, Kanban/produção, fila de impressão) num card só —
+// é o mesmo /api/resolver que os leitores de QR já usam, só que consultado direto pelo
+// número da OT em vez de a partir de um QR físico
+async function buscar(){
+  const ot=document.getElementById('otInput').value.trim();
+  if(!ot){ toast('Digite um número de OT','err'); return; }
+  const resEl=document.getElementById('resultado');
+  resEl.innerHTML='<div class="card g"><div class="empty">Buscando...</div></div>';
+  const r=await fetch(`${API}/resolver?ot=${encodeURIComponent(ot)}`).then(r=>r.json()).catch(()=>({tipo:'desconhecido'}));
+
+  if(r.tipo==='desconhecido'){
+    resEl.innerHTML='<div class="card g"><div class="empty">Nenhum sistema conhece essa OT ainda.</div></div>';
+    return;
+  }
+
+  let html='<div class="card g">';
+  html+=`<div class="header-ot">${esc(r.ot)}</div>`;
+  if(r.nomeOt) html+=`<div class="sub" style="margin-bottom:14px">${esc(r.nomeOt)}</div>`;
+
+  // ---- Estoque ----
+  html+='<div class="eixo"><div class="eixo-titulo"><span class="eixo-dot estoque"></span>Material — Estoque</div>';
+  if(r.tipo==='ot' && r.itens.length){
+    html+=r.itens.map(i=>`
+      <div class="linha">
+        <div><b>${esc(i.item_nome)}</b><br><span>${i.quantidade} ${esc(i.unidade||'')}${i.local_uso?' · '+esc(i.local_uso):''}</span></div>
+        <span class="badge ${i.status}">${i.status==='devolvido'?'Devolvido':i.status==='aprovado'?'Aprovado':'Pendente'}</span>
+      </div>`).join('');
+  } else {
+    html+='<div class="na">Sem OT formal registrada no Estoque (não passou por "Nova OT").</div>';
+  }
+  html+='</div>';
+
+  // ---- Kanban ----
+  html+='<div class="eixo"><div class="eixo-titulo"><span class="eixo-dot kanban"></span>Produção — Kanban</div>';
+  if(r.kanban && r.kanban.length){
+    html+=r.kanban.map(c=>`
+      <div class="linha">
+        <div><b>${esc(c.titulo||'Sem título')}</b><br><span>${esc(c.coluna||'')}</span></div>
+        ${c.blocked?'<span class="badge bloqueado">🚩 Atrasado</span>':''}
+      </div>`).join('');
+  } else {
+    html+='<div class="na">Nenhum cartão encontrado no Kanban pra essa OT.</div>';
+  }
+  html+='</div>';
+
+  // ---- Impressão ----
+  html+='<div class="eixo"><div class="eixo-titulo"><span class="eixo-dot impressao"></span>Etiquetas impressas</div>';
+  const imp = r.tipo==='ot-impressao' ? { itens:r.itens } : r.impressao;
+  if(imp && imp.itens && imp.itens.length){
+    html+=`<div class="linha"><span>${imp.itens.length} item(ns) já publicado(s) na última impressão${r.atualizadoEm?' · '+new Date(r.atualizadoEm.replace(' ','T')+'Z').toLocaleDateString('pt-BR'):''}</span></div>`;
+  } else {
+    html+='<div class="na">Nenhuma etiqueta impressa registrada ainda pra essa OT.</div>';
+  }
+  html+='</div>';
+
+  html+='</div>';
+  resEl.innerHTML=html;
+}
+document.getElementById('btnBuscar').addEventListener('click', buscar);
+document.getElementById('otInput').addEventListener('keydown', e=>{ if(e.key==='Enter') buscar(); });
+
+const otUrl=new URL(location.href).searchParams.get('ot');
+if(otUrl){ document.getElementById('otInput').value=otUrl; buscar(); }
+</script>
+</body>
+</html>

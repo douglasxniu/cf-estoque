@@ -438,6 +438,7 @@ button:disabled{opacity:.7;cursor:wait}
   <a href="https://estoque.niupt.workers.dev" target="_blank" title="Dashboard / Estoque (NIU Estoque)">📊 Dashboard</a>
   <a href="https://niumapas.pages.dev" target="_blank" title="Mapa de Instalação">🗺 Mapa</a>
   <a href="https://niukanban.pages.dev" target="_blank" title="Kanban de produção">🗂 Kanban</a>
+  <a href="https://estoque.niupt.workers.dev/macroview.html" target="_blank" title="Visão cruzada de uma OT: material, produção e impressão juntos">🔭 MacroView</a>
 </div>
 
 <div class="card">
