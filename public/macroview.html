@@ -42,7 +42,21 @@ input::placeholder{color:var(--muted-2)}
 .badge.devolvido{background:var(--surface-hover);color:var(--muted)}
 .badge.bloqueado{background:rgba(248,113,113,.14);color:var(--danger)}
 .na{color:var(--muted-2);font-style:italic;font-size:.82rem}
-.header-ot{font-size:1.3rem;font-weight:800;color:var(--primary);margin-bottom:2px}
+.header-ot{font-size:1.3rem;font-weight:800;color:var(--primary);margin-bottom:2px;overflow-wrap:break-word}
+.sub{overflow-wrap:break-word}
+
+/* ---- sanfona das etiquetas impressas ---- */
+.accordion-trigger{display:flex;justify-content:space-between;align-items:center;gap:10px;cursor:pointer;padding:2px 0;user-select:none}
+.accordion-trigger:hover .linha-count{color:var(--text)}
+.linha-count{font-size:.72rem;color:var(--muted);white-space:nowrap}
+.accordion-chevron{width:14px;height:14px;flex-shrink:0;color:var(--muted);transition:transform .2s ease}
+.accordion-chevron.open{transform:rotate(180deg)}
+.accordion-body{max-height:0;overflow:hidden;transition:max-height .25s ease}
+.accordion-body.open{max-height:2000px}
+.accordion-body .linha{padding:8px 0}
+.etq-nome{font-size:.86rem;font-weight:700}
+.etq-meta{font-size:.72rem;color:var(--muted)}
+.etq-qtd{font-family:ui-monospace,monospace;font-size:.76rem;font-weight:700;color:var(--muted);flex-shrink:0}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(8px);background:rgba(20,22,30,.95);color:#fff;padding:11px 20px;border-radius:30px;font-weight:600;font-size:.82rem;opacity:0;transition:.25s;z-index:99;border:1px solid var(--brd);white-space:nowrap}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .eco-links{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
@@ -60,7 +74,7 @@ input::placeholder{color:var(--muted-2)}
       <path d="M22.04,4.83V0h2.47v4.74c0,2.09.6,3.1,1.88,3.1s2.8-.77,4.53-2.03l2.98-2.06V0h2.5v10.22h-2.32c0-1.13,0-2.86.06-3.99-3.99,2.68-5.78,3.99-8.14,3.99-2.53,0-3.96-1.64-3.96-5.39"/>
       <path d="M14.36,5.39v4.83h-2.47v-4.74c0-2.09-.6-3.1-1.88-3.1s-2.8.77-4.53,2.03l-2.98,2.06v3.76H0V0h2.32c0,1.13,0,2.86-.06,3.99C6.26,1.31,8.05,0,10.4,0c2.53,0,3.96,1.64,3.96,5.39"/>
     </svg>
-    <div><div style="font-weight:800;color:var(--text);font-size:.95rem">Estoque Elétrica</div><div class="sub">MacroView — visão cruzada por OT</div></div>
+    <div><div style="font-weight:800;color:var(--text);font-size:.95rem">Prepress</div><div class="sub">MacroView — visão cruzada por OT</div></div>
   </a>
   <button class="theme-toggle" title="Alternar tema" aria-label="Alternar tema claro/escuro">
     <svg class="ic-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
@@ -144,11 +158,23 @@ async function buscar(){
   }
   html+='</div>';
 
-  // ---- Impressão ----
+  // ---- Impressão: sanfona — clica no cabeçalho pra abrir e ver os itens já impressos ----
   html+='<div class="eixo"><div class="eixo-titulo"><span class="eixo-dot impressao"></span>Etiquetas impressas</div>';
-  const imp = r.tipo==='ot-impressao' ? { itens:r.itens } : r.impressao;
+  const imp = r.tipo==='ot-impressao' ? { itens:r.itens, atualizadoEm:r.atualizadoEm } : r.impressao;
   if(imp && imp.itens && imp.itens.length){
-    html+=`<div class="linha"><span>${imp.itens.length} item(ns) já publicado(s) na última impressão${r.atualizadoEm?' · '+new Date(r.atualizadoEm.replace(' ','T')+'Z').toLocaleDateString('pt-BR'):''}</span></div>`;
+    const dataFmt = imp.atualizadoEm ? new Date(imp.atualizadoEm.replace(' ','T')+'Z').toLocaleDateString('pt-BR') : (r.atualizadoEm ? new Date(r.atualizadoEm.replace(' ','T')+'Z').toLocaleDateString('pt-BR') : '');
+    html+=`
+      <div class="accordion-trigger" id="impTrigger">
+        <span class="linha-count">${imp.itens.length} item(ns) já publicado(s)${dataFmt?' · '+dataFmt:''}</span>
+        <svg class="accordion-chevron" id="impChevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="accordion-body" id="impBody">
+        ${imp.itens.map(it=>`
+          <div class="linha">
+            <div><div class="etq-nome">${esc(it.nome)}</div><span class="etq-meta">${esc(it.local||'')}${it.obs?' · '+esc(it.obs):''}</span></div>
+            <span class="etq-qtd">${it.quantidade||1}×</span>
+          </div>`).join('')}
+      </div>`;
   } else {
     html+='<div class="na">Nenhuma etiqueta impressa registrada ainda pra essa OT.</div>';
   }
@@ -156,6 +182,14 @@ async function buscar(){
 
   html+='</div>';
   resEl.innerHTML=html;
+
+  const impTrigger=document.getElementById('impTrigger');
+  if(impTrigger){
+    impTrigger.addEventListener('click', ()=>{
+      document.getElementById('impBody').classList.toggle('open');
+      document.getElementById('impChevron').classList.toggle('open');
+    });
+  }
 }
 document.getElementById('btnBuscar').addEventListener('click', buscar);
 document.getElementById('otInput').addEventListener('keydown', e=>{ if(e.key==='Enter') buscar(); });

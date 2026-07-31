@@ -23,6 +23,7 @@ body{margin:0;min-height:100vh;font-size:15px;padding:20px 14px 40px}
 .meta-row .val{font-weight:700;margin-top:2px}
 table{width:100%;border-collapse:collapse;font-size:.88rem;margin-top:4px}
 th,td{padding:9px 4px;border-bottom:1px solid var(--border);text-align:left}
+.obs{font-size:.76rem;color:var(--muted);font-style:italic;margin-top:2px}
 th{color:var(--muted);font-size:.66rem;text-transform:uppercase;letter-spacing:.03em;font-weight:700}
 .empty{color:var(--muted);text-align:center;padding:24px;font-size:.9rem}
 .footer{text-align:center;color:var(--muted);font-size:.68rem;margin-top:18px}
@@ -50,6 +51,11 @@ th{color:var(--muted);font-size:.66rem;text-transform:uppercase;letter-spacing:.
 
 <script>
 const esc=s=>String(s??'').replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
+function otParaExibicao(bruto){
+  const t=String(bruto||'').trim();
+  const m=t.match(/^OT-(\d{4})-(\d{1,6})$/i);
+  return m?`OT-${m[2]}`:t;
+}
 
 (async function () {
   const app = document.getElementById('app');
@@ -70,19 +76,19 @@ const esc=s=>String(s??'').replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&am
   app.innerHTML = `
     <div class="card">
       <div class="titulo">Guia de Transporte #${dados.id}</div>
-      <div class="sub">${dados.ot ? 'OT ' + esc(dados.ot) : 'Peças de OTs diferentes — ver detalhe por item abaixo'}</div>
+      <div class="sub">${dados.ot ? 'OT ' + esc(otParaExibicao(dados.ot)) : 'Peças de OTs diferentes — ver detalhe por item abaixo'}</div>
       <div class="meta-row">
         <div><div class="lbl">Retirado por</div><div class="val">${esc(dados.retiradoPor || '—')}</div></div>
         <div><div class="lbl">Emitida em</div><div class="val">${data}</div></div>
       </div>
       <table>
-        <thead><tr><th>Peça</th><th>Série</th><th>OT</th></tr></thead>
+        <thead><tr><th>Peça</th><th>Quantidade</th></tr></thead>
         <tbody>
-          ${dados.itens.map(i => `<tr><td>${esc(i.nome)}</td><td>${esc(i.serial)}</td><td>${esc(i.ot || '—')}</td></tr>`).join('')}
+          ${dados.itens.map(i => `<tr><td>${esc(i.nome)}${i.obs?`<div class="obs">${esc(i.obs)}</div>`:''}</td><td>${i.quantidade||1}</td></tr>`).join('')}
         </tbody>
       </table>
       <div class="assinatura">
-        Confirmo o recebimento das ${dados.itens.length} peça(s) acima.
+        Confirmo o recebimento das ${dados.itens.reduce((s,i)=>s+(i.quantidade||1),0)} peça(s) acima.
         <div class="linha-assinatura"></div>
         Assinatura de quem retira
       </div>

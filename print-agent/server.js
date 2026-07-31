@@ -153,6 +153,7 @@ app.post('/api/fila/substituir', (req, res) => {
     cabecalho = { ot: ot || '', nomeOt: nomeOt || '', tipo: 'ot' };
     fila = validos.map(it => ({
       nome: String(it.nome).trim(), local: it.local || '', obs: it.obs || '',
+      itemId: it.itemId || null, // id do catálogo do Estoque, quando o item veio de lá — vira QR de identidade na etiqueta
       quantidade: Math.max(1, Math.min(500, parseInt(it.quantidade, 10) || 1))
     }));
   }
@@ -217,8 +218,12 @@ async function montarLabelsDaFila({ comQr, tamanho }) {
   }
   fila.forEach(l => {
     const total = l.quantidade || 1;
+    // QR de identidade do item (aponta pro próprio item de catálogo) — permite ao Checkout
+    // de Entrega reconhecer qual peça foi lida, não só a OT. Só existe quando o item veio
+    // do estoque de verdade (tem itemId); item digitado/livre cai pro resumo da OT mesmo.
+    const qrItemUrl = l.itemId ? `${SITE_URL}/scan.html?id=${l.itemId}&ot=${encodeURIComponent(cabecalho.ot)}` : null;
     for (let i = 1; i <= total; i++) {
-      labels.push({ ot: cabecalho.ot, nomeOt: cabecalho.nomeOt, nome: l.nome, local: l.local, obs: l.obs, unitIdx: i, unitTotal: total, qrResumoUrl: urlResumo });
+      labels.push({ ot: cabecalho.ot, nomeOt: cabecalho.nomeOt, nome: l.nome, local: l.local, obs: l.obs, unitIdx: i, unitTotal: total, qrResumoUrl: urlResumo, qrItemUrl });
     }
   });
   return labels;
@@ -401,7 +406,9 @@ button:disabled{opacity:.7;cursor:wait}
 .modal-acoes{display:flex;gap:8px;margin-top:14px}
 .check-row{display:flex;align-items:center;gap:8px;text-transform:none;cursor:pointer;font-size:.85rem;font-weight:500;color:var(--text)}
 .check-row input{width:auto;margin:0;flex-shrink:0}
-</style></head>
+</style>
+<script src="https://estoque.niupt.workers.dev/macroview-widget.js" defer></script>
+</head>
 <body>
 <canvas id="neuralBg"></canvas>
 <script>
@@ -436,9 +443,12 @@ button:disabled{opacity:.7;cursor:wait}
 
 <div class="eco-links">
   <a href="https://estoque.niupt.workers.dev" target="_blank" title="Dashboard / Estoque (NIU Estoque)">📊 Dashboard</a>
+  <a href="https://estoque.niupt.workers.dev/nova-ot.html" target="_blank" title="Nova OT">➕ Nova OT</a>
+  <a href="https://estoque.niupt.workers.dev/scan.html" target="_blank" title="Leitor QR">🔲 Leitor QR</a>
+  <a href="https://estoque.niupt.workers.dev/checkout.html" target="_blank" title="Checkout de Entrega">📦 Checkout</a>
   <a href="https://niumapas.pages.dev" target="_blank" title="Mapa de Instalação">🗺 Mapa</a>
   <a href="https://niukanban.pages.dev" target="_blank" title="Kanban de produção">🗂 Kanban</a>
-  <a href="https://estoque.niupt.workers.dev/macroview.html" target="_blank" title="Visão cruzada de uma OT: material, produção e impressão juntos">🔭 MacroView</a>
+  <a href="#" onclick="abrirMacroView();return false" title="Visão cruzada de uma OT: material, produção e impressão juntos">🔭 MacroView</a>
 </div>
 
 <div class="card">

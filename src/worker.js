@@ -867,11 +867,13 @@ export default {
     if (path === "/api/ot/sugestoes" && method === "GET") {
       const q = (url.searchParams.get("q") || "").trim();
       if (q.length < 2) return json({ sugestoes: [] });
+      // só sugere OTs em aberto — "aberto" aqui significa: não marcada como 'encerrado' nos
+      // projetos (OT sem linha em projetos ainda conta como aberta, ex: só tem etiqueta impressa)
       const termo = `%${q}%`;
       const [solic, proj, resumo] = await Promise.all([
-        env.DB.prepare("SELECT DISTINCT s.ot AS ot, p.nome AS nome FROM solicitacoes s LEFT JOIN projetos p ON s.ot = p.numero WHERE s.ot LIKE ? LIMIT 8").bind(termo).all(),
-        env.DB.prepare("SELECT numero AS ot, nome FROM projetos WHERE numero LIKE ? OR nome LIKE ? LIMIT 8").bind(termo, termo).all(),
-        env.DB.prepare("SELECT ot, nome_ot AS nome FROM etiquetas_resumo WHERE ot LIKE ? OR nome_ot LIKE ? LIMIT 8").bind(termo, termo).all()
+        env.DB.prepare("SELECT DISTINCT s.ot AS ot, p.nome AS nome FROM solicitacoes s LEFT JOIN projetos p ON s.ot = p.numero WHERE s.ot LIKE ? AND (p.status IS NULL OR p.status != 'encerrado') LIMIT 8").bind(termo).all(),
+        env.DB.prepare("SELECT numero AS ot, nome FROM projetos WHERE (numero LIKE ? OR nome LIKE ?) AND status != 'encerrado' LIMIT 8").bind(termo, termo).all(),
+        env.DB.prepare("SELECT r.ot AS ot, r.nome_ot AS nome FROM etiquetas_resumo r LEFT JOIN projetos p ON r.ot = p.numero WHERE (r.ot LIKE ? OR r.nome_ot LIKE ?) AND (p.status IS NULL OR p.status != 'encerrado') LIMIT 8").bind(termo, termo).all()
       ]);
       const vistos = new Map();
       for (const row of [...solic.results, ...proj.results, ...resumo.results]) {
@@ -1053,7 +1055,12 @@ export default {
           ? { nomeOt: resumoRow.nome_ot, itens: JSON.parse(resumoRow.itens_json), atualizadoEm: resumoRow.atualizado_em }
           : null;
 
-        if (results.length) return json({ tipo: "ot", ot: otCanonica, itens: results, impressao, kanban });
+        if (results.length) {
+          // nome da OT: prioriza o projeto (join já traz projeto_nome em cada linha), cai pra
+          // trás pro nome gravado na última impressão de etiqueta se a OT não tem projeto
+          const nomeOt = results.find(i => i.projeto_nome)?.projeto_nome || impressao?.nomeOt || null;
+          return json({ tipo: "ot", ot: otCanonica, nomeOt, itens: results, impressao, kanban });
+        }
         if (resumoRow) return json({ tipo: "ot-impressao", ot: resumoRow.ot, nomeOt: resumoRow.nome_ot, itens: JSON.parse(resumoRow.itens_json), atualizadoEm: resumoRow.atualizado_em, kanban });
         if (kanban && kanban.length) return json({ tipo: "ot-kanban", ot: otCanonica, kanban });
       }
@@ -1084,7 +1091,9 @@ export default {
         uid: it?.uid ?? null,
         nome: String(it?.nome || "").slice(0, 200),
         serial: String(it?.serial || "").slice(0, 100),
-        ot: String(it?.ot || "").slice(0, 60)
+        ot: String(it?.ot || "").slice(0, 60),
+        quantidade: Math.max(1, Math.min(9999, parseInt(it?.quantidade, 10) || 1)),
+        obs: String(it?.obs || "").slice(0, 300)
       })).filter(it => it.nome) : [];
       if (!itens.length) return json({ error: "nenhum item válido" }, 400);
       const ot = typeof b?.ot === "string" ? b.ot.trim().slice(0, 60) : "";
@@ -1104,6 +1113,58 @@ export default {
         id: row.id, ot: row.ot, retiradoPor: row.retirado_por,
         itens: JSON.parse(row.itens_json), criadoPor: row.criado_por, criadoEm: row.criado_em
       });
+    }
+
+    // histórico de guias já emitidas pra uma OT — usado tanto pra numerar a nota nova
+    // ("Nº 3 desta OT, anteriores #000040 e #000041") quanto pra consultar depois. Casa por
+    // número tolerante (ultimoNumeroOT, já usado no resolvedor) porque uma guia pode
+    // referenciar a OT tanto no campo solto quanto dentro de cada item (itens de OTs
+    // diferentes numa mesma guia) — por isso lê tudo e filtra em memória, não dá pra fazer
+    // isso só em SQL sem soltar o formato inconsistente que já existe nos dados.
+    if (path === "/api/checkout/por-ot" && method === "GET") {
+      const alvo = ultimoNumeroOT(url.searchParams.get("ot") || "");
+      if (alvo === null) return json({ guias: [] });
+      const { results } = await env.DB.prepare(
+        "SELECT id, ot, retirado_por, criado_por, criado_em, itens_json FROM checkouts ORDER BY criado_em ASC"
+      ).all();
+      const guias = results.filter(row => {
+        if (row.ot && ultimoNumeroOT(row.ot) === alvo) return true;
+        try { return JSON.parse(row.itens_json).some(it => it.ot && ultimoNumeroOT(it.ot) === alvo); }
+        catch { return false; }
+      }).map(row => ({
+        id: row.id, ot: row.ot, retiradoPor: row.retirado_por, criadoPor: row.criado_por,
+        criadoEm: row.criado_em, totalItens: JSON.parse(row.itens_json).length
+      }));
+      return json({ guias });
+    }
+
+    // busca livre por OT, nome de peça ou nº de série entre as guias já emitidas — alimenta
+    // a página de pesquisa de notas de transporte
+    if (path === "/api/checkout/buscar" && method === "GET") {
+      const q = (url.searchParams.get("q") || "").trim().toLowerCase();
+      if (q.length < 2) return json({ resultados: [] });
+      const { results } = await env.DB.prepare(
+        "SELECT id, ot, retirado_por, criado_por, criado_em, itens_json FROM checkouts ORDER BY criado_em DESC LIMIT 300"
+      ).all();
+      const resultados = [];
+      for (const row of results) {
+        let itens = [];
+        try { itens = JSON.parse(row.itens_json); } catch { itens = []; }
+        const otBate = (row.ot || "").toLowerCase().includes(q);
+        const itensBatidos = itens.filter(it =>
+          (it.nome || "").toLowerCase().includes(q) ||
+          (it.serial || "").toLowerCase().includes(q) ||
+          (it.ot || "").toLowerCase().includes(q)
+        );
+        if (otBate || itensBatidos.length) {
+          resultados.push({
+            id: row.id, ot: row.ot, retiradoPor: row.retirado_por, criadoEm: row.criado_em,
+            totalItens: itens.length, itensBatidos: (itensBatidos.length ? itensBatidos : itens).slice(0, 4)
+          });
+          if (resultados.length >= 40) break;
+        }
+      }
+      return json({ resultados });
     }
 
     // ---------- FILA DE IMPRESSÃO TÉRMICA (preparação — sem automação real ainda) ----------

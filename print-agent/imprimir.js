@@ -183,12 +183,16 @@ async function desenharEtiquetaMedia(doc, lab, W, H, opts = {}, y0 = 0) {
   // ver o resumo sem precisar procurar a etiqueta de resumo separada). 15x15mm: menor que
   // isso, testes mostraram que o celular tem dificuldade de ler na resolução da impressora
   // térmica — módulo físico do QR precisa ficar grande o bastante.
+  // prioriza o QR de identidade do PRÓPRIO item (permite ao Checkout de Entrega reconhecer
+  // qual peça foi lida ao escanear), caindo pro resumo genérico da OT só quando o item não
+  // tem id de catálogo (item livre/digitado, sem correspondência no Estoque)
+  const qrUrl = lab.qrItemUrl || lab.qrResumoUrl;
   let larguraColunaDireita = 0;
   let alturaColunaDireita = 0;
-  if (lab.qrResumoUrl) {
+  if (qrUrl) {
     const qrSize = 15;
     const qrX = W - pad - qrSize, qrY = y0 + 2;
-    const qrImg = await gerarQrDataUrl(lab.qrResumoUrl);
+    const qrImg = await gerarQrDataUrl(qrUrl);
     doc.addImage(qrImg, 'PNG', qrX, qrY, qrSize, qrSize);
     larguraColunaDireita = qrSize;
     alturaColunaDireita = qrY + qrSize - y0;
@@ -201,7 +205,7 @@ async function desenharEtiquetaMedia(doc, lab, W, H, opts = {}, y0 = 0) {
   // embaixo do QR (mesma coluna à direita) quando o QR existe.
   const totalUnidades = lab.unitTotal ?? 1;
   const idxAtual = lab.unitIdx ?? 1;
-  const topoContador = y0 + (lab.qrResumoUrl ? alturaColunaDireita + 1.5 : 2.1);
+  const topoContador = y0 + (qrUrl ? alturaColunaDireita + 1.5 : 2.1);
   if (totalUnidades <= 8) {
     const quad = 1.9, gap = 0.7;
     const n = totalUnidades;

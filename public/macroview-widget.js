@@ -11,6 +11,13 @@
   if (window.abrirMacroView) return; // já carregado (evita duplicar se o host incluir 2x)
   const MV_API = 'https://estoque.niupt.workers.dev/api';
   const esc = s => String(s ?? '').replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
+  // remove o ano embutido no meio do número (ex: "OT-2026-0383" → "OT-0383") só pra
+  // exibição — a busca continua usando o valor completo original
+  const otParaExibicao = bruto => {
+    const t = String(bruto || '').trim();
+    const m = t.match(/^OT-(\d{4})-(\d{1,6})$/i);
+    return m ? `OT-${m[2]}` : t;
+  };
 
   let overlay, inputEl, sugestoesEl, resultadoEl, debounceTimer;
 
@@ -125,7 +132,7 @@
 
   function renderResultado(r) {
     if (r.tipo === 'desconhecido') return '<div class="mv-empty">Nenhum sistema conhece essa OT ainda.</div>';
-    let html = `<div class="mv-header-ot">${esc(r.ot)}</div>`;
+    let html = `<div class="mv-header-ot">${esc(otParaExibicao(r.ot))}</div>`;
     if (r.nomeOt) html += `<div class="mv-sub">${esc(r.nomeOt)}</div>`;
 
     html += '<div class="mv-eixo"><div class="mv-eixo-titulo"><span class="mv-dot estoque"></span>Material — Estoque</div>';

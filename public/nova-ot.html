@@ -771,8 +771,13 @@ function montarLabelsItens(ot,nomeOt,local){
   const qrResumoUrl = ot ? `${location.origin}/ot-resumo.html?ot=${encodeURIComponent(ot)}` : null;
   carrinho.forEach(c=>{
     const total=UNIDADES_CONTAVEIS.includes(c.unidade)?Math.max(1,Math.round(c.qty)):1;
+    // QR do item aponta pro próprio item de catálogo (id real), não só pro resumo da OT —
+    // é o que permite o Checkout de Entrega reconhecer QUAL peça foi lida ao escanear a
+    // etiqueta, não só a OT dela. Só existe pra itens vindos do estoque (c._estoque) —
+    // itens livres/digitados não têm id de catálogo pra apontar.
+    const qrItemUrl = c._estoque ? `${location.origin}/scan.html?id=${c._id}&ot=${encodeURIComponent(ot)}` : null;
     for(let i=1;i<=total;i++){
-      labels.push({ot,nomeOt,nome:c.nome,local:c.local||local,obs:c.obs,unitIdx:i,unitTotal:total,qrResumoUrl});
+      labels.push({ot,nomeOt,nome:c.nome,local:c.local||local,obs:c.obs,unitIdx:i,unitTotal:total,qrResumoUrl,qrItemUrl});
     }
   });
   return labels;
@@ -823,6 +828,7 @@ async function enviarParaZebra(){
     nome:c.nome,
     local:c.local||v.local,
     obs:c.obs||'',
+    itemId: c._estoque ? c._id : null, // pro print-agent poder gerar o QR de identidade do item
     quantidade:UNIDADES_CONTAVEIS.includes(c.unidade)?Math.max(1,Math.round(c.qty)):1
   }));
   const json = JSON.stringify({ot,nomeOt,itens});

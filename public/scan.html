@@ -68,7 +68,7 @@ input::placeholder{color:var(--muted-2)}
       <path d="M22.04,4.83V0h2.47v4.74c0,2.09.6,3.1,1.88,3.1s2.8-.77,4.53-2.03l2.98-2.06V0h2.5v10.22h-2.32c0-1.13,0-2.86.06-3.99-3.99,2.68-5.78,3.99-8.14,3.99-2.53,0-3.96-1.64-3.96-5.39"/>
       <path d="M14.36,5.39v4.83h-2.47v-4.74c0-2.09-.6-3.1-1.88-3.1s-2.8.77-4.53,2.03l-2.98,2.06v3.76H0V0h2.32c0,1.13,0,2.86-.06,3.99C6.26,1.31,8.05,0,10.4,0c2.53,0,3.96,1.64,3.96,5.39"/>
     </svg>
-    <div><div style="font-weight:800;color:var(--text);font-size:.95rem">Estoque Elétrica</div><div class="sub">Leitor QR</div></div>
+    <div><div style="font-weight:800;color:var(--text);font-size:.95rem">Prepress</div><div class="sub">Leitor QR</div></div>
   </a>
   <button class="theme-toggle" title="Alternar tema" aria-label="Alternar tema claro/escuro">
     <svg class="ic-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
@@ -130,6 +130,12 @@ let unidadeAtual=null, pendentesCandidatos=[];
 let scanInt=null, lastScan=0, detector=null, scanning=false, carrinho=[];
 
 const esc=s=>String(s??'').replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
+// remove o ano embutido no meio do número (ex: "OT-2026-0383" → "OT-0383") só pra exibição
+function otParaExibicao(bruto){
+  const t=String(bruto||'').trim();
+  const m=t.match(/^OT-(\d{4})-(\d{1,6})$/i);
+  return m?`OT-${m[2]}`:t;
+}
 
 /* ===== LEITOR FÍSICO (Zebra DS22 etc, modo teclado USB/Bluetooth) =====
    O aparelho não fala com o navegador por nenhuma API — ele "digita" o texto do QR onde
@@ -295,7 +301,7 @@ async function mostrarOTModal(ot){
     const devolvidos=items.filter(i=>i.status==='devolvido').length;
     body.innerHTML=`
       <div style="font-size:.65rem;color:var(--muted);letter-spacing:.06em;font-weight:700">ORDEM DE TRABALHO</div>
-      <div style="font-size:1.5rem;font-weight:800;color:var(--primary);margin:2px 0 8px">${esc(ot)}</div>
+      <div style="font-size:1.5rem;font-weight:800;color:var(--primary);margin:2px 0 8px">${esc(otParaExibicao(ot))}</div>
       <div style="font-size:.85rem;color:var(--muted);margin-bottom:2px">${esc(first.solicitante||'—')}${first.setor?' · '+esc(first.setor):''}</div>
       <div style="font-size:.78rem;color:var(--muted);margin-bottom:14px">${devolvidos}/${items.length} devolvidos</div>
       <div style="border-top:1px solid var(--border);padding-top:10px">
@@ -318,7 +324,7 @@ async function mostrarOTModal(ot){
   // aprovação/entrega/devolução rastreada, só o que foi publicado na hora de imprimir
   body.innerHTML=`
     <div style="font-size:.65rem;color:var(--muted);letter-spacing:.06em;font-weight:700">ORDEM DE TRABALHO</div>
-    <div style="font-size:1.5rem;font-weight:800;color:var(--primary);margin:2px 0 4px">${esc(r.ot)}</div>
+    <div style="font-size:1.5rem;font-weight:800;color:var(--primary);margin:2px 0 4px">${esc(otParaExibicao(r.ot))}</div>
     ${r.nomeOt?`<div style="font-size:.85rem;color:var(--muted);margin-bottom:8px">${esc(r.nomeOt)}</div>`:''}
     <div style="font-size:.68rem;font-weight:700;color:#fbbf24;background:rgba(251,191,36,.12);border-radius:8px;padding:6px 10px;margin-bottom:14px">⚠ OT não registada no Estoque — resumo do que foi impresso, sem aprovação/devolução</div>
     <div style="border-top:1px solid var(--border);padding-top:10px">

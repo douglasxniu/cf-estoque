@@ -5,62 +5,151 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <title>Checkout de Entrega · Estoque</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@600;700&display=swap" rel="stylesheet">
 <script src="/theme.js"></script>
 <script src="/dialogs.js"></script>
 <link rel="stylesheet" href="/theme.css">
 <script src="/auth-gate.js"></script>
 <style>
-:root{--brd:var(--border);--r:16px}
-*{margin:0;padding:0}
-body{font-size:14.5px;min-height:100vh;padding:12px 12px 90px}
-.g{background:var(--surface);border:1px solid var(--brd);border-radius:var(--r);backdrop-filter:blur(10px) saturate(130%);box-shadow:var(--shadow-card)}
-header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
+:root{--brd:var(--border);--r:12px}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-size:14px;min-height:100vh;padding:12px 12px 96px;max-width:760px;margin:0 auto}
+.g{background:var(--surface);border:1px solid var(--brd);border-radius:var(--r);box-shadow:var(--shadow-card)}
+header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
 header a{text-decoration:none;display:flex;align-items:center;gap:10px}
-.sub{font-size:.75rem;color:var(--muted)}
-.card{padding:14px;margin-bottom:10px}
-.btn{border:none;border-radius:12px;padding:13px;font-weight:700;cursor:pointer;font-size:.9rem;width:100%;font-family:inherit;margin-bottom:8px}
-.btn-cam{background:linear-gradient(135deg,#f5a623,#d6890a);color:#1f2937}
-.btn-ok{background:linear-gradient(135deg,var(--ok),#059669);color:#fff}
-.btn-sec{background:var(--surface-hover);color:var(--text);border:1px solid var(--brd)}
-.btn:disabled{opacity:.5;cursor:not-allowed}
-#camBox{display:none;position:relative;border-radius:var(--r);overflow:hidden;margin-bottom:10px;aspect-ratio:4/3;background:#000}
+.sub{font-size:.72rem;color:var(--muted);letter-spacing:.02em}
+.eco-links{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.eco-links a{display:inline-flex;align-items:center;gap:5px;font-size:.68rem;font-weight:600;color:var(--muted);background:var(--surface-hover);border:1px solid var(--brd);border-radius:8px;padding:5px 9px;text-decoration:none}
+.eco-links a:hover{color:var(--text)}
+
+.card{padding:16px;margin-bottom:10px}
+.card-eyebrow{display:flex;align-items:center;gap:7px;font-size:.66rem;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:12px}
+.card-eyebrow .ic{width:13px;height:13px;opacity:.85;flex-shrink:0}
+
+/* ---- número de guia (estilo "código de rastreio") ---- */
+.ot-field{position:relative}
+.ot-field input{
+  width:100%;padding:14px 16px;border:1.5px solid var(--brd);border-radius:10px;
+  background:var(--surface-2);color:var(--text);
+  font-family:'JetBrains Mono',ui-monospace,monospace;font-size:1.15rem;font-weight:700;
+  letter-spacing:.03em;text-transform:uppercase
+}
+.ot-field input:focus{outline:none;border-color:var(--primary)}
+.ot-field input::placeholder{color:var(--muted-2);font-weight:600;text-transform:none;letter-spacing:0;font-family:Inter,sans-serif;font-size:.85rem}
+.ot-status{display:flex;align-items:center;gap:7px;margin-top:8px;font-size:.78rem;color:var(--muted);min-height:18px}
+.ot-status.ok{color:var(--ok);font-weight:700}
+.ot-status .spin{width:12px;height:12px;border:2px solid var(--brd);border-top-color:var(--primary);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ---- sugestões de OT em aberto, ao digitar ---- */
+.ot-suggest{
+  position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:20;
+  background:var(--surface);border:1px solid var(--brd);border-radius:10px;
+  box-shadow:var(--shadow-card);overflow:hidden;display:none;max-height:260px;overflow-y:auto
+}
+.ot-suggest.show{display:block}
+.ot-suggest-item{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--brd)}
+.ot-suggest-item:last-child{border-bottom:none}
+.ot-suggest-item:hover,.ot-suggest-item.active{background:var(--surface-hover)}
+.ot-suggest-numero{font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:700;font-size:.85rem;color:var(--primary);flex-shrink:0}
+.ot-suggest-nome{font-size:.78rem;color:var(--muted);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right}
+.ot-suggest-empty{padding:12px 14px;font-size:.78rem;color:var(--muted-2);text-align:center}
+
+/* ---- checklist de itens esperados ---- */
+.esperados{margin-top:12px;border-top:1px solid var(--brd);padding-top:10px}
+.esp-row{display:flex;align-items:center;gap:10px;padding:7px 0}
+.esp-check{width:20px;height:20px;border-radius:6px;border:1.5px solid var(--brd);flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:.15s}
+.esp-check.done{background:var(--ok);border-color:var(--ok)}
+.esp-check svg{width:12px;height:12px;color:#fff;opacity:0;transition:.15s}
+.esp-check.done svg{opacity:1}
+.esp-info{flex:1;min-width:0}
+.esp-nome{font-size:.86rem;font-weight:600}
+.esp-nome.done{color:var(--muted);text-decoration:line-through;text-decoration-color:var(--brd)}
+.esp-meta{font-size:.7rem;color:var(--muted)}
+.esp-count{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:.76rem;font-weight:700;color:var(--muted);flex-shrink:0}
+.esp-count.done{color:var(--ok)}
+
+/* ---- barra de leitura: compacta, ícones, nada de botão largura total ---- */
+.scan-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.icon-btn{
+  display:inline-flex;align-items:center;gap:7px;padding:8px 13px;border-radius:9px;
+  border:1px solid var(--brd);background:var(--surface-2);color:var(--text);
+  font-weight:700;font-size:.78rem;cursor:pointer;font-family:inherit;transition:.12s
+}
+.icon-btn:hover{background:var(--surface-hover);border-color:var(--muted-2)}
+.icon-btn.active{background:var(--primary);border-color:var(--primary);color:#fff}
+.icon-btn svg{width:16px;height:16px;flex-shrink:0}
+.leitor-field{flex:1;min-width:180px;position:relative}
+.leitor-field input{width:100%;padding:8px 12px 8px 34px;border:1px solid var(--brd);border-radius:9px;background:var(--surface-2);color:var(--text);font-size:.8rem;font-family:inherit}
+.leitor-field input:focus{outline:none;border-color:var(--primary)}
+.leitor-field .ic{position:absolute;left:11px;top:50%;transform:translateY(-50%);width:14px;height:14px;color:var(--muted);pointer-events:none}
+
+#camBox{display:none;position:relative;border-radius:10px;overflow:hidden;margin-top:10px;aspect-ratio:16/9;background:#000;max-height:220px}
 #camBox video{width:100%;height:100%;object-fit:cover;display:block}
 #camBox canvas{display:none}
 .scan-line{position:absolute;left:5%;right:5%;height:2px;background:linear-gradient(90deg,transparent,var(--primary),transparent);animation:sl 1.8s linear infinite}
 @keyframes sl{0%{top:15%}50%{top:85%}100%{top:15%}}
-#status{position:absolute;bottom:6px;left:6px;background:rgba(0,0,0,.65);color:#fff;font-size:.62rem;padding:3px 8px;border-radius:6px}
-.empty{color:var(--muted);text-align:center;padding:20px;font-size:.85rem}
-.toast{position:fixed;bottom:70px;left:50%;transform:translateX(-50%) translateY(8px);background:rgba(20,22,30,.95);color:#fff;padding:11px 20px;border-radius:30px;font-weight:600;font-size:.82rem;opacity:0;transition:.25s;z-index:99;border:1px solid var(--brd);white-space:nowrap}
+#status{position:absolute;bottom:6px;left:6px;background:rgba(0,0,0,.65);color:#fff;font-size:.6rem;padding:3px 8px;border-radius:6px}
+
+/* ---- manifesto dinâmico de peças escaneadas ---- */
+.manifesto-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px}
+.manifesto-count{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:.72rem;font-weight:700;color:var(--text);background:var(--surface-2);border:1px solid var(--brd);border-radius:20px;padding:2px 10px}
+.manifesto{margin-top:8px}
+.manif-row-wrap{border-bottom:1px solid var(--brd);padding:9px 4px;animation:slideIn .2s ease-out}
+@keyframes slideIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+.manif-row-wrap:last-child{border-bottom:none}
+.manif-row{display:flex;align-items:center;gap:10px}
+.manif-num{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:.68rem;color:var(--muted-2);width:20px;flex-shrink:0;text-align:right}
+.manif-ic{width:26px;height:26px;border-radius:7px;background:var(--ok-bg,rgba(34,197,94,.12));display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.manif-ic svg{width:14px;height:14px;color:var(--ok)}
+.manif-ic.alerta{background:var(--warn-bg,rgba(245,158,11,.12))}
+.manif-ic.alerta svg{color:var(--warn)}
+.manif-info{flex:1;min-width:0}
+.manif-nome{font-size:.85rem;font-weight:700}
+.manif-tag{font-size:.62rem;font-weight:800;padding:2px 7px;border-radius:20px;text-transform:uppercase;letter-spacing:.03em;flex-shrink:0}
+.manif-tag.fora{background:rgba(245,158,11,.14);color:var(--warn)}
+.manif-qtd{width:52px;flex-shrink:0;padding:5px 6px;border:1px solid var(--brd);border-radius:7px;background:var(--surface-2);color:var(--text);font-size:.8rem;text-align:center;font-family:'JetBrains Mono',ui-monospace,monospace}
+.manif-qtd:focus{outline:none;border-color:var(--primary)}
+.manif-rm{background:none;border:none;color:var(--muted-2);cursor:pointer;padding:5px;flex-shrink:0;border-radius:6px}
+.manif-rm:hover{color:var(--danger);background:rgba(239,68,68,.08)}
+.manif-rm svg{width:15px;height:15px;display:block}
+.manif-obs{width:100%;margin-top:6px;padding:6px 9px;border:1px solid var(--brd);border-radius:7px;background:var(--surface-2);color:var(--text);font-size:.76rem;font-family:inherit}
+.manif-obs:focus{outline:none;border-color:var(--primary)}
+.manif-obs::placeholder{color:var(--muted-2)}
+.empty{color:var(--muted);text-align:center;padding:26px 10px;font-size:.84rem}
+.empty svg{width:28px;height:28px;color:var(--muted-2);margin-bottom:8px}
+
+/* ---- barra de fechamento (sticky, discreta) ---- */
+.footer-bar{
+  position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--brd);
+  padding:10px 14px;display:flex;align-items:center;gap:10px;z-index:40;
+  box-shadow:0 -6px 20px rgba(0,0,0,.12)
+}
+.footer-inner{max-width:760px;margin:0 auto;display:flex;align-items:center;gap:10px;width:100%}
+.footer-bar input{flex:1;min-width:0;padding:9px 12px;border:1px solid var(--brd);border-radius:9px;background:var(--surface-2);color:var(--text);font-size:.82rem;font-family:inherit}
+.footer-bar input:focus{outline:none;border-color:var(--primary)}
+.footer-bar input::placeholder{color:var(--muted-2)}
+.btn-fechar{
+  display:inline-flex;align-items:center;gap:7px;white-space:nowrap;
+  background:var(--text);color:var(--bg,var(--surface));border:none;border-radius:9px;
+  padding:10px 16px;font-weight:700;font-size:.82rem;cursor:pointer;font-family:inherit;flex-shrink:0
+}
+.btn-fechar:disabled{opacity:.4;cursor:not-allowed}
+.btn-fechar svg{width:15px;height:15px}
+.toast{position:fixed;bottom:76px;left:50%;transform:translateX(-50%) translateY(8px);background:rgba(20,22,30,.95);color:#fff;padding:11px 20px;border-radius:30px;font-weight:600;font-size:.82rem;opacity:0;transition:.25s;z-index:99;border:1px solid var(--brd);white-space:nowrap}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-label{font-size:.72rem;color:var(--muted);font-weight:700;display:block;margin-bottom:4px;margin-top:10px}
-input{width:100%;padding:11px 12px;border:1px solid var(--brd);border-radius:10px;background:var(--surface-2);color:var(--text);font-size:.9rem;font-family:inherit}
-input:focus{outline:none;border-color:var(--primary)}
-input::placeholder{color:var(--muted-2)}
-.item-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--brd)}
-.item-row:last-child{border-bottom:none}
-.item-row .info{flex:1;min-width:0}
-.item-row b{display:block;font-size:.88rem}
-.item-row span{font-size:.72rem;color:var(--muted)}
-.item-row .rm{background:none;border:none;color:var(--danger);font-size:1.1rem;cursor:pointer;padding:4px 8px}
-.counter{background:var(--primary);color:#fff;font-size:.7rem;font-weight:800;border-radius:20px;padding:1px 8px}
-.hint{font-size:.72rem;color:var(--muted);margin-top:8px;line-height:1.5}
-.eco-links{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
-.eco-links a{display:inline-flex;align-items:center;gap:5px;font-size:.68rem;font-weight:600;color:var(--muted);background:var(--surface-hover);border:1px solid var(--brd);border-radius:8px;padding:5px 9px;text-decoration:none}
-.eco-links a:hover{color:var(--text)}
 </style>
-<script src="/macroview-widget.js" defer></script>
 </head>
 <body>
 
 <header>
   <a href="/index.html">
-    <svg width="70" height="20" viewBox="0 0 36.4 10.22" fill="currentColor" style="color:var(--text)">
+    <svg width="60" height="17" viewBox="0 0 36.4 10.22" fill="currentColor" style="color:var(--text)">
       <rect x="16.96" y="0" width="2.47" height="10.22"/>
       <path d="M22.04,4.83V0h2.47v4.74c0,2.09.6,3.1,1.88,3.1s2.8-.77,4.53-2.03l2.98-2.06V0h2.5v10.22h-2.32c0-1.13,0-2.86.06-3.99-3.99,2.68-5.78,3.99-8.14,3.99-2.53,0-3.96-1.64-3.96-5.39"/>
       <path d="M14.36,5.39v4.83h-2.47v-4.74c0-2.09-.6-3.1-1.88-3.1s-2.8.77-4.53,2.03l-2.98,2.06v3.76H0V0h2.32c0,1.13,0,2.86-.06,3.99C6.26,1.31,8.05,0,10.4,0c2.53,0,3.96,1.64,3.96,5.39"/>
     </svg>
-    <div><div style="font-weight:800;color:var(--text);font-size:.95rem">Estoque Elétrica</div><div class="sub">Checkout de Entrega</div></div>
+    <div><div style="font-weight:800;color:var(--text);font-size:.9rem">Prepress</div><div class="sub">Checkout de Entrega</div></div>
   </a>
   <button class="theme-toggle" title="Alternar tema" aria-label="Alternar tema claro/escuro">
     <svg class="ic-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
@@ -72,46 +161,110 @@ input::placeholder{color:var(--muted-2)}
   <a href="/nova-ot.html" title="Nova OT">➕ Nova OT</a>
   <a href="/scan.html" title="Leitor QR">🔲 Leitor QR</a>
   <a href="#" onclick="abrirMacroView();return false" title="Visão cruzada de uma OT">🔭 MacroView</a>
+  <a href="/pesquisa-transportes.html" title="Pesquisar guias de transporte já emitidas">🔍 Transportes</a>
   <a href="http://192.168.23.185:4000" target="_blank" title="Etiquetas Térmicas (print-agent)">🖨 Etiquetas</a>
   <a href="https://niumapas.pages.dev" target="_blank" title="Mapa de Instalação">🗺 Mapa</a>
   <a href="https://niukanban.pages.dev" target="_blank" title="Kanban de Produção">🗂 Kanban</a>
 </div>
 
+<!-- ---- guia: número da OT + itens esperados ---- -->
 <div class="card g">
-  <button class="btn btn-cam" id="btnCam">Ativar câmera</button>
+  <div class="card-eyebrow">
+    <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M16 3H8a2 2 0 0 0-2 2v2h12V5a2 2 0 0 0-2-2Z"/></svg>
+    Guia de retirada
+  </div>
+  <div class="ot-field">
+    <input id="otInput" placeholder="Nº da Ordem de Trabalho" autocomplete="off">
+    <div class="ot-suggest" id="otSuggest"></div>
+  </div>
+  <div class="ot-status" id="otStatus"></div>
+  <div class="esperados" id="esperadosWrap" style="display:none">
+    <div id="esperadosLista"></div>
+  </div>
+</div>
+
+<!-- ---- leitura ---- -->
+<div class="card g">
+  <div class="card-eyebrow">
+    <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3M14 21v-4h4M21 14v3M21 21h-3"/></svg>
+    Ler peças
+  </div>
+  <div class="scan-toolbar">
+    <button class="icon-btn" id="btnCam">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2Z"/><circle cx="12" cy="13" r="4"/></svg>
+      Câmera
+    </button>
+    <div class="leitor-field">
+      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V4a1 1 0 0 1 1-1h3M17 3h3a1 1 0 0 1 1 1v3M21 17v3a1 1 0 0 1-1 1h-3M7 21H4a1 1 0 0 1-1-1v-3"/></svg>
+      <input id="hidScanInput" type="text" autocomplete="off" placeholder="Leitor físico — clique aqui e escaneie">
+    </div>
+  </div>
   <div id="camBox">
     <video id="video" autoplay playsinline muted></video>
     <canvas id="canvas"></canvas>
     <div class="scan-line"></div>
     <div id="status">aguardando...</div>
   </div>
-  <label>Leitor físico (USB/Bluetooth)</label>
-  <input id="hidScanInput" type="text" autocomplete="off" placeholder="Clique em «Iniciar leitura» e escaneie a peça">
-  <button class="btn btn-sec" id="btnIniciarLeitor" style="margin-top:8px">▶ Iniciar leitura</button>
-  <div class="hint">Escaneie cada peça pronta pra saída — só aceita QR de unidade física (etiqueta colada na peça). Cada leitura entra na lista abaixo, uma vez cada.</div>
-</div>
-
-<div class="card g">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-    <b style="font-size:.9rem">Peças escaneadas</b>
-    <span class="counter" id="contador">0</span>
+  <div class="scan-toolbar" style="margin-top:8px">
+    <div class="leitor-field" style="min-width:220px">
+      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+      <input id="itemManualInput" type="text" autocomplete="off" placeholder="Sem QR? Digite o nome da peça">
+    </div>
+    <input id="itemManualQtd" type="number" min="1" value="1" title="Quantidade" style="width:64px;padding:8px 10px;border:1px solid var(--brd);border-radius:9px;background:var(--surface-2);color:var(--text);font-size:.8rem;text-align:center;font-family:inherit">
+    <button class="icon-btn" id="btnAddManual">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+      Adicionar
+    </button>
   </div>
-  <div id="lista"><div class="empty">Nenhuma peça escaneada ainda.</div></div>
 </div>
 
+<!-- ---- manifesto dinâmico ---- -->
 <div class="card g">
-  <label style="margin-top:0">Retirado por</label>
-  <input id="retiradoPor" placeholder="Nome de quem está levando o material">
-  <button class="btn btn-ok" id="btnGerar" style="margin-top:14px" disabled>Gerar guia de transporte</button>
+  <div class="manifesto-head">
+    <div class="card-eyebrow" style="margin-bottom:0">
+      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      Manifesto
+    </div>
+    <span class="manifesto-count" id="contador">0 peças</span>
+  </div>
+  <div class="manifesto" id="lista">
+    <div class="empty">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M16 3H8a2 2 0 0 0-2 2v2h12V5a2 2 0 0 0-2-2Z"/></svg><br>
+      Nenhuma peça escaneada ainda
+    </div>
+  </div>
+</div>
+
+<div class="footer-bar">
+  <div class="footer-inner">
+    <input id="retiradoPor" placeholder="Retirado por...">
+    <button class="btn-fechar" id="btnGerar" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>
+      Fechar guia
+    </button>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
 
 <script src="/vendor/jsQR.js"></script>
+<script src="/vendor/qrcode.js"></script>
+<script src="/vendor/jspdf.umd.min.js"></script>
+<script src="/pdf-nota-transporte.js"></script>
 <script>
 const API='/api';
 const esc=s=>String(s??'').replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
-let itensCheckout=[]; // [{uid,nome,serial,ot}]
+// remove o ano embutido no meio do número (ex: "OT-2026-0383" → "OT-0383") só pra exibição —
+// otAtual continua guardando o valor completo original, usado pra casar/gravar de verdade
+function otParaExibicao(bruto){
+  const t=String(bruto||'').trim();
+  const m=t.match(/^OT-(\d{4})-(\d{1,6})$/i);
+  return m?`OT-${m[2]}`:t;
+}
+let itensCheckout=[]; // [{uid,nome,serial,ot,esperado}]
+let esperados=[]; // [{nome,quantidade,unidade,escaneados}]
+let otAtual='';
+let nomeOtAtual='';
 let camOn=false, scanInt=null, detector=null, scanning=false, lastScan=0;
 
 function toast(m,t){
@@ -120,26 +273,214 @@ function toast(m,t){
   setTimeout(()=>el.classList.remove('show'),2600);
 }
 
+/* ===== sugestões de OT em aberto: mostra todas ao focar, filtra ao digitar ===== */
+// lista cheia carregada uma vez de /api/projetos (só as não-encerradas) e filtrada
+// localmente a cada tecla — não depende de round-trip pro servidor a cada caractere
+let otsAbertas=null, sugestActiveIdx=-1;
+
+async function carregarOtsAbertas(){
+  if(otsAbertas) return otsAbertas;
+  try{
+    const todos=await fetch(`${API}/projetos`).then(r=>r.json());
+    otsAbertas=(todos||[])
+      .filter(p=>p.status!=='encerrado')
+      .map(p=>({ot:p.numero, nome:p.nome||''}))
+      .sort((a,b)=>a.ot.localeCompare(b.ot, 'pt-BR', {numeric:true}));
+  }catch(e){ otsAbertas=[]; }
+  return otsAbertas;
+}
+
+function renderSugestoes(lista){
+  const box=document.getElementById('otSuggest');
+  if(!lista.length){ box.innerHTML='<div class="ot-suggest-empty">Nenhuma OT em aberto encontrada</div>'; box.classList.add('show'); sugestActiveIdx=-1; return; }
+  box.innerHTML=lista.map((p,i)=>`
+    <div class="ot-suggest-item" data-numero="${esc(p.ot)}" data-idx="${i}">
+      <span class="ot-suggest-numero">${esc(p.ot)}</span>
+      <span class="ot-suggest-nome">${esc(p.nome||'')}</span>
+    </div>`).join('');
+  box.classList.add('show');
+  sugestActiveIdx=-1;
+  box.querySelectorAll('.ot-suggest-item').forEach(el=>{
+    el.addEventListener('mousedown', e=>{ // mousedown (não click) pra disparar antes do blur do input
+      e.preventDefault();
+      document.getElementById('otInput').value=el.dataset.numero;
+      esconderSugestoes();
+      buscarOt();
+    });
+  });
+}
+
+function esconderSugestoes(){
+  const box=document.getElementById('otSuggest');
+  box.classList.remove('show'); box.innerHTML=''; sugestActiveIdx=-1;
+}
+
+async function filtrarSugestoes(){
+  const termo=document.getElementById('otInput').value.trim().toLowerCase();
+  const lista=await carregarOtsAbertas();
+  // sem termo (acabou de focar) → mostra a barra com todas; com termo → cruza a string
+  // contra número e nome, em qualquer posição, não só no começo
+  const filtrados=termo
+    ? lista.filter(p=>p.ot.toLowerCase().includes(termo) || p.nome.toLowerCase().includes(termo))
+    : lista;
+  renderSugestoes(filtrados);
+}
+
+document.getElementById('otInput').addEventListener('input', filtrarSugestoes);
+document.getElementById('otInput').addEventListener('focus', filtrarSugestoes);
+document.addEventListener('click', e=>{
+  if(!e.target.closest('.ot-field')) esconderSugestoes();
+});
+document.getElementById('otInput').addEventListener('keydown', e=>{
+  const box=document.getElementById('otSuggest');
+  const itens=[...box.querySelectorAll('.ot-suggest-item')];
+  if(!itens.length) return;
+  if(e.key==='ArrowDown'){ e.preventDefault(); sugestActiveIdx=Math.min(sugestActiveIdx+1, itens.length-1); itens.forEach((el,i)=>el.classList.toggle('active', i===sugestActiveIdx)); }
+  else if(e.key==='ArrowUp'){ e.preventDefault(); sugestActiveIdx=Math.max(sugestActiveIdx-1, 0); itens.forEach((el,i)=>el.classList.toggle('active', i===sugestActiveIdx)); }
+  else if(e.key==='Escape'){ esconderSugestoes(); }
+  else if(e.key==='Enter' && sugestActiveIdx>=0){ e.preventDefault(); e.stopImmediatePropagation(); itens[sugestActiveIdx].dispatchEvent(new MouseEvent('mousedown')); }
+});
+
+/* ===== OT no topo: busca os itens esperados (produzidos/aprovados) ===== */
+async function buscarOt(){
+  esconderSugestoes();
+  const ot=document.getElementById('otInput').value.trim();
+  const statusEl=document.getElementById('otStatus');
+  const wrap=document.getElementById('esperadosWrap');
+  if(!ot){ statusEl.innerHTML=''; wrap.style.display='none'; esperados=[]; otAtual=''; return; }
+  statusEl.innerHTML='<span class="spin"></span> Buscando...';
+  const r=await fetch(`${API}/resolver?ot=${encodeURIComponent(ot)}`).then(r=>r.json()).catch(()=>({tipo:'desconhecido'}));
+  if(r.tipo==='desconhecido'){
+    statusEl.innerHTML='Nenhum sistema conhece essa OT ainda — pode escanear mesmo assim.';
+    wrap.style.display='none'; esperados=[]; otAtual=ot; nomeOtAtual='';
+    document.getElementById('hidScanInput').focus();
+    return;
+  }
+  otAtual = r.ot || ot;
+  document.getElementById('otInput').value = otParaExibicao(otAtual);
+  const itensOt = r.tipo==='ot' ? r.itens.filter(i=>i.status!=='devolvido') : [];
+  // nome do trabalho: vem solto em r.nomeOt (tipo ot-impressao) ou dentro de cada item
+  // como projeto_nome (tipo ot, join com a tabela de projetos)
+  nomeOtAtual = r.nomeOt || itensOt[0]?.projeto_nome || '';
+  esperados = itensOt.map(i=>({ nome:i.item_nome, quantidade:i.quantidade, unidade:i.unidade, escaneados:0 }));
+  // já casa unidades escaneadas antes de trocar de OT (raro, mas evita perder contagem)
+  itensCheckout.forEach(it=>{ if(it.ot===otAtual) marcarEsperado(it.nome); });
+  if(esperados.length){
+    statusEl.innerHTML=`<b style="color:var(--ok)">✓ ${r.nomeOt?esc(r.nomeOt)+' · ':''}${esperados.length} item(ns) liberado(s) pra separação</b>`;
+    wrap.style.display='block';
+  } else {
+    statusEl.innerHTML='OT encontrada, mas sem itens liberados pra separação ainda.';
+    wrap.style.display='none';
+  }
+  renderEsperados();
+  // já deixa o cursor pronto pro leitor físico — depois de achar a OT, o próximo passo
+  // natural é escanear, sem precisar clicar em mais nada
+  document.getElementById('hidScanInput').focus();
+}
+document.getElementById('otInput').addEventListener('blur', buscarOt);
+document.getElementById('otInput').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); buscarOt(); document.getElementById('otInput').blur(); } });
+
+function marcarEsperado(nomePeca){
+  const alvo=(nomePeca||'').trim().toLowerCase();
+  const item=esperados.find(e=>e.nome.trim().toLowerCase()===alvo && e.escaneados<e.quantidade);
+  if(item){ item.escaneados++; return true; }
+  return false;
+}
+
+function renderEsperados(){
+  document.getElementById('esperadosLista').innerHTML = esperados.map(e=>{
+    const done = e.escaneados>=e.quantidade;
+    return `<div class="esp-row">
+      <div class="esp-check ${done?'done':''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg></div>
+      <div class="esp-info">
+        <div class="esp-nome ${done?'done':''}">${esc(e.nome)}</div>
+        <div class="esp-meta">${e.unidade||''}</div>
+      </div>
+      <div class="esp-count ${done?'done':''}">${e.escaneados}/${e.quantidade}</div>
+    </div>`;
+  }).join('');
+}
+
+/* ===== adiciona uma linha ao manifesto (peça escaneada, item de catálogo ou item avulso
+   digitado à mão — os três entram na mesma lista e vão juntos pro PDF final). Série e OT
+   continuam guardados (uid/serial/ot) pra casar com os itens esperados e pra desduplicar
+   leitura repetida, só não aparecem mais na tela nem no PDF — a exibição é nome + quantidade. */
+function adicionarAoManifesto({ uid, nome, serial, ot, quantidade }){
+  const esperado = otAtual ? marcarEsperado(nome) : false;
+  itensCheckout.unshift({ uid: uid||null, nome, serial: serial||'', ot: ot||otAtual||'', quantidade: quantidade||1, obs:'', esperado });
+  toast('✓ '+nome+' adicionado');
+  if(navigator.vibrate) navigator.vibrate(60);
+  renderEsperados();
+  renderManifesto();
+}
+
+/* ===== processar uma leitura de unidade física (uid) ===== */
 async function processarUid(uid){
-  if(itensCheckout.some(i=>i.uid==uid)){ toast('Essa peça já está na lista','err'); return; }
+  if(itensCheckout.some(i=>i.uid==uid)){ toast('Essa peça já está no manifesto','err'); return; }
   const r=await fetch(`${API}/resolver?uid=${encodeURIComponent(uid)}`).then(r=>r.json()).catch(()=>null);
   if(!r||r.tipo!=='unidade'){ toast('QR não é de uma unidade física','err'); return; }
   const u=r.unidade;
-  itensCheckout.push({ uid, nome:u.nome, serial:u.serial, ot:u.ot||'' });
-  toast('✓ '+u.nome+' adicionado');
-  render();
+  adicionarAoManifesto({ uid, nome:u.nome, serial:u.serial, ot:u.ot });
 }
 
-function render(){
-  document.getElementById('contador').textContent=itensCheckout.length;
-  document.getElementById('lista').innerHTML = itensCheckout.length ? itensCheckout.map((it,i)=>`
-    <div class="item-row">
-      <div class="info"><b>${esc(it.nome)}</b><span>${esc(it.serial)}${it.ot?' · OT '+esc(it.ot):' · sem OT vinculada'}</span></div>
-      <button class="rm" onclick="removerItem(${i})" title="Remover">✕</button>
-    </div>`).join('') : '<div class="empty">Nenhuma peça escaneada ainda.</div>';
-  document.getElementById('btnGerar').disabled = itensCheckout.length===0;
+/* ===== item de catálogo (QR sem número de série individual, ex: scan.html?id=...) ===== */
+async function processarItemCatalogo(id){
+  const r=await fetch(`${API}/resolver?id=${encodeURIComponent(id)}`).then(r=>r.json()).catch(()=>null);
+  if(!r||r.tipo!=='item'){ toast('QR não reconhecido','err'); return; }
+  adicionarAoManifesto({ nome:r.item.nome });
 }
-function removerItem(i){ itensCheckout.splice(i,1); render(); }
+
+/* ===== item avulso digitado à mão — pra peças sem QR/etiqueta ainda ===== */
+function adicionarItemManual(){
+  const input=document.getElementById('itemManualInput');
+  const qtdInput=document.getElementById('itemManualQtd');
+  const nome=input.value.trim();
+  if(!nome){ toast('Digite o nome da peça','err'); return; }
+  const quantidade=Math.max(1, parseInt(qtdInput.value,10)||1);
+  adicionarAoManifesto({ nome, quantidade });
+  input.value=''; qtdInput.value='1';
+  input.focus();
+}
+document.getElementById('btnAddManual').addEventListener('click', adicionarItemManual);
+document.getElementById('itemManualInput').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); adicionarItemManual(); } });
+
+function renderManifesto(){
+  document.getElementById('contador').textContent = itensCheckout.length+(itensCheckout.length===1?' peça':' peças');
+  document.getElementById('btnGerar').disabled = itensCheckout.length===0;
+  const lista=document.getElementById('lista');
+  if(!itensCheckout.length){
+    lista.innerHTML='<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M16 3H8a2 2 0 0 0-2 2v2h12V5a2 2 0 0 0-2-2Z"/></svg><br>Nenhuma peça escaneada ainda</div>';
+    return;
+  }
+  lista.innerHTML = itensCheckout.map((it,i)=>{
+    const n = itensCheckout.length - i;
+    return `<div class="manif-row-wrap">
+      <div class="manif-row">
+        <div class="manif-num">${n}</div>
+        <div class="manif-ic ${it.esperado?'':'alerta'}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">${it.esperado?'<path d="M20 6 9 17l-5-5"/>':'<path d="M12 9v4M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/>'}</svg>
+        </div>
+        <div class="manif-info">
+          <div class="manif-nome">${esc(it.nome)}</div>
+        </div>
+        ${!it.esperado?'<span class="manif-tag fora">fora da lista</span>':''}
+        <input class="manif-qtd" type="number" min="1" value="${it.quantidade||1}" title="Quantidade" oninput="itensCheckout[${i}].quantidade=Math.max(1,parseInt(this.value,10)||1)">
+        <button class="manif-rm" onclick="removerItem(${i})" title="Remover"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      </div>
+      <input class="manif-obs" placeholder="Observação sobre esta peça (opcional)" value="${esc(it.obs||'')}" oninput="itensCheckout[${i}].obs=this.value">
+    </div>`;
+  }).join('');
+}
+function removerItem(i){
+  const it=itensCheckout[i];
+  if(it.esperado){
+    const item=esperados.find(e=>e.nome.trim().toLowerCase()===it.nome.trim().toLowerCase());
+    if(item && item.escaneados>0) item.escaneados--;
+  }
+  itensCheckout.splice(i,1);
+  renderEsperados();
+  renderManifesto();
+}
 
 /* ===== câmera ===== */
 document.getElementById('btnCam').addEventListener('click', async ()=>{
@@ -149,7 +490,7 @@ document.getElementById('btnCam').addEventListener('click', async ()=>{
     const v=document.getElementById('video');
     v.srcObject=stream;
     document.getElementById('camBox').style.display='block';
-    document.getElementById('btnCam').textContent='Parar câmera';
+    document.getElementById('btnCam').classList.add('active');
     camOn=true;
     if('BarcodeDetector' in window){ try{detector=new BarcodeDetector({formats:['qr_code']});}catch(e){detector=null;} }
     v.oncanplay=()=>{ if(!scanInt) scanInt=setInterval(doScan,250); };
@@ -161,7 +502,7 @@ function stopCam(){
   if(v.srcObject) v.srcObject.getTracks().forEach(t=>t.stop());
   v.srcObject=null;
   document.getElementById('camBox').style.display='none';
-  document.getElementById('btnCam').textContent='Ativar câmera';
+  document.getElementById('btnCam').classList.remove('active');
   camOn=false;
   if(scanInt){clearInterval(scanInt);scanInt=null;}
 }
@@ -185,23 +526,21 @@ async function doScan(){
     if(st) st.textContent=val?'✓ QR detetado!':'aguardando...';
     if(val&&now-lastScan>1500){
       lastScan=now;
-      try{ const u=new URL(val).searchParams.get('uid'); if(u) processarUid(u); }catch(e){}
+      try{
+        const params=new URL(val).searchParams;
+        const u=params.get('uid'), id=params.get('id');
+        if(u) processarUid(u); else if(id) processarItemCatalogo(id);
+      }catch(e){}
     }
   }catch(e){}
   scanning=false;
 }
 
-/* ===== leitor físico (mesmo mecanismo do Leitor QR) ===== */
+/* ===== leitor físico ===== */
 const MAPA_LEITOR_FISICO = { 'Ç': ':', '-': '/', "'": '-', '_': '?', '+': '=' };
 function corrigirCharsLeitorFisico(texto) {
   return texto.replace(/[Ç\-'_+]/g, c => MAPA_LEITOR_FISICO[c] ?? c);
 }
-function iniciarLeitorFisico(){
-  const hid=document.getElementById('hidScanInput');
-  hid.value=''; hid.focus({preventScroll:true});
-  toast('Leitor pronto — escaneie agora');
-}
-document.getElementById('btnIniciarLeitor').addEventListener('click', iniciarLeitorFisico);
 document.getElementById('hidScanInput').addEventListener('keydown', e=>{
   if(e.key!=='Enter') return;
   e.preventDefault();
@@ -209,23 +548,49 @@ document.getElementById('hidScanInput').addEventListener('keydown', e=>{
   const val=corrigirCharsLeitorFisico(hid.value.trim());
   hid.value='';
   if(!val) return;
-  try{ const u=new URL(val).searchParams.get('uid'); if(u) processarUid(u); else toast('QR não é de uma unidade física','err'); }
+  try{
+    const params=new URL(val).searchParams;
+    const uid=params.get('uid'), id=params.get('id'), ot=params.get('ot');
+    if(uid){ processarUid(uid); return; }
+    if(id){ processarItemCatalogo(id); return; }
+    // etiqueta de resumo da OT (ou qualquer QR com ?ot=) — não é uma peça, só preenche o
+    // campo da OT sozinho e já busca os itens esperados, sem contar como leitura de peça
+    if(ot){ document.getElementById('otInput').value=ot; buscarOt(); toast('OT preenchida a partir do QR'); return; }
+    toast('QR não reconhecido','err');
+  }
   catch(e){ toast('Não consegui ler esse QR','err'); }
 });
 
-/* ===== gerar guia ===== */
+/* ===== fechar guia: grava no servidor + gera a Nota de Transporte em PDF ===== */
 document.getElementById('btnGerar').addEventListener('click', async ()=>{
   const btn=document.getElementById('btnGerar');
-  btn.disabled=true; btn.textContent='Gerando...';
+  btn.disabled=true; btn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin .7s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Gerando...';
   const ots=[...new Set(itensCheckout.map(i=>i.ot).filter(Boolean))];
   const r=await fetch(`${API}/checkout`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
     ot: ots.length===1?ots[0]:'',
     retiradoPor: document.getElementById('retiradoPor').value.trim(),
     itens: itensCheckout
   })}).then(r=>r.json()).catch(()=>null);
-  if(!r?.ok){ toast('Erro ao gerar a guia','err'); btn.disabled=false; btn.textContent='Gerar guia de transporte'; return; }
-  location.href = `/guia-transporte.html?id=${r.id}`;
+  if(!r?.ok){ toast('Erro ao gerar a guia','err'); btn.disabled=false; btn.innerHTML='Fechar guia'; return; }
+  const dados=await fetch(`${API}/checkout/${r.id}`).then(r=>r.json());
+  // histórico de guias já emitidas pra essa OT (a que acabou de ser criada já entra na
+  // lista, por isso o total já inclui ela — a posição dela é sempre a última/mais recente)
+  let numeroSequencial=1, guiasAnteriores=[];
+  const otParaHistorico = dados.ot || (ots.length===1?ots[0]:'');
+  if(otParaHistorico){
+    const hist=await fetch(`${API}/checkout/por-ot?ot=${encodeURIComponent(otParaHistorico)}`).then(r=>r.json()).catch(()=>({guias:[]}));
+    numeroSequencial = hist.guias.length || 1;
+    guiasAnteriores = hist.guias.filter(g=>g.id!==r.id).map(g=>g.id);
+  }
+  gerarNotaTransportePDF({ ...dados, nomeOt: nomeOtAtual, numeroSequencial, guiasAnteriores });
+  toast('✓ Guia gerada — PDF baixado');
+  setTimeout(()=>{ location.href=`/guia-transporte.html?id=${r.id}`; }, 900);
 });
+
+// cursor pronto no leitor físico assim que a página abre — é o campo com correção de
+// caracteres do scanner, então é onde qualquer leitura (peça ou QR de resumo da OT) deve
+// cair por padrão, sem precisar clicar em nada antes de começar a escanear
+document.getElementById('hidScanInput').focus();
 </script>
 </body>
 </html>

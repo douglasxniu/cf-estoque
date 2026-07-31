@@ -277,15 +277,18 @@ async function construirEtiquetaTermicaPDF(labels) {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); doc.setTextColor(100, 100, 100);
     doc.text(EMPRESA_NOME_CURTO, headerX, headerY);
 
-    // QR pequeno de resumo da OT no canto superior direito — mesmo link da etiqueta de QR
-    // dedicada, em toda etiqueta de item também. 15x15mm: menor que isso, o celular tem
-    // dificuldade de ler na resolução da impressora térmica.
+    // QR pequeno no canto superior direito — prioriza o QR de identidade do PRÓPRIO item
+    // (permite ao Checkout de Entrega reconhecer qual peça foi lida ao escanear), caindo
+    // pro resumo genérico da OT só quando o item não tem id de catálogo (item livre/
+    // digitado). 15x15mm: menor que isso, o celular tem dificuldade de ler na resolução da
+    // impressora térmica.
+    const qrUrl = lab.qrItemUrl || lab.qrResumoUrl;
     let larguraColunaDireita = 0;
     let alturaColunaDireita = 0;
-    if (lab.qrResumoUrl) {
+    if (qrUrl) {
       const qrSize = 15;
       const qrX = W - pad - qrSize, qrY = 2;
-      doc.addImage(qrDataUrl(lab.qrResumoUrl, 5), 'PNG', qrX, qrY, qrSize, qrSize);
+      doc.addImage(qrDataUrl(qrUrl, 5), 'PNG', qrX, qrY, qrSize, qrSize);
       larguraColunaDireita = qrSize;
       alturaColunaDireita = qrY + qrSize;
     }
@@ -296,7 +299,7 @@ async function construirEtiquetaTermicaPDF(labels) {
     // (mesma coluna à direita) quando o QR existe.
     const totalUnidades = lab.unitTotal ?? 1;
     const idxAtual = lab.unitIdx ?? (idx + 1);
-    const topoContador = lab.qrResumoUrl ? alturaColunaDireita + 1.5 : 2.1;
+    const topoContador = qrUrl ? alturaColunaDireita + 1.5 : 2.1;
     if (totalUnidades <= 8) {
       const quad = 1.9, gap = 0.7;
       const n = totalUnidades;
