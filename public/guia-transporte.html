@@ -81,6 +81,17 @@ function otParaExibicao(bruto){
         <div><div class="lbl">Retirado por</div><div class="val">${esc(dados.retiradoPor || '—')}</div></div>
         <div><div class="lbl">Emitida em</div><div class="val">${data}</div></div>
       </div>
+      ${dados.destinoLat!=null && dados.destinoLng!=null ? `
+      <div class="meta-row" style="display:block">
+        <div class="lbl">Endereço de entrega</div>
+        <div class="val" style="margin-bottom:8px">${esc(dados.destinoEndereco || '—')}</div>
+        <img src="/api/mapa-estatico?lat=${dados.destinoLat}&lng=${dados.destinoLng}&zoom=${dados.destinoZoom||16}&w=960&h=490" alt="Mapa do endereço de entrega, com pin" style="width:100%;border-radius:10px;border:1px solid var(--border);display:block">
+        ${(dados.destinoPontos||[]).length ? `
+        <div style="margin-top:10px">
+          <div class="lbl" style="margin-bottom:5px">Pontos de referência</div>
+          <ul style="margin:0;padding-left:18px;font-size:.82rem">${dados.destinoPontos.map(p=>`<li style="margin-bottom:3px">${esc(p)}</li>`).join('')}</ul>
+        </div>` : ''}
+      </div>` : ''}
       <table>
         <thead><tr><th>Peça</th><th>Quantidade</th></tr></thead>
         <tbody>

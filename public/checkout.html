@@ -6,10 +6,14 @@
 <title>Checkout de Entrega · Estoque</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/@geoapify/geocoder-autocomplete@2/styles/minimal.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="/theme.js"></script>
 <script src="/dialogs.js"></script>
 <link rel="stylesheet" href="/theme.css">
 <script src="/auth-gate.js"></script>
+<script src="https://unpkg.com/@geoapify/geocoder-autocomplete@2/dist/index.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
 :root{--brd:var(--border);--r:12px}
 *{margin:0;padding:0;box-sizing:border-box}
@@ -41,6 +45,11 @@ header a{text-decoration:none;display:flex;align-items:center;gap:10px}
 .ot-status .spin{width:12px;height:12px;border:2px solid var(--brd);border-top-color:var(--primary);border-radius:50%;animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 
+/* ---- nome da OT em destaque — pra confirmar de cara que é o trabalho certo ---- */
+.ot-titulo{display:none;align-items:baseline;gap:10px;margin-top:10px;padding:10px 12px;background:var(--surface-2);border:1px solid var(--brd);border-left:3px solid var(--primary);border-radius:9px;animation:slideIn .2s ease-out}
+.ot-titulo-badge{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:.68rem;font-weight:700;color:var(--primary);flex-shrink:0}
+.ot-titulo-nome{font-size:.95rem;font-weight:800;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+
 /* ---- sugestões de OT em aberto, ao digitar ---- */
 .ot-suggest{
   position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:20;
@@ -68,6 +77,32 @@ header a{text-decoration:none;display:flex;align-items:center;gap:10px}
 .esp-meta{font-size:.7rem;color:var(--muted)}
 .esp-count{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:.76rem;font-weight:700;color:var(--muted);flex-shrink:0}
 .esp-count.done{color:var(--ok)}
+.esp-row.clicavel{cursor:pointer;padding:7px 8px;margin:0 -8px;border-radius:8px;transition:.12s}
+.esp-row.clicavel:hover{background:var(--surface-hover)}
+.esp-row.clicavel:hover .esp-add{opacity:1}
+.esp-add{font-size:.66rem;font-weight:700;color:var(--primary);opacity:0;transition:.12s;flex-shrink:0;white-space:nowrap}
+
+/* ---- endereço de entrega (opcional): busca geocodificada + mapa com pin ---- */
+.endereco-entrega{margin-top:12px;border-top:1px solid var(--brd);padding-top:10px}
+.endereco-label{display:flex;align-items:center;gap:6px;font-size:.72rem;font-weight:700;color:var(--muted);margin-bottom:8px}
+.endereco-label .ic{width:13px;height:13px;opacity:.8;flex-shrink:0}
+/* container do widget oficial da Geoapify — a lib desenha o próprio input/dropdown dentro */
+#enderecoAutocomplete{position:relative}
+.geoapify-autocomplete-input{width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid var(--brd)!important;border-radius:9px!important;background:var(--surface-2)!important;color:var(--text)!important;font-size:.82rem;font-family:inherit!important}
+.geoapify-autocomplete-input:focus{outline:none;border-color:var(--primary)!important}
+.geoapify-autocomplete-items{background:var(--surface)!important;border:1px solid var(--brd)!important;border-radius:9px!important;box-shadow:var(--shadow-card)!important;color:var(--text)!important}
+.geoapify-autocomplete-items div{color:var(--text)!important}
+.geoapify-autocomplete-items div:hover,.geoapify-autocomplete-items .selected{background:var(--surface-hover)!important}
+.endereco-status{margin-top:7px;font-size:.76rem;color:var(--muted);min-height:16px}
+.endereco-status.ok{color:var(--ok);font-weight:600}
+.endereco-status.err{color:var(--danger)}
+.endereco-status .spin{width:10px;height:10px;border:2px solid var(--brd);border-top-color:var(--primary);border-radius:50%;animation:spin .7s linear infinite;display:inline-block;vertical-align:-1px}
+.endereco-mapa-live{width:100%;height:260px;border-radius:9px;border:1px solid var(--brd);margin-top:8px;display:none}
+.endereco-hint-arrastar{font-size:.68rem;color:var(--muted);margin-top:5px;display:none}
+.endereco-pontos{margin-top:10px;display:none}
+.endereco-pontos-titulo{font-size:.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+.endereco-pontos ul{margin:0;padding-left:16px}
+.endereco-pontos li{font-size:.78rem;color:var(--text);margin-bottom:3px}
 
 /* ---- barra de leitura: compacta, ícones, nada de botão largura total ---- */
 .scan-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
@@ -83,6 +118,17 @@ header a{text-decoration:none;display:flex;align-items:center;gap:10px}
 .leitor-field input{width:100%;padding:8px 12px 8px 34px;border:1px solid var(--brd);border-radius:9px;background:var(--surface-2);color:var(--text);font-size:.8rem;font-family:inherit}
 .leitor-field input:focus{outline:none;border-color:var(--primary)}
 .leitor-field .ic{position:absolute;left:11px;top:50%;transform:translateY(-50%);width:14px;height:14px;color:var(--muted);pointer-events:none}
+
+/* ---- adicionar peça manualmente: bloco próprio, separado da barra de leitura ---- */
+.manual-add{margin-top:14px;padding-top:12px;border-top:1px solid var(--brd)}
+.manual-add-label{display:flex;align-items:center;gap:6px;font-size:.72rem;font-weight:700;color:var(--muted);margin-bottom:8px}
+.manual-add-label .ic{width:13px;height:13px;opacity:.8;flex-shrink:0}
+.manual-add-row{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start}
+.manual-nome-field{flex:1;min-width:200px}
+.manual-qtd{width:66px;flex-shrink:0;padding:8px 10px;border:1px solid var(--brd);border-radius:9px;background:var(--surface-2);color:var(--text);font-size:.85rem;text-align:center;font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:700}
+.manual-qtd:focus{outline:none;border-color:var(--primary)}
+.btn-add-manual{background:var(--primary);border-color:var(--primary);color:#fff;flex-shrink:0;width:auto}
+.btn-add-manual:hover{filter:brightness(1.08)}
 
 #camBox{display:none;position:relative;border-radius:10px;overflow:hidden;margin-top:10px;aspect-ratio:16/9;background:#000;max-height:220px}
 #camBox video{width:100%;height:100%;object-fit:cover;display:block}
@@ -177,9 +223,24 @@ header a{text-decoration:none;display:flex;align-items:center;gap:10px}
     <input id="otInput" placeholder="Nº da Ordem de Trabalho" autocomplete="off">
     <div class="ot-suggest" id="otSuggest"></div>
   </div>
+  <div class="ot-titulo" id="otTitulo">
+    <span class="ot-titulo-badge" id="otTituloBadge"></span>
+    <span class="ot-titulo-nome" id="otTituloNome"></span>
+  </div>
   <div class="ot-status" id="otStatus"></div>
   <div class="esperados" id="esperadosWrap" style="display:none">
     <div id="esperadosLista"></div>
+  </div>
+  <div class="endereco-entrega">
+    <div class="endereco-label">
+      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 0 1 18 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+      Endereço de entrega (opcional)
+    </div>
+    <div id="enderecoAutocomplete"></div>
+    <div class="endereco-status" id="enderecoStatus"></div>
+    <div class="endereco-mapa-live" id="enderecoMapaLive"></div>
+    <div class="endereco-hint-arrastar" id="enderecoHintArrastar">Arraste o pin ou o mapa pra ajustar a posição exata — use scroll/pinça pra zoom.</div>
+    <div class="endereco-pontos" id="enderecoPontos" style="display:none"></div>
   </div>
 </div>
 
@@ -205,16 +266,23 @@ header a{text-decoration:none;display:flex;align-items:center;gap:10px}
     <div class="scan-line"></div>
     <div id="status">aguardando...</div>
   </div>
-  <div class="scan-toolbar" style="margin-top:8px">
-    <div class="leitor-field" style="min-width:220px">
+  <div class="manual-add">
+    <div class="manual-add-label">
       <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
-      <input id="itemManualInput" type="text" autocomplete="off" placeholder="Sem QR? Digite o nome da peça">
+      Sem QR? Adicione a peça manualmente
     </div>
-    <input id="itemManualQtd" type="number" min="1" value="1" title="Quantidade" style="width:64px;padding:8px 10px;border:1px solid var(--brd);border-radius:9px;background:var(--surface-2);color:var(--text);font-size:.8rem;text-align:center;font-family:inherit">
-    <button class="icon-btn" id="btnAddManual">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
-      Adicionar
-    </button>
+    <div class="manual-add-row">
+      <div class="leitor-field manual-nome-field">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        <input id="itemManualInput" type="text" autocomplete="off" placeholder="Nome da peça (busca no catálogo)">
+        <div class="ot-suggest" id="itemSuggest"></div>
+      </div>
+      <input id="itemManualQtd" type="number" min="1" value="1" title="Quantidade" class="manual-qtd">
+      <button class="icon-btn btn-add-manual" id="btnAddManual">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+        Adicionar
+      </button>
+    </div>
   </div>
 </div>
 
@@ -265,6 +333,7 @@ let itensCheckout=[]; // [{uid,nome,serial,ot,esperado}]
 let esperados=[]; // [{nome,quantidade,unidade,escaneados}]
 let otAtual='';
 let nomeOtAtual='';
+let enderecoDestino=null; // {enderecoFormatado,lat,lng} — só depois de uma busca confirmada
 let camOn=false, scanInt=null, detector=null, scanning=false, lastScan=0;
 
 function toast(m,t){
@@ -341,18 +410,29 @@ document.getElementById('otInput').addEventListener('keydown', e=>{
   else if(e.key==='Enter' && sugestActiveIdx>=0){ e.preventDefault(); e.stopImmediatePropagation(); itens[sugestActiveIdx].dispatchEvent(new MouseEvent('mousedown')); }
 });
 
+// nome da OT em destaque logo abaixo do campo — o usuário confirma de cara que pegou o
+// trabalho certo antes de começar a escanear, em vez de precisar ler a linha de status miúda
+function atualizarTituloOt(){
+  const bloco=document.getElementById('otTitulo');
+  if(!nomeOtAtual){ bloco.style.display='none'; return; }
+  document.getElementById('otTituloBadge').textContent = otParaExibicao(otAtual);
+  document.getElementById('otTituloNome').textContent = nomeOtAtual;
+  bloco.style.display='flex';
+}
+
 /* ===== OT no topo: busca os itens esperados (produzidos/aprovados) ===== */
 async function buscarOt(){
   esconderSugestoes();
   const ot=document.getElementById('otInput').value.trim();
   const statusEl=document.getElementById('otStatus');
   const wrap=document.getElementById('esperadosWrap');
-  if(!ot){ statusEl.innerHTML=''; wrap.style.display='none'; esperados=[]; otAtual=''; return; }
+  if(!ot){ statusEl.innerHTML=''; wrap.style.display='none'; esperados=[]; otAtual=''; nomeOtAtual=''; atualizarTituloOt(); return; }
   statusEl.innerHTML='<span class="spin"></span> Buscando...';
   const r=await fetch(`${API}/resolver?ot=${encodeURIComponent(ot)}`).then(r=>r.json()).catch(()=>({tipo:'desconhecido'}));
   if(r.tipo==='desconhecido'){
     statusEl.innerHTML='Nenhum sistema conhece essa OT ainda — pode escanear mesmo assim.';
     wrap.style.display='none'; esperados=[]; otAtual=ot; nomeOtAtual='';
+    atualizarTituloOt();
     document.getElementById('hidScanInput').focus();
     return;
   }
@@ -362,14 +442,15 @@ async function buscarOt(){
   // nome do trabalho: vem solto em r.nomeOt (tipo ot-impressao) ou dentro de cada item
   // como projeto_nome (tipo ot, join com a tabela de projetos)
   nomeOtAtual = r.nomeOt || itensOt[0]?.projeto_nome || '';
+  atualizarTituloOt();
   esperados = itensOt.map(i=>({ nome:i.item_nome, quantidade:i.quantidade, unidade:i.unidade, escaneados:0 }));
   // já casa unidades escaneadas antes de trocar de OT (raro, mas evita perder contagem)
   itensCheckout.forEach(it=>{ if(it.ot===otAtual) marcarEsperado(it.nome); });
   if(esperados.length){
-    statusEl.innerHTML=`<b style="color:var(--ok)">✓ ${r.nomeOt?esc(r.nomeOt)+' · ':''}${esperados.length} item(ns) liberado(s) pra separação</b>`;
+    statusEl.innerHTML=`<b style="color:var(--ok)">✓ ${esperados.length} item(ns) liberado(s) pra separação — clique num item da lista ou escaneie</b>`;
     wrap.style.display='block';
   } else {
-    statusEl.innerHTML='OT encontrada, mas sem itens liberados pra separação ainda.';
+    statusEl.innerHTML='OT encontrada, mas sem itens liberados pra separação ainda — dá pra escanear ou adicionar peças manualmente.';
     wrap.style.display='none';
   }
   renderEsperados();
@@ -380,6 +461,109 @@ async function buscarOt(){
 document.getElementById('otInput').addEventListener('blur', buscarOt);
 document.getElementById('otInput').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); buscarOt(); document.getElementById('otInput').blur(); } });
 
+/* ===== endereço de entrega: usa o widget oficial da Geoapify (GeocoderAutocomplete —
+   mesma interface do playground deles) em vez de uma busca customizada. A chave roda no
+   navegador (é assim que esse widget funciona), então ela vem de /api/config/geoapify-key
+   (atrás de login) em vez de ir fixa no HTML — mas de qualquer forma, restrinja essa chave
+   por domínio no painel da Geoapify, já que passa a trafegar no cliente. ===== */
+let enderecoZoom=16;
+
+function limparResultadoEndereco(){
+  enderecoDestino=null;
+  document.getElementById('enderecoMapaLive').style.display='none';
+  document.getElementById('enderecoHintArrastar').style.display='none';
+  document.getElementById('enderecoPontos').style.display='none';
+  document.getElementById('enderecoStatus').textContent='';
+  document.getElementById('enderecoStatus').className='endereco-status';
+  enderecoZoom=16;
+  pontosReq++; // invalida qualquer busca de pontos de referência em andamento
+}
+
+// mapa interativo de verdade (Leaflet + tiles da Geoapify) — dá pra arrastar o mapa e o
+// pin pra ajustar a posição exata; a imagem estática só entra na hora de gerar o PDF
+// (/api/mapa-estatico), com a posição/zoom que ficaram confirmados aqui
+let mapaLive=null, marcadorLive=null;
+
+function atualizarStatusEndereco(ajustadoManualmente){
+  const statusEl=document.getElementById('enderecoStatus');
+  statusEl.textContent='✓ '+enderecoDestino.enderecoFormatado+(ajustadoManualmente?' (pin ajustado manualmente)':'');
+  statusEl.className='endereco-status ok';
+}
+
+// pontos de referência reais perto do pin (Geoapify Places + Workers AI só pra frasear) —
+// busca de novo sempre que a posição muda (seleção inicial ou arrasto do pin), pra ficar
+// coerente com onde o pin está de fato
+let pontosReq=0;
+async function buscarPontosReferencia(lat, lng){
+  const meuId=++pontosReq;
+  const box=document.getElementById('enderecoPontos');
+  box.style.display='block';
+  box.innerHTML='<div class="endereco-pontos-titulo">Pontos de referência</div><div class="endereco-status"><span class="spin"></span> Buscando…</div>';
+  try{
+    const r=await fetch(`${API}/pontos-referencia?lat=${lat}&lng=${lng}`).then(r=>r.json());
+    if(meuId!==pontosReq) return; // resposta antiga (posição já mudou de novo) — ignora
+    const pontos=r.pontos||[];
+    if(enderecoDestino) enderecoDestino.pontosReferencia=pontos;
+    box.innerHTML = pontos.length
+      ? '<div class="endereco-pontos-titulo">Pontos de referência</div><ul>'+pontos.map(p=>`<li>${esc(p)}</li>`).join('')+'</ul>'
+      : '';
+    box.style.display = pontos.length ? 'block' : 'none';
+  }catch(e){
+    if(meuId===pontosReq) box.style.display='none';
+  }
+}
+
+function mostrarMapaEndereco(enderecoFormatado, lat, lng){
+  enderecoDestino={ enderecoFormatado, lat, lng, zoom:enderecoZoom };
+  atualizarStatusEndereco(false);
+  document.getElementById('enderecoMapaLive').style.display='block';
+  document.getElementById('enderecoHintArrastar').style.display='block';
+  buscarPontosReferencia(lat, lng);
+
+  if(!mapaLive){
+    mapaLive=L.map('enderecoMapaLive').setView([lat,lng], enderecoZoom);
+    L.tileLayer(`https://maps.geoapify.com/v1/tile/osm-bright/{z}/{x}/{y}.png?apiKey=${geoapifyApiKey}`, {
+      attribution:'Powered by <a href="https://www.geoapify.com/" target="_blank">Geoapify</a> | © OpenStreetMap contributors © OpenMapTiles',
+      maxZoom:20
+    }).addTo(mapaLive);
+    marcadorLive=L.marker([lat,lng], { draggable:true }).addTo(mapaLive);
+    marcadorLive.on('dragend', ()=>{
+      const pos=marcadorLive.getLatLng();
+      enderecoDestino.lat=pos.lat; enderecoDestino.lng=pos.lng;
+      atualizarStatusEndereco(true);
+      buscarPontosReferencia(pos.lat, pos.lng);
+    });
+    mapaLive.on('zoomend', ()=>{ if(enderecoDestino) enderecoDestino.zoom=mapaLive.getZoom(); });
+  } else {
+    mapaLive.setView([lat,lng], enderecoZoom);
+    marcadorLive.setLatLng([lat,lng]);
+    setTimeout(()=>mapaLive.invalidateSize(), 0); // container pode ter ficado display:none antes
+  }
+}
+
+let geoapifyApiKey=null;
+(async function initEnderecoAutocomplete(){
+  try{
+    const { apiKey } = await fetch(`${API}/config/geoapify-key`).then(r=>r.json());
+    if(!apiKey) return;
+    geoapifyApiKey=apiKey;
+    const autocomplete = new window.autocomplete.GeocoderAutocomplete(
+      document.getElementById('enderecoAutocomplete'), apiKey,
+      { placeholder:'Rua, número, cidade...', lang:'pt', limit:6 }
+    );
+    autocomplete.on('select', feature=>{
+      if(!feature || !feature.properties) { limparResultadoEndereco(); return; }
+      const [lon, lat] = feature.geometry.coordinates;
+      enderecoZoom=16;
+      mostrarMapaEndereco(feature.properties.formatted, lat, lon);
+    });
+    autocomplete.on('input', ()=>{ if(enderecoDestino) limparResultadoEndereco(); });
+  }catch(e){
+    document.getElementById('enderecoStatus').textContent='Busca de endereço indisponível agora.';
+    document.getElementById('enderecoStatus').className='endereco-status err';
+  }
+})();
+
 function marcarEsperado(nomePeca){
   const alvo=(nomePeca||'').trim().toLowerCase();
   const item=esperados.find(e=>e.nome.trim().toLowerCase()===alvo && e.escaneados<e.quantidade);
@@ -387,18 +571,27 @@ function marcarEsperado(nomePeca){
   return false;
 }
 
+// itens da lista "esperados" (já liberados pra essa OT) ficam clicáveis quando ainda não
+// completos — clicar soma 1 unidade ao manifesto sem precisar escanear, útil quando a peça
+// não tem QR à mão mas já se sabe que é uma das esperadas pra essa OT
 function renderEsperados(){
-  document.getElementById('esperadosLista').innerHTML = esperados.map(e=>{
+  document.getElementById('esperadosLista').innerHTML = esperados.map((e,i)=>{
     const done = e.escaneados>=e.quantidade;
-    return `<div class="esp-row">
+    return `<div class="esp-row ${done?'':'clicavel'}" ${done?'':`onclick="adicionarEsperadoManual(${i})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();adicionarEsperadoManual(${i})}" role="button" tabindex="0"`} title="${done?'':'Clique pra adicionar 1 unidade ao manifesto'}">
       <div class="esp-check ${done?'done':''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg></div>
       <div class="esp-info">
         <div class="esp-nome ${done?'done':''}">${esc(e.nome)}</div>
         <div class="esp-meta">${e.unidade||''}</div>
       </div>
       <div class="esp-count ${done?'done':''}">${e.escaneados}/${e.quantidade}</div>
+      ${done?'':'<span class="esp-add">+ adicionar</span>'}
     </div>`;
   }).join('');
+}
+function adicionarEsperadoManual(i){
+  const e=esperados[i];
+  if(!e || e.escaneados>=e.quantidade) return;
+  adicionarAoManifesto({ nome:e.nome, quantidade:1 });
 }
 
 /* ===== adiciona uma linha ao manifesto (peça escaneada, item de catálogo ou item avulso
@@ -430,19 +623,102 @@ async function processarItemCatalogo(id){
   adicionarAoManifesto({ nome:r.item.nome });
 }
 
-/* ===== item avulso digitado à mão — pra peças sem QR/etiqueta ainda ===== */
+/* ===== item avulso digitado à mão — pra peças sem QR/etiqueta ainda =====
+   autocomplete busca no catálogo real (GET /api/itens, cacheado como em carregarOtsAbertas)
+   pra reduzir nome digitado errado/duplicado; fluxo pensado pra alimentar tudo via teclado:
+   digita o nome → Enter/Tab avança pra quantidade → Enter adiciona e já volta o foco pro
+   nome, pronto pra próxima peça — sem precisar tocar no mouse entre uma peça e outra. */
+let catalogoItens=null, itemSugestActiveIdx=-1;
+
+async function carregarCatalogoItens(){
+  if(catalogoItens) return catalogoItens;
+  try{
+    const todos=await fetch(`${API}/itens`).then(r=>r.json());
+    catalogoItens=(todos||[]).map(i=>({ nome:i.nome, unidade:i.unidade||'', estoque:i.quantidade??0 }));
+  }catch(e){ catalogoItens=[]; }
+  return catalogoItens;
+}
+
+function renderSugestoesItem(lista){
+  const box=document.getElementById('itemSuggest');
+  if(!lista.length){ esconderSugestoesItem(); return; }
+  box.innerHTML=lista.slice(0,8).map((it,i)=>`
+    <div class="ot-suggest-item" data-nome="${esc(it.nome)}" data-idx="${i}">
+      <span class="ot-suggest-numero" style="color:var(--text)">${esc(it.nome)}</span>
+      <span class="ot-suggest-nome">${it.estoque} ${esc(it.unidade)} em estoque</span>
+    </div>`).join('');
+  box.classList.add('show');
+  itemSugestActiveIdx=-1;
+  box.querySelectorAll('.ot-suggest-item').forEach(el=>{
+    el.addEventListener('mousedown', e=>{
+      e.preventDefault();
+      selecionarItemSugerido(el.dataset.nome);
+    });
+  });
+}
+function esconderSugestoesItem(){
+  const box=document.getElementById('itemSuggest');
+  box.classList.remove('show'); box.innerHTML=''; itemSugestActiveIdx=-1;
+}
+function selecionarItemSugerido(nome){
+  document.getElementById('itemManualInput').value=nome;
+  esconderSugestoesItem();
+  const qtd=document.getElementById('itemManualQtd');
+  qtd.focus(); qtd.select();
+}
+async function filtrarSugestoesItem(){
+  const termo=document.getElementById('itemManualInput').value.trim().toLowerCase();
+  if(!termo){ esconderSugestoesItem(); return; }
+  const lista=await carregarCatalogoItens();
+  renderSugestoesItem(lista.filter(it=>it.nome.toLowerCase().includes(termo)));
+}
+document.getElementById('itemManualInput').addEventListener('input', filtrarSugestoesItem);
+document.addEventListener('click', e=>{
+  if(!e.target.closest('.manual-nome-field')) esconderSugestoesItem();
+});
+
 function adicionarItemManual(){
   const input=document.getElementById('itemManualInput');
   const qtdInput=document.getElementById('itemManualQtd');
   const nome=input.value.trim();
-  if(!nome){ toast('Digite o nome da peça','err'); return; }
+  if(!nome){ toast('Digite o nome da peça','err'); input.focus(); return; }
   const quantidade=Math.max(1, parseInt(qtdInput.value,10)||1);
   adicionarAoManifesto({ nome, quantidade });
   input.value=''; qtdInput.value='1';
+  esconderSugestoesItem();
   input.focus();
 }
 document.getElementById('btnAddManual').addEventListener('click', adicionarItemManual);
-document.getElementById('itemManualInput').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); adicionarItemManual(); } });
+
+document.getElementById('itemManualInput').addEventListener('keydown', e=>{
+  const box=document.getElementById('itemSuggest');
+  const itens=[...box.querySelectorAll('.ot-suggest-item')];
+  if(itens.length && (e.key==='ArrowDown'||e.key==='ArrowUp')){
+    e.preventDefault();
+    itemSugestActiveIdx = e.key==='ArrowDown' ? Math.min(itemSugestActiveIdx+1, itens.length-1) : Math.max(itemSugestActiveIdx-1, 0);
+    itens.forEach((el,i)=>el.classList.toggle('active', i===itemSugestActiveIdx));
+    return;
+  }
+  if(e.key==='Escape'){ esconderSugestoesItem(); return; }
+  if(e.key==='Enter' || e.key==='Tab'){
+    if(itens.length && itemSugestActiveIdx>=0){
+      e.preventDefault();
+      selecionarItemSugerido(itens[itemSugestActiveIdx].dataset.nome);
+      return;
+    }
+    // sem sugestão escolhida: Enter/Tab só avança pro campo de quantidade — quem confirma
+    // e efetivamente adiciona ao manifesto é o Enter dado lá, depois da quantidade
+    esconderSugestoesItem();
+    if(e.key==='Enter'){
+      e.preventDefault();
+      const qtd=document.getElementById('itemManualQtd');
+      qtd.focus(); qtd.select();
+    }
+  }
+});
+document.getElementById('itemManualQtd').addEventListener('keydown', e=>{
+  if(e.key==='Enter'){ e.preventDefault(); adicionarItemManual(); }
+});
 
 function renderManifesto(){
   document.getElementById('contador').textContent = itensCheckout.length+(itensCheckout.length===1?' peça':' peças');
@@ -569,7 +845,8 @@ document.getElementById('btnGerar').addEventListener('click', async ()=>{
   const r=await fetch(`${API}/checkout`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
     ot: ots.length===1?ots[0]:'',
     retiradoPor: document.getElementById('retiradoPor').value.trim(),
-    itens: itensCheckout
+    itens: itensCheckout,
+    endereco: enderecoDestino || undefined
   })}).then(r=>r.json()).catch(()=>null);
   if(!r?.ok){ toast('Erro ao gerar a guia','err'); btn.disabled=false; btn.innerHTML='Fechar guia'; return; }
   const dados=await fetch(`${API}/checkout/${r.id}`).then(r=>r.json());
@@ -582,7 +859,18 @@ document.getElementById('btnGerar').addEventListener('click', async ()=>{
     numeroSequencial = hist.guias.length || 1;
     guiasAnteriores = hist.guias.filter(g=>g.id!==r.id).map(g=>g.id);
   }
-  gerarNotaTransportePDF({ ...dados, nomeOt: nomeOtAtual, numeroSequencial, guiasAnteriores });
+  // o PDF é montado de forma síncrona (jsPDF) — por isso o mapa é baixado e convertido pra
+  // dataURL aqui antes de chamar o gerador, em vez de deixar o gerador buscar sozinho
+  let mapaDataUrl=null;
+  if(dados.destinoLat!=null && dados.destinoLng!=null){
+    try{
+      // proporção larga x 92mm igual à faixa do mapa no PDF (~180x92mm) e resolução alta o
+      // suficiente pra não borrar quando impresso — ver pdf-nota-transporte.js
+      const blob=await fetch(`${API}/mapa-estatico?lat=${dados.destinoLat}&lng=${dados.destinoLng}&zoom=${dados.destinoZoom||16}&w=1400&h=716`).then(r=>r.blob());
+      mapaDataUrl=await new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.onerror=rej; fr.readAsDataURL(blob); });
+    }catch(e){ mapaDataUrl=null; }
+  }
+  gerarNotaTransportePDF({ ...dados, nomeOt: nomeOtAtual, numeroSequencial, guiasAnteriores, mapaDataUrl });
   toast('✓ Guia gerada — PDF baixado');
   setTimeout(()=>{ location.href=`/guia-transporte.html?id=${r.id}`; }, 900);
 });

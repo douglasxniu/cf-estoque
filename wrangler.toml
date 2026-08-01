@@ -11,6 +11,12 @@ database_id = "ba514db4-66ed-46a8-9d7c-47c8ff02e623"
 directory = "public"
 binding = "ASSETS"
 
+# Workers AI (grátis) — usado só pra frasear em pt-PT os pontos de referência perto do
+# endereço de entrega, sempre a partir de POIs reais (Geoapify Places), nunca inventando
+# lugares. Ver /api/pontos-referencia em worker.js.
+[ai]
+binding = "AI"
+
 # Backup automático semanal do banco (envia um dump JSON por e-mail) — roda domingo às 3h UTC.
 [triggers]
 crons = ["0 3 * * 7"]

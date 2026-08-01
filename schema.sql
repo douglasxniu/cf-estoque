@@ -100,5 +100,13 @@ CREATE TABLE checkouts (
   retirado_por TEXT,
   itens_json TEXT NOT NULL,
   criado_por TEXT,
-  criado_em TEXT DEFAULT (datetime('now'))
+  criado_em TEXT DEFAULT (datetime('now')),
+  -- endereço de entrega opcional (geocodificado via Geoapify) — ver migration_checkout_endereco.sql
+  destino_endereco TEXT,
+  destino_lat REAL,
+  destino_lng REAL,
+  -- zoom do mapa escolhido pelo usuário — ver migration_checkout_zoom.sql
+  destino_zoom INTEGER,
+  -- pontos de referência (JSON array de strings) — ver migration_checkout_pontos_referencia.sql
+  destino_pontos_json TEXT
 );

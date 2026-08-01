@@ -11,6 +11,23 @@ function imagemMuitoGrande(dataUrl) {
   return typeof dataUrl === "string" && dataUrl.length > IMAGEM_MAX_BYTES;
 }
 
+// distância (Haversine, metros) e direção cardinal (8 pontos, pt-PT) entre dois lat/lng —
+// usadas pra descrever pontos de referência perto do endereço de entrega
+function distanciaMetros(lat1, lon1, lat2, lon2) {
+  const R = 6371000, rad = Math.PI / 180;
+  const dLat = (lat2 - lat1) * rad, dLon = (lon2 - lon1) * rad;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+function direcaoCardinal(lat1, lon1, lat2, lon2) {
+  const rad = Math.PI / 180;
+  const y = Math.sin((lon2 - lon1) * rad) * Math.cos(lat2 * rad);
+  const x = Math.cos(lat1 * rad) * Math.sin(lat2 * rad) - Math.sin(lat1 * rad) * Math.cos(lat2 * rad) * Math.cos((lon2 - lon1) * rad);
+  const graus = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+  const pontos = ["norte", "nordeste", "leste", "sudeste", "sul", "sudoeste", "oeste", "noroeste"];
+  return pontos[Math.round(graus / 45) % 8];
+}
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -31,7 +48,10 @@ const PUBLIC_ROUTES = [
   // embutido em Mapa/Kanban/print-agent (domínios diferentes, sem o token de login do
   // Estoque) — não expõem nada que /api/ot/:ot e /api/etiquetas-resumo/:ot já não expusessem
   { method: "GET", path: "/api/resolver" },
-  { method: "GET", path: "/api/ot/sugestoes" }
+  { method: "GET", path: "/api/ot/sugestoes" },
+  // só a imagem do mapa (sem a chave da API, que fica só no servidor) — a guia pública
+  // (guia-transporte.html) e o PDF precisam mostrar o mesmo pin sem exigir login
+  { method: "GET", path: "/api/mapa-estatico" }
 ];
 // GET /api/ot/:ot e GET /api/unidades/:id precisam ser públicos: são acessados pelo QR
 // físico colado no item / link do email, sem que quem lê tenha o token de admin.
@@ -1098,10 +1118,18 @@ export default {
       if (!itens.length) return json({ error: "nenhum item válido" }, 400);
       const ot = typeof b?.ot === "string" ? b.ot.trim().slice(0, 60) : "";
       const retiradoPor = typeof b?.retiradoPor === "string" ? b.retiradoPor.trim().slice(0, 120) : "";
+      // endereço de entrega é opcional — só grava se veio já geocodificado (lat/lng válidos)
+      // do fluxo de busca no checkout.html, nunca texto livre sem coordenada
+      const endereco = b?.endereco;
+      const destinoEndereco = endereco && typeof endereco.enderecoFormatado === "string" ? endereco.enderecoFormatado.slice(0, 300) : null;
+      const destinoLat = endereco && Number.isFinite(endereco.lat) ? endereco.lat : null;
+      const destinoLng = endereco && Number.isFinite(endereco.lng) ? endereco.lng : null;
+      const destinoZoom = endereco && Number.isFinite(endereco.zoom) ? Math.min(20, Math.max(3, endereco.zoom)) : null;
+      const destinoPontos = endereco && Array.isArray(endereco.pontosReferencia) ? JSON.stringify(endereco.pontosReferencia.slice(0, 5).map(p => String(p).slice(0, 200))) : null;
       const usuario = await usuarioAtual(request, env);
       const r = await env.DB.prepare(
-        "INSERT INTO checkouts (ot, retirado_por, itens_json, criado_por) VALUES (?, ?, ?, ?)"
-      ).bind(ot, retiradoPor, JSON.stringify(itens), usuario?.nome || null).run();
+        "INSERT INTO checkouts (ot, retirado_por, itens_json, criado_por, destino_endereco, destino_lat, destino_lng, destino_zoom, destino_pontos_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      ).bind(ot, retiradoPor, JSON.stringify(itens), usuario?.nome || null, destinoEndereco, destinoLat, destinoLng, destinoZoom, destinoPontos).run();
       return json({ ok: true, id: r.meta.last_row_id });
     }
 
@@ -1109,10 +1137,159 @@ export default {
     if (checkoutMatch && method === "GET") {
       const row = await env.DB.prepare("SELECT * FROM checkouts WHERE id=?").bind(checkoutMatch[1]).first();
       if (!row) return json({ error: "não encontrado" }, 404);
+      let destinoPontos = [];
+      try { destinoPontos = row.destino_pontos_json ? JSON.parse(row.destino_pontos_json) : []; } catch (e) { destinoPontos = []; }
       return json({
         id: row.id, ot: row.ot, retiradoPor: row.retirado_por,
-        itens: JSON.parse(row.itens_json), criadoPor: row.criado_por, criadoEm: row.criado_em
+        itens: JSON.parse(row.itens_json), criadoPor: row.criado_por, criadoEm: row.criado_em,
+        destinoEndereco: row.destino_endereco || "", destinoLat: row.destino_lat, destinoLng: row.destino_lng,
+        destinoZoom: row.destino_zoom || 16, destinoPontos
       });
+    }
+
+    // ---------- ENDEREÇO DE ENTREGA (Geoapify — geocoding/autocomplete/mapa estático,
+    // free tier sem cartão de crédito) ----------
+    // busca de endereço pra guia de transporte: exige login (só quem está fechando uma guia
+    // usa isso) — protege a cota gratuita da API de abuso por gente de fora.
+
+    // entrega a chave pro widget oficial da Geoapify (roda no navegador, não dá pra evitar
+    // que a chave fique visível ali) — atrás de login pelo menos, e restrinja a chave por
+    // domínio no painel da Geoapify já que ela passa a trafegar no cliente
+    if (path === "/api/config/geoapify-key" && method === "GET") {
+      if (!env.GEOAPIFY_API_KEY) return json({ error: "GEOAPIFY_API_KEY não configurada." }, 501);
+      return json({ apiKey: env.GEOAPIFY_API_KEY });
+    }
+
+    // sugestões enquanto o usuário digita — o Autocomplete da Geoapify já devolve lat/lon
+    // de cada sugestão, então escolher uma não precisa de uma 2ª chamada de geocode
+    if (path === "/api/autocomplete-endereco" && method === "GET") {
+      if (!env.GEOAPIFY_API_KEY) return json({ error: "Busca de endereço não configurada (falta GEOAPIFY_API_KEY)." }, 501);
+      const q = (url.searchParams.get("q") || "").trim().slice(0, 300);
+      if (q.length < 3) return json({ previsoes: [] });
+      try {
+        const params = new URLSearchParams({ text: q, apiKey: env.GEOAPIFY_API_KEY, lang: "pt", format: "json" });
+        const resp = await fetch(`https://api.geoapify.com/v1/geocode/autocomplete?${params}`);
+        const r = await resp.json();
+        if (!resp.ok) {
+          console.error("autocomplete-endereco:", resp.status, JSON.stringify(r).slice(0, 300));
+          return json({ error: "Falha ao buscar sugestões de endereço." }, 502);
+        }
+        const previsoes = (r.results || []).map(p => ({ descricao: p.formatted, lat: p.lat, lon: p.lon }));
+        return json({ previsoes });
+      } catch (e) {
+        return json({ error: "Falha ao consultar o serviço de mapas." }, 502);
+      }
+    }
+
+    // busca de endereço por texto livre (atalho "Buscar" sem escolher uma sugestão)
+    if (path === "/api/geocode" && method === "GET") {
+      if (!env.GEOAPIFY_API_KEY) return json({ error: "Busca de endereço não configurada (falta GEOAPIFY_API_KEY)." }, 501);
+      const endereco = (url.searchParams.get("endereco") || "").trim().slice(0, 300);
+      if (!endereco) return json({ error: "Endereço vazio." }, 400);
+      try {
+        const params = new URLSearchParams({ text: endereco, apiKey: env.GEOAPIFY_API_KEY, lang: "pt", format: "json" });
+        const resp = await fetch(`https://api.geoapify.com/v1/geocode/search?${params}`);
+        const r = await resp.json();
+        const res = r.results && r.results[0];
+        if (!resp.ok || !res) return json({ error: "Endereço não encontrado." }, 404);
+        return json({ enderecoFormatado: res.formatted, lat: res.lat, lng: res.lon });
+      } catch (e) {
+        return json({ error: "Falha ao consultar o serviço de mapas." }, 502);
+      }
+    }
+
+    // proxy da imagem estática do mapa (com pin) — a chave nunca vai pro navegador, o
+    // front só referencia esta URL como <img src=...>; público (ver PUBLIC_ROUTES) porque
+    // a guia impressa/pública também precisa mostrar o mapa
+    if (path === "/api/mapa-estatico" && method === "GET") {
+      if (!env.GEOAPIFY_API_KEY) return new Response(null, { status: 501 });
+      const lat = parseFloat(url.searchParams.get("lat"));
+      const lng = parseFloat(url.searchParams.get("lng"));
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return json({ error: "lat/lng inválidos." }, 400);
+      const largura = Math.min(2048, Math.max(100, parseInt(url.searchParams.get("w"), 10) || 480));
+      const altura = Math.min(2048, Math.max(100, parseInt(url.searchParams.get("h"), 10) || 300));
+      const zoom = Math.min(20, Math.max(3, parseInt(url.searchParams.get("zoom"), 10) || 16));
+      const mParams = new URLSearchParams({
+        style: "osm-bright", width: String(largura), height: String(altura),
+        center: `lonlat:${lng},${lat}`, zoom: String(zoom),
+        marker: `lonlat:${lng},${lat};color:#ff0000;size:48`,
+        format: "png", apiKey: env.GEOAPIFY_API_KEY
+      });
+      try {
+        const resp = await fetch(`https://maps.geoapify.com/v1/staticmap?${mParams}`);
+        const buf = await resp.arrayBuffer();
+        if (!resp.ok) {
+          console.error("mapa-estatico: Geoapify respondeu", resp.status, new TextDecoder().decode(buf).slice(0, 300));
+          return json({ error: "Falha ao gerar o mapa." }, 502);
+        }
+        return new Response(buf, {
+          headers: { "Content-Type": resp.headers.get("Content-Type") || "image/png", "Cache-Control": "public, max-age=86400", "Access-Control-Allow-Origin": "*" }
+        });
+      } catch (e) {
+        console.error("mapa-estatico: exceção", e.message);
+        return json({ error: "Falha ao consultar o serviço de mapas." }, 502);
+      }
+    }
+
+    // pontos de referência perto do endereço de entrega — busca lugares REAIS perto do pin
+    // (Geoapify Places, não inventado) e usa a Workers AI só pra escolher os 3 mais úteis
+    // pra um motorista e frasear em pt-PT com distância/direção; se a IA falhar, cai pra uma
+    // formatação determinística dos mesmos dados reais, então o recurso nunca depende 100%
+    // da IA responder pra funcionar
+    if (path === "/api/pontos-referencia" && method === "GET") {
+      if (!env.GEOAPIFY_API_KEY) return json({ pontos: [] });
+      const lat = parseFloat(url.searchParams.get("lat"));
+      const lng = parseFloat(url.searchParams.get("lng"));
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return json({ error: "lat/lng inválidos." }, 400);
+      try {
+        // exige pelo menos 3 pontos de verdade — se a busca inicial (raio menor, categorias
+        // mais "úteis pra reconhecer da rua") não achar o suficiente, alarga o raio e depois
+        // solta as categorias, até achar 3 ou desistir na última tentativa
+        const tentativas = [
+          { raio: 600, categorias: "commercial,catering,leisure,tourism,education,healthcare,public_transport" },
+          { raio: 1500, categorias: "commercial,catering,leisure,tourism,education,healthcare,public_transport" },
+          { raio: 3000, categorias: null }
+        ];
+        let candidatos = [];
+        for (const t of tentativas) {
+          const pParams = new URLSearchParams({
+            filter: `circle:${lng},${lat},${t.raio}`, bias: `proximity:${lng},${lat}`,
+            limit: "15", apiKey: env.GEOAPIFY_API_KEY
+          });
+          if (t.categorias) pParams.set("categories", t.categorias);
+          const r = await fetch(`https://api.geoapify.com/v2/places?${pParams}`).then(r => r.json());
+          candidatos = (r.features || [])
+            .map(f => f.properties)
+            .filter(p => p && p.name)
+            .map(p => ({ nome: p.name, distanciaM: Math.round(distanciaMetros(lat, lng, p.lat, p.lon)), direcao: direcaoCardinal(lat, lng, p.lat, p.lon) }))
+            .sort((a, b) => a.distanciaM - b.distanciaM)
+            .slice(0, 8);
+          if (candidatos.length >= 3) break;
+        }
+
+        if (!candidatos.length) return json({ pontos: [] });
+
+        const formatarDeterministico = () => candidatos.slice(0, 3).map(c => `${c.nome} — ${c.distanciaM}m a ${c.direcao} do local`);
+
+        if (!env.AI) return json({ pontos: formatarDeterministico() });
+        try {
+          const prompt = `Lista de lugares reais perto de um endereço de entrega (nome — distância em metros — direção a partir do pin):\n` +
+            candidatos.map(c => `- ${c.nome} — ${c.distanciaM}m — ${c.direcao}`).join("\n") +
+            `\n\nEscolha os 3 melhores como pontos de referência visuais pra um motorista de entrega encontrar o local (priorize os mais próximos e mais fáceis de reconhecer da rua, como comércio, transporte público ou pontos turísticos). Responda só com 3 linhas, uma por ponto, no formato "Nome — distância — direção", em português de Portugal. Não invente nenhum lugar que não esteja na lista.`;
+          const resposta = await env.AI.run("@cf/meta/llama-3.1-8b-instruct", {
+            messages: [{ role: "user", content: prompt }],
+            max_tokens: 200
+          });
+          const linhas = (resposta.response || "").split("\n").map(l => l.replace(/^[-•\d.\s]+/, "").trim()).filter(Boolean).slice(0, 3);
+          return json({ pontos: linhas.length >= 3 ? linhas : formatarDeterministico() });
+        } catch (e) {
+          console.error("pontos-referencia: IA falhou", e.message);
+          return json({ pontos: formatarDeterministico() });
+        }
+      } catch (e) {
+        console.error("pontos-referencia: exceção", e.message);
+        return json({ pontos: [] });
+      }
     }
 
     // histórico de guias já emitidas pra uma OT — usado tanto pra numerar a nota nova

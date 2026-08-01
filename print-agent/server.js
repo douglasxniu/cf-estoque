@@ -10,9 +10,12 @@
 const express = require('express');
 const multer = require('multer');
 const os = require('os');
+const path = require('path');
 const { imprimir, gerarPDF, TAMANHOS, TAMANHO_PADRAO, nivelDeConteudo } = require('./imprimir');
 const { extrairLabelsDoPDF } = require('./importar-pdf');
 const { extrairLabelsDaImagem } = require('./importar-imagem');
+const { gerarPDFLivre, imprimirLivre } = require('./editor-pdf');
+const modelosStore = require('./modelos');
 
 const SITE_URL = 'https://estoque.niupt.workers.dev'; // pro QR de resumo da OT
 
@@ -46,6 +49,50 @@ function totalEtiquetas() {
 function estado() {
   return { cabecalho, fila, total: totalEtiquetas() };
 }
+
+// editor visual de etiquetas (canvas livre: texto/imagem/traço de corte) — ferramenta à
+// parte da fila estruturada acima, layout inteiro vem do cliente já convertido pra mm
+app.use('/editor', express.static(path.join(__dirname, 'editor')));
+
+app.post('/api/editor/gerar-pdf', (req, res) => {
+  try {
+    const doc = gerarPDFLivre(req.body || {});
+    res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="etiqueta-${Date.now()}.pdf"` });
+    res.send(Buffer.from(doc.output('arraybuffer')));
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.post('/api/editor/imprimir', async (req, res) => {
+  try {
+    const arquivo = await imprimirLivre(req.body || {});
+    res.json({ ok: true, arquivo });
+  } catch (e) {
+    res.status(500).json({ error: e.message, stderr: e.stderr ? e.stderr.toString() : undefined });
+  }
+});
+
+// modelos salvos (presets) do editor — pra reimprimir a mesma etiqueta depois sem remontar
+app.get('/api/editor/modelos', (req, res) => res.json(modelosStore.listar()));
+app.get('/api/editor/modelos/:nome', (req, res) => {
+  const modelo = modelosStore.obter(req.params.nome);
+  if (!modelo) return res.status(404).json({ error: 'Modelo não encontrado.' });
+  res.json(modelo);
+});
+app.post('/api/editor/modelos', (req, res) => {
+  try {
+    const { nome, largura, altura, elementos } = req.body || {};
+    const salvo = modelosStore.salvar(nome, { largura, altura, elementos });
+    res.json({ ok: true, modelo: salvo });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+app.delete('/api/editor/modelos/:nome', (req, res) => {
+  modelosStore.excluir(req.params.nome);
+  res.json({ ok: true });
+});
 
 app.get('/api/estado', (req, res) => res.json(estado()));
 

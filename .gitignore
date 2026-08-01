@@ -6,3 +6,4 @@ scripts/autocommit.log
 .dev.vars
 .env
 print-agent/.env
+print-agent/modelos.json

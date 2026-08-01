@@ -1,0 +1,557 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Editor de Etiquetas · NIU Estoque</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
+<style>
+:root{color-scheme:dark}
+:root,:root[data-theme="dark"]{
+  --bg:#0b0d12; --surface:#12151c; --surface-2:#1a1e28; --surface-3:#20242f;
+  --header-bg:#0e1015;
+  --border:#262b36; --border-soft:#1d212b;
+  --text:#e9ebf0; --muted:#8b91a0; --muted-2:#5b6070;
+  --primary:#2e3948; --primary-hover:#39465a; --on-primary:#fff; --accent:#5b8cff;
+  --danger:#f0575c; --danger-bg:rgba(240,87,92,.12); --danger-border:rgba(240,87,92,.35);
+  --shadow-sm:0 2px 8px rgba(0,0,0,.25);
+}
+:root[data-theme="light"]{
+  --bg:#f3f4f6; --surface:#ffffff; --surface-2:#f7f8fa; --surface-3:#eef0f4;
+  --header-bg:#14161b;
+  --border:#e1e4ea; --border-soft:#ececf0;
+  --text:#161922; --muted:#666c7c; --muted-2:#9096a3;
+  --primary:#1f2937; --primary-hover:#111827; --on-primary:#fff; --accent:#3f6cf0;
+  --danger:#d8434c; --danger-bg:rgba(216,67,76,.08); --danger-border:rgba(216,67,76,.25);
+  --shadow-sm:0 2px 10px rgba(20,22,35,.06);
+}
+@media (prefers-color-scheme: light){ :root:not([data-theme]){
+  --bg:#f3f4f6; --surface:#ffffff; --surface-2:#f7f8fa; --surface-3:#eef0f4;
+  --header-bg:#14161b;
+  --border:#e1e4ea; --border-soft:#ececf0;
+  --text:#161922; --muted:#666c7c; --muted-2:#9096a3;
+  --primary:#1f2937; --primary-hover:#111827; --on-primary:#fff; --accent:#3f6cf0;
+  --danger:#d8434c; --danger-bg:rgba(216,67,76,.08); --danger-border:rgba(216,67,76,.25);
+  --shadow-sm:0 2px 10px rgba(20,22,35,.06);
+}}
+*{box-sizing:border-box}
+body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;margin:0;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
+header{display:flex;align-items:center;gap:14px;padding:13px 22px;background:var(--header-bg);border-bottom:3px solid var(--accent)}
+header .logo-niu{width:38px;height:auto;flex-shrink:0;color:#fff}
+header .marca{display:flex;flex-direction:column;line-height:1.15}
+header .marca b{font-size:.82rem;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:#fff}
+header .marca span{font-size:.62rem;font-weight:500;letter-spacing:.07em;text-transform:uppercase;color:#9aa0ad}
+header .divisor{width:1px;align-self:stretch;background:rgba(255,255,255,.14);margin:2px 2px}
+header h1{font-size:.92rem;margin:0;font-weight:700;color:#fff;letter-spacing:-.01em}
+header .sub{color:#8890a0;font-size:.74rem;flex:1;text-align:right}
+.layout{display:flex;height:calc(100vh - 60px)}
+.painel{width:278px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);padding:18px;overflow-y:auto}
+.painel h2{font-size:.66rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin:20px 0 9px;padding-bottom:6px;border-bottom:1px solid var(--border-soft)}
+.painel h2:first-child{margin-top:0}
+label{display:block;font-size:.7rem;font-weight:600;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em}
+input,select{width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface-2);color:var(--text);font-size:.85rem;margin-bottom:8px;font-family:inherit}
+input:focus,select:focus{outline:none;border-color:var(--accent)}
+select{cursor:pointer}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+button{border:none;border-radius:6px;padding:9px 12px;font-weight:600;cursor:pointer;font-size:.8rem;font-family:inherit;width:100%;margin-bottom:6px;transition:filter .12s,background .12s;letter-spacing:.01em}
+button:active{transform:scale(.98)}
+.btn-primary{background:var(--primary);color:var(--on-primary)}
+.btn-primary:hover{background:var(--primary-hover)}
+.btn-ghost{background:var(--surface-2);color:var(--text);border:1px solid var(--border)}
+.btn-ghost:hover{background:var(--surface-3)}
+.btn-danger{background:var(--danger-bg);color:var(--danger);border:1px solid var(--danger-border)}
+.btn-danger:hover{background:var(--danger-border)}
+.btn-row{display:flex;gap:6px}
+.btn-row button{margin-bottom:0}
+.toggle-row{display:flex;gap:6px;margin-bottom:8px}
+.toggle-row button{flex:1;margin-bottom:0;background:var(--surface-2);border:1px solid var(--border);color:var(--text)}
+.toggle-row button.ativo{background:var(--primary);color:var(--on-primary);border-color:var(--primary)}
+.propriedades{display:none;border-top:1px solid var(--border-soft);padding-top:12px;margin-top:12px}
+.propriedades.aberto{display:block}
+.canvas-area{flex:1;display:flex;align-items:center;justify-content:center;overflow:auto;background:repeating-conic-gradient(var(--surface-3) 0% 25%, var(--bg) 0% 50%) 0 0/20px 20px}
+.folha{background:#fff;box-shadow:0 12px 40px -12px rgba(0,0,0,.5);position:relative}
+.hint{font-size:.7rem;color:var(--muted);line-height:1.5;margin-top:4px}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 18px;font-size:.85rem;max-width:90vw;box-shadow:0 12px 32px -14px rgba(0,0,0,.55);z-index:999;opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.mostrar{opacity:1}
+.toast.erro{border-color:var(--danger-border);color:var(--danger);background:var(--danger-bg)}
+input[type=color]{padding:2px;height:34px;cursor:pointer}
+.hidden-file{display:none}
+</style>
+</head>
+<body>
+<header>
+  <svg class="logo-niu" viewBox="0 0 36.4 10.22" fill="currentColor"><rect x="16.96" y="0" width="2.47" height="10.22"/><path d="M22.04,4.83V0h2.47v4.74c0,2.09.6,3.1,1.88,3.1s2.8-.77,4.53-2.03l2.98-2.06V0h2.5v10.22h-2.32c0-1.13,0-2.86.06-3.99-3.99,2.68-5.78,3.99-8.14,3.99-2.53,0-3.96-1.64-3.96-5.39"/><path d="M14.36,5.39v4.83h-2.47v-4.74c0-2.09-.6-3.1-1.88-3.1s-2.8.77-4.53,2.03l-2.98,2.06v3.76H0V0h2.32c0,1.13,0,2.86-.06,3.99C6.26,1.31,8.05,0,10.4,0c2.53,0,3.96,1.64,3.96,5.39"/></svg>
+  <div class="marca"><b>NIU</b><span>Experience Agency</span></div>
+  <div class="divisor"></div>
+  <h1>Editor de Etiquetas</h1>
+  <span class="sub">Arraste texto e imagens · defina o traço de corte · gere o PDF ou imprima na Zebra</span>
+</header>
+<div class="layout">
+  <div class="painel">
+    <h2>Tamanho da etiqueta</h2>
+    <select id="tamanhoPreset">
+      <option value="100x150">10 x 15 cm</option>
+      <option value="76x51" selected>7,6 x 5,1 cm</option>
+      <option value="57x19">5,7 x 1,9 cm</option>
+      <option value="32x25">3,2 x 2,5 cm</option>
+      <option value="custom">Personalizado…</option>
+    </select>
+    <div class="row2" id="tamanhoCustom" style="display:none">
+      <div><label>Largura (mm)</label><input type="number" id="largCustom" value="76" min="5" max="300"></div>
+      <div><label>Altura (mm)</label><input type="number" id="altCustom" value="51" min="5" max="300"></div>
+    </div>
+
+    <h2>Adicionar</h2>
+    <button class="btn-ghost" id="btnTexto">+ Texto</button>
+    <button class="btn-ghost" id="btnImagem">+ Imagem</button>
+    <input type="file" id="fileImagem" class="hidden-file" accept="image/*">
+    <div class="btn-row">
+      <button class="btn-ghost" id="btnLinhaH">+ Corte ─</button>
+      <button class="btn-ghost" id="btnLinhaV">+ Corte │</button>
+    </div>
+    <p class="hint">O traço picotado marca onde você vai cortar/dividir a etiqueta depois, na mão — arraste-o pra posição desejada.</p>
+
+    <div class="propriedades" id="propTexto">
+      <h2>Texto selecionado</h2>
+      <label>Tamanho da fonte (pt)</label>
+      <input type="number" id="propTamanho" min="4" max="72">
+      <div class="toggle-row">
+        <button id="propNegrito">Negrito</button>
+        <button id="propItalico">Itálico</button>
+      </div>
+      <div class="toggle-row">
+        <button id="alinhaEsq">⟵</button>
+        <button id="alinhaCentro">↔</button>
+        <button id="alinhaDir">⟶</button>
+      </div>
+      <label>Cor</label>
+      <input type="color" id="propCor" value="#141414">
+    </div>
+
+    <h2>Seleção</h2>
+    <button class="btn-ghost" id="btnDuplicar">Duplicar (Ctrl+D)</button>
+    <div class="btn-row" style="margin-bottom:6px">
+      <button class="btn-ghost" id="alinEsq" title="Alinhar à esquerda">⇤</button>
+      <button class="btn-ghost" id="alinCentroH" title="Centralizar horizontalmente">↔</button>
+      <button class="btn-ghost" id="alinDir" title="Alinhar à direita">⇥</button>
+    </div>
+    <div class="btn-row" style="margin-bottom:6px">
+      <button class="btn-ghost" id="alinTopo" title="Alinhar ao topo">⤒</button>
+      <button class="btn-ghost" id="alinCentroV" title="Centralizar verticalmente">↕</button>
+      <button class="btn-ghost" id="alinBase" title="Alinhar à base">⤓</button>
+    </div>
+    <button class="btn-danger" id="btnExcluir">Excluir selecionado</button>
+    <button class="btn-danger" id="btnLimpar">Limpar tudo</button>
+
+    <h2>Modelos salvos</h2>
+    <select id="listaModelos"><option value="">— selecionar —</option></select>
+    <div class="btn-row" style="margin-bottom:8px">
+      <button class="btn-ghost" id="btnCarregarModelo">Carregar</button>
+      <button class="btn-danger" id="btnExcluirModelo">Excluir</button>
+    </div>
+    <button class="btn-ghost" id="btnSalvarModelo">Salvar como modelo…</button>
+    <p class="hint">Ficam guardados neste servidor — qualquer um na rede/túnel vê a mesma lista, pra reimprimir depois sem remontar.</p>
+
+    <h2>Exportar</h2>
+    <label>Cópias (etiqueta repetida em páginas seguintes)</label>
+    <input type="number" id="copias" value="1" min="1" max="100">
+    <button class="btn-ghost" id="btnPdf">Baixar PDF</button>
+    <button class="btn-primary" id="btnImprimir">Imprimir na Zebra</button>
+  </div>
+  <div class="canvas-area">
+    <div class="folha" id="folha">
+      <canvas id="c"></canvas>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const TAMANHOS = { '100x150':[100,150], '76x51':[76,51], '57x19':[57,19], '32x25':[32,25] };
+const ESCALA = 6; // px por mm na tela — export sempre converte de volta pra mm, então isso só afeta zoom visual
+
+let larguraMm, alturaMm;
+const canvas = new fabric.Canvas('c', { backgroundColor: '#ffffff', preserveObjectStacking: true });
+
+function aplicarTamanho(w, h) {
+  larguraMm = w; alturaMm = h;
+  canvas.setWidth(w * ESCALA);
+  canvas.setHeight(h * ESCALA);
+  canvas.renderAll();
+}
+
+document.getElementById('tamanhoPreset').addEventListener('change', e => {
+  const custom = document.getElementById('tamanhoCustom');
+  if (e.target.value === 'custom') { custom.style.display = 'grid'; return; }
+  custom.style.display = 'none';
+  const [w, h] = TAMANHOS[e.target.value];
+  document.getElementById('largCustom').value = w;
+  document.getElementById('altCustom').value = h;
+  if (canvas.getObjects().length === 0 || confirm('Trocar o tamanho agora limpa os elementos já colocados. Continuar?')) {
+    canvas.clear(); canvas.backgroundColor = '#ffffff';
+    aplicarTamanho(w, h);
+  } else {
+    e.target.value = Object.keys(TAMANHOS).find(k => TAMANHOS[k][0] === larguraMm && TAMANHOS[k][1] === alturaMm) || 'custom';
+  }
+});
+['largCustom', 'altCustom'].forEach(id => document.getElementById(id).addEventListener('change', () => {
+  const w = Number(document.getElementById('largCustom').value) || larguraMm;
+  const h = Number(document.getElementById('altCustom').value) || alturaMm;
+  if (canvas.getObjects().length === 0 || confirm('Trocar o tamanho agora limpa os elementos já colocados. Continuar?')) {
+    canvas.clear(); canvas.backgroundColor = '#ffffff';
+    aplicarTamanho(w, h);
+  }
+}));
+
+aplicarTamanho(76, 51);
+
+// --- adicionar elementos ---
+document.getElementById('btnTexto').addEventListener('click', () => {
+  const t = new fabric.Textbox('Texto', {
+    left: canvas.width / 2 - 60, top: canvas.height / 2 - 14,
+    width: 120, fontSize: 16, fill: '#141414', fontFamily: 'Helvetica',
+    hasRotatingPoint: false, lockRotation: true
+  });
+  canvas.add(t); canvas.setActiveObject(t); t.enterEditing(); t.selectAll();
+});
+
+document.getElementById('btnImagem').addEventListener('click', () => document.getElementById('fileImagem').click());
+document.getElementById('fileImagem').addEventListener('change', e => {
+  const arquivo = e.target.files[0];
+  if (!arquivo) return;
+  const leitor = new FileReader();
+  leitor.onload = ev => {
+    fabric.Image.fromURL(ev.target.result, img => {
+      const maxLado = Math.min(canvas.width, canvas.height) * 0.6;
+      const fator = Math.min(1, maxLado / Math.max(img.width, img.height));
+      img.set({
+        left: canvas.width / 2 - (img.width * fator) / 2,
+        top: canvas.height / 2 - (img.height * fator) / 2,
+        scaleX: fator, scaleY: fator,
+        hasRotatingPoint: false, lockRotation: true
+      });
+      canvas.add(img); canvas.setActiveObject(img);
+    });
+  };
+  leitor.readAsDataURL(arquivo);
+  e.target.value = '';
+});
+
+function linhaPicote(pontos, orientacao) {
+  const l = new fabric.Line(pontos, {
+    stroke: '#555', strokeWidth: 2, strokeDashArray: [6, 4],
+    selectable: true, hasControls: false, hasRotatingPoint: false, lockRotation: true,
+    lockMovementX: orientacao === 'h', lockMovementY: orientacao === 'v',
+    hoverCursor: orientacao === 'h' ? 'ns-resize' : 'ew-resize'
+  });
+  l.corte = orientacao;
+  canvas.add(l); canvas.setActiveObject(l);
+}
+document.getElementById('btnLinhaH').addEventListener('click', () => linhaPicote([0, canvas.height / 2, canvas.width, canvas.height / 2], 'h'));
+document.getElementById('btnLinhaV').addEventListener('click', () => linhaPicote([canvas.width / 2, 0, canvas.width / 2, canvas.height], 'v'));
+
+document.getElementById('btnExcluir').addEventListener('click', () => {
+  const obj = canvas.getActiveObject();
+  if (obj) { canvas.remove(obj); canvas.discardActiveObject(); canvas.renderAll(); }
+});
+document.getElementById('btnLimpar').addEventListener('click', () => {
+  if (!canvas.getObjects().length || confirm('Remover todos os elementos da etiqueta?')) { canvas.clear(); canvas.backgroundColor = '#ffffff'; canvas.renderAll(); }
+});
+
+// duplica o objeto (ou seleção múltipla) selecionado, deslocado um pouco pra não ficar
+// exatamente em cima do original
+function duplicarSelecionado() {
+  const obj = canvas.getActiveObject();
+  if (!obj) return;
+  obj.clone(clone => {
+    clone.set({ left: obj.left + 14, top: obj.top + 14 });
+    if (clone.type === 'activeSelection') {
+      clone.canvas = canvas;
+      clone.forEachObject(o => canvas.add(o));
+      clone.setCoords();
+    } else {
+      canvas.add(clone);
+    }
+    canvas.setActiveObject(clone);
+    canvas.requestRenderAll();
+  });
+}
+document.getElementById('btnDuplicar').addEventListener('click', duplicarSelecionado);
+
+// alinha o objeto (ou o bloco inteiro, se for uma seleção múltipla) em relação às bordas
+// da própria etiqueta — útil pra centralizar rápido um logo ou texto
+function alinhar(modo) {
+  const obj = canvas.getActiveObject();
+  if (!obj) return;
+  const w = obj.getScaledWidth(), h = obj.getScaledHeight();
+  if (modo === 'esq') obj.set('left', 0);
+  else if (modo === 'centroH') obj.set('left', (canvas.width - w) / 2);
+  else if (modo === 'dir') obj.set('left', canvas.width - w);
+  else if (modo === 'topo') obj.set('top', 0);
+  else if (modo === 'centroV') obj.set('top', (canvas.height - h) / 2);
+  else if (modo === 'base') obj.set('top', canvas.height - h);
+  obj.setCoords();
+  canvas.requestRenderAll();
+}
+document.getElementById('alinEsq').addEventListener('click', () => alinhar('esq'));
+document.getElementById('alinCentroH').addEventListener('click', () => alinhar('centroH'));
+document.getElementById('alinDir').addEventListener('click', () => alinhar('dir'));
+document.getElementById('alinTopo').addEventListener('click', () => alinhar('topo'));
+document.getElementById('alinCentroV').addEventListener('click', () => alinhar('centroV'));
+document.getElementById('alinBase').addEventListener('click', () => alinhar('base'));
+
+document.addEventListener('keydown', e => {
+  const editando = canvas.getActiveObject()?.isEditing;
+  if ((e.key === 'Delete' || e.key === 'Backspace') && !editando) {
+    const obj = canvas.getActiveObject();
+    if (obj) { canvas.remove(obj); canvas.discardActiveObject(); canvas.renderAll(); }
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd' && !editando) {
+    e.preventDefault();
+    duplicarSelecionado();
+  }
+});
+
+// --- painel de propriedades de texto ---
+const propTexto = document.getElementById('propTexto');
+function textoAtivo() {
+  const obj = canvas.getActiveObject();
+  return obj && obj.type === 'textbox' ? obj : null;
+}
+canvas.on('selection:created', atualizarPainel);
+canvas.on('selection:updated', atualizarPainel);
+canvas.on('selection:cleared', () => propTexto.classList.remove('aberto'));
+function atualizarPainel() {
+  const t = textoAtivo();
+  if (!t) { propTexto.classList.remove('aberto'); return; }
+  propTexto.classList.add('aberto');
+  document.getElementById('propTamanho').value = Math.round(t.fontSize);
+  document.getElementById('propNegrito').classList.toggle('ativo', t.fontWeight === 'bold');
+  document.getElementById('propItalico').classList.toggle('ativo', t.fontStyle === 'italic');
+  document.getElementById('propCor').value = t.fill || '#141414';
+}
+document.getElementById('propTamanho').addEventListener('input', e => {
+  const t = textoAtivo(); if (!t) return;
+  t.set('fontSize', Number(e.target.value) || 16); canvas.renderAll();
+});
+document.getElementById('propNegrito').addEventListener('click', () => {
+  const t = textoAtivo(); if (!t) return;
+  t.set('fontWeight', t.fontWeight === 'bold' ? 'normal' : 'bold'); canvas.renderAll(); atualizarPainel();
+});
+document.getElementById('propItalico').addEventListener('click', () => {
+  const t = textoAtivo(); if (!t) return;
+  t.set('fontStyle', t.fontStyle === 'italic' ? 'normal' : 'italic'); canvas.renderAll(); atualizarPainel();
+});
+document.getElementById('propCor').addEventListener('input', e => {
+  const t = textoAtivo(); if (!t) return;
+  t.set('fill', e.target.value); canvas.renderAll();
+});
+['alinhaEsq', 'alinhaCentro', 'alinhaDir'].forEach((id, i) => document.getElementById(id).addEventListener('click', () => {
+  const t = textoAtivo(); if (!t) return;
+  t.set('textAlign', ['left', 'center', 'right'][i]); canvas.renderAll();
+}));
+
+// --- traço picotado sempre atravessa a etiqueta inteira, mesmo depois de arrastado ---
+// --- guias de alinhamento: ao arrastar texto/imagem, gruda no centro e nas bordas da
+// etiqueta (com margem de tolerância) e mostra uma linha-guia rosa enquanto estiver colado ---
+const SNAP = 7; // px de tolerância pro "ímã"
+let guiaV = null, guiaH = null;
+function guia(orientacao, pos) {
+  const existente = orientacao === 'v' ? guiaV : guiaH;
+  const pontos = orientacao === 'v' ? [pos, 0, pos, canvas.height] : [0, pos, canvas.width, pos];
+  if (existente) { existente.set(orientacao === 'v' ? { x1: pos, x2: pos } : { y1: pos, y2: pos }); existente.bringToFront(); return; }
+  const l = new fabric.Line(pontos, { stroke: '#ff3d9a', strokeWidth: 1, strokeDashArray: [4, 3], selectable: false, evented: false });
+  l.guia = true;
+  canvas.add(l); l.bringToFront();
+  if (orientacao === 'v') guiaV = l; else guiaH = l;
+}
+function limparGuias() {
+  if (guiaV) { canvas.remove(guiaV); guiaV = null; }
+  if (guiaH) { canvas.remove(guiaH); guiaH = null; }
+}
+
+canvas.on('object:moving', e => {
+  const o = e.target;
+  if (o.corte === 'h') { o.set({ x1: 0, x2: canvas.width, y2: o.y1 }); return; }
+  if (o.corte === 'v') { o.set({ y1: 0, y2: canvas.height, x2: o.x1 }); return; }
+
+  const w = o.getScaledWidth(), h = o.getScaledHeight();
+  const cx = canvas.width / 2, cy = canvas.height / 2;
+  let colouV = false, colouH = false;
+
+  if (Math.abs(o.left + w / 2 - cx) < SNAP) { o.set('left', cx - w / 2); guia('v', cx); colouV = true; }
+  else if (Math.abs(o.left) < SNAP) { o.set('left', 0); guia('v', 0); colouV = true; }
+  else if (Math.abs(o.left + w - canvas.width) < SNAP) { o.set('left', canvas.width - w); guia('v', canvas.width); colouV = true; }
+
+  if (Math.abs(o.top + h / 2 - cy) < SNAP) { o.set('top', cy - h / 2); guia('h', cy); colouH = true; }
+  else if (Math.abs(o.top) < SNAP) { o.set('top', 0); guia('h', 0); colouH = true; }
+  else if (Math.abs(o.top + h - canvas.height) < SNAP) { o.set('top', canvas.height - h); guia('h', canvas.height); colouH = true; }
+
+  if (!colouV && guiaV) { canvas.remove(guiaV); guiaV = null; }
+  if (!colouH && guiaH) { canvas.remove(guiaH); guiaH = null; }
+  o.setCoords();
+});
+canvas.on('mouse:up', limparGuias);
+
+// --- exportar: converte cada objeto do canvas (px) pra mm ---
+function montarDesign() {
+  const elementos = [];
+  for (const obj of canvas.getObjects()) {
+    if (obj.guia) continue;
+    if (obj.type === 'textbox') {
+      const cor = obj.fill && obj.fill[0] === '#'
+        ? [1, 3, 5].map(i => parseInt(obj.fill.slice(i, i + 2), 16))
+        : [20, 20, 20];
+      elementos.push({
+        tipo: 'texto',
+        x: obj.left / ESCALA, y: obj.top / ESCALA,
+        w: (obj.width * obj.scaleX) / ESCALA,
+        texto: obj.text,
+        tamanho: Math.round((obj.fontSize / ESCALA) / 0.3528),
+        negrito: obj.fontWeight === 'bold', italico: obj.fontStyle === 'italic',
+        alinhamento: obj.textAlign, cor
+      });
+    } else if (obj.type === 'image') {
+      elementos.push({
+        tipo: 'imagem',
+        x: obj.left / ESCALA, y: obj.top / ESCALA,
+        w: (obj.width * obj.scaleX) / ESCALA, h: (obj.height * obj.scaleY) / ESCALA,
+        dataUrl: obj.getSrc ? obj.getSrc() : obj._element.src
+      });
+    } else if (obj.type === 'line') {
+      elementos.push({
+        tipo: 'linha',
+        x1: obj.x1 / ESCALA, y1: obj.y1 / ESCALA, x2: obj.x2 / ESCALA, y2: obj.y2 / ESCALA
+      });
+    }
+  }
+  return { largura: larguraMm, altura: alturaMm, elementos };
+}
+
+function mostrarToast(msg, erro) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = 'toast mostrar' + (erro ? ' erro' : '');
+  setTimeout(() => el.classList.remove('mostrar'), 3200);
+}
+
+function copiasEscolhidas() {
+  return Math.max(1, Math.min(100, Number(document.getElementById('copias').value) || 1));
+}
+
+document.getElementById('btnPdf').addEventListener('click', async () => {
+  canvas.discardActiveObject(); canvas.renderAll();
+  try {
+    const resp = await fetch('/api/editor/gerar-pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...montarDesign(), copias: copiasEscolhidas() }) });
+    if (!resp.ok) throw new Error((await resp.json()).error || 'Falha ao gerar PDF.');
+    const blob = await resp.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = `etiqueta-${Date.now()}.pdf`; a.click();
+  } catch (e) { mostrarToast(e.message, true); }
+});
+
+document.getElementById('btnImprimir').addEventListener('click', async () => {
+  canvas.discardActiveObject(); canvas.renderAll();
+  const btn = document.getElementById('btnImprimir');
+  btn.disabled = true;
+  try {
+    const resp = await fetch('/api/editor/imprimir', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...montarDesign(), copias: copiasEscolhidas() }) });
+    const dados = await resp.json();
+    if (!resp.ok) throw new Error(dados.error || 'Falha ao imprimir.');
+    mostrarToast(`Enviado pra Zebra ✓ (${copiasEscolhidas()} etiqueta${copiasEscolhidas() > 1 ? 's' : ''})`);
+  } catch (e) { mostrarToast(e.message, true); }
+  finally { btn.disabled = false; }
+});
+
+// --- modelos salvos (presets) ---
+async function recarregarListaModelos(selecionar) {
+  const sel = document.getElementById('listaModelos');
+  try {
+    const resp = await fetch('/api/editor/modelos');
+    const modelos = await resp.json();
+    sel.innerHTML = '<option value="">— selecionar —</option>' + modelos.map(m =>
+      `<option value="${m.nome.replace(/"/g, '&quot;')}">${m.nome} (${m.largura}×${m.altura}mm)</option>`
+    ).join('');
+    if (selecionar) sel.value = selecionar;
+  } catch (e) { mostrarToast('Não consegui carregar a lista de modelos.', true); }
+}
+recarregarListaModelos();
+
+function carregarDesign(design) {
+  canvas.clear(); canvas.backgroundColor = '#ffffff';
+  aplicarTamanho(design.largura, design.altura);
+  const chave = Object.keys(TAMANHOS).find(k => TAMANHOS[k][0] === design.largura && TAMANHOS[k][1] === design.altura);
+  document.getElementById('tamanhoPreset').value = chave || 'custom';
+  document.getElementById('tamanhoCustom').style.display = chave ? 'none' : 'grid';
+  document.getElementById('largCustom').value = design.largura;
+  document.getElementById('altCustom').value = design.altura;
+
+  (design.elementos || []).forEach(el => {
+    if (el.tipo === 'texto') {
+      const cor = Array.isArray(el.cor) ? '#' + el.cor.map(c => Math.max(0, Math.min(255, c)).toString(16).padStart(2, '0')).join('') : '#141414';
+      const t = new fabric.Textbox(el.texto || '', {
+        left: el.x * ESCALA, top: el.y * ESCALA, width: el.w * ESCALA,
+        fontSize: (el.tamanho || 10) * 0.3528 * ESCALA, fill: cor,
+        fontWeight: el.negrito ? 'bold' : 'normal', fontStyle: el.italico ? 'italic' : 'normal',
+        textAlign: el.alinhamento || 'left', fontFamily: 'Helvetica',
+        hasRotatingPoint: false, lockRotation: true
+      });
+      canvas.add(t);
+    } else if (el.tipo === 'imagem' && el.dataUrl) {
+      fabric.Image.fromURL(el.dataUrl, img => {
+        img.set({
+          left: el.x * ESCALA, top: el.y * ESCALA,
+          scaleX: (el.w * ESCALA) / img.width, scaleY: (el.h * ESCALA) / img.height,
+          hasRotatingPoint: false, lockRotation: true
+        });
+        canvas.add(img); canvas.renderAll();
+      });
+    } else if (el.tipo === 'linha') {
+      const orientacao = Math.abs(el.x1 - el.x2) < 0.01 ? 'v' : 'h';
+      linhaPicote([el.x1 * ESCALA, el.y1 * ESCALA, el.x2 * ESCALA, el.y2 * ESCALA], orientacao);
+    }
+  });
+  canvas.discardActiveObject();
+  canvas.renderAll();
+}
+
+document.getElementById('btnCarregarModelo').addEventListener('click', async () => {
+  const nome = document.getElementById('listaModelos').value;
+  if (!nome) return mostrarToast('Escolha um modelo na lista primeiro.', true);
+  if (canvas.getObjects().length && !confirm('Isso substitui o que está no canvas agora. Continuar?')) return;
+  try {
+    const resp = await fetch(`/api/editor/modelos/${encodeURIComponent(nome)}`);
+    if (!resp.ok) throw new Error((await resp.json()).error || 'Modelo não encontrado.');
+    carregarDesign(await resp.json());
+    mostrarToast(`Modelo "${nome}" carregado ✓`);
+  } catch (e) { mostrarToast(e.message, true); }
+});
+
+document.getElementById('btnSalvarModelo').addEventListener('click', async () => {
+  const atual = document.getElementById('listaModelos').value;
+  const nome = prompt('Nome do modelo:', atual || '');
+  if (!nome || !nome.trim()) return;
+  canvas.discardActiveObject(); canvas.renderAll();
+  try {
+    const resp = await fetch('/api/editor/modelos', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nome: nome.trim(), ...montarDesign() })
+    });
+    const dados = await resp.json();
+    if (!resp.ok) throw new Error(dados.error || 'Falha ao salvar modelo.');
+    await recarregarListaModelos(nome.trim());
+    mostrarToast(`Modelo "${nome.trim()}" salvo ✓`);
+  } catch (e) { mostrarToast(e.message, true); }
+});
+
+document.getElementById('btnExcluirModelo').addEventListener('click', async () => {
+  const nome = document.getElementById('listaModelos').value;
+  if (!nome) return mostrarToast('Escolha um modelo na lista primeiro.', true);
+  if (!confirm(`Excluir o modelo "${nome}"? Não dá pra desfazer.`)) return;
+  try {
+    await fetch(`/api/editor/modelos/${encodeURIComponent(nome)}`, { method: 'DELETE' });
+    await recarregarListaModelos();
+    mostrarToast(`Modelo "${nome}" excluído.`);
+  } catch (e) { mostrarToast(e.message, true); }
+});
+</script>
+</body></html>

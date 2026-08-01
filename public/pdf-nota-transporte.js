@@ -9,7 +9,7 @@
 // comunicada à AT, NIF de remetente/destinatário e software de faturação certificado —
 // Decreto-Lei 28/2019 e Portaria 195/2020). Se o material sair fisicamente das instalações
 // em circunstância sujeita a essa obrigação, a guia fiscal continua sendo necessária à parte.
-function construirNotaTransportePDF({ id, ot, nomeOt, retiradoPor, criadoPor, criadoEm, itens, numeroSequencial, guiasAnteriores }) {
+function construirNotaTransportePDF({ id, ot, nomeOt, retiradoPor, criadoPor, criadoEm, itens, numeroSequencial, guiasAnteriores, mapaDataUrl, destinoEndereco, destinoPontos }) {
   if (typeof window.jspdf === 'undefined') { if (window.niuAlert) niuAlert('Gerador de PDF não carregou.'); else alert('Gerador de PDF não carregou.'); return null; }
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
@@ -35,6 +35,12 @@ function construirNotaTransportePDF({ id, ot, nomeOt, retiradoPor, criadoPor, cr
     let t = texto;
     while (t.length > 1 && doc.getTextWidth(t + '…') > maxWidth) t = t.slice(0, -1);
     return t + '…';
+  }
+  // quebra em várias linhas em vez de truncar — usado no endereço de entrega, que NUNCA
+  // pode cortar (o motorista precisa do endereço completo, não de um pedaço com "…")
+  function quebrarLinhas(texto, maxWidth, fonte, estilo, fam = 'helvetica') {
+    doc.setFont(fam, estilo); doc.setFontSize(fonte);
+    return doc.splitTextToSize(String(texto || '—'), maxWidth);
   }
   // remove o ano embutido no meio do número (ex: "OT-2026-0383" → "OT-0383") só pra
   // exibição — a busca/gravação continua usando o valor completo original
@@ -99,10 +105,51 @@ function construirNotaTransportePDF({ id, ot, nomeOt, retiradoPor, criadoPor, cr
     doc.text(linhaUnica(legenda, CW - 8), M + CW / 2, bY + bH - 3, { align: 'center' });
   }
 
+  // ============ ENDEREÇO DE ENTREGA (opcional) — largura total, endereço NUNCA é cortado
+  // (quebra em várias linhas em vez de "…"), mapa grande abaixo, e um rodapé com pontos de
+  // referência reais perto do pin, pra ajudar o motorista a confirmar visualmente o local
+  // (pedido explícito: mapa bem maior e sem cortar o texto do endereço) ============
+  let eY = bY + bH, eH = 0;
+  if (mapaDataUrl) {
+    const padX = 4;
+    const linhasEndereco = quebrarLinhas(destinoEndereco, CW - padX * 2, 10, 'bold');
+    const enderecoH = 6 + linhasEndereco.length * 4.6 + 2;
+
+    const mapaH = 92; // mapa grande de propósito — legibilidade em papel pede tamanho, não miniatura
+
+    const linhasPontos = (destinoPontos || []).slice(0, 3).map(p => quebrarLinhas('•  ' + p, CW - padX * 2 - 3, 7.4, 'normal'));
+    const pontosH = linhasPontos.length ? 6 + linhasPontos.reduce((s, l) => s + l.length * 3.6, 0) + 3 : 0;
+
+    eH = enderecoH + mapaH + pontosH;
+    doc.setLineWidth(0.6); doc.rect(M, eY, CW, eH);
+
+    // endereço — texto completo, quebrado em quantas linhas precisar
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(6); doc.setTextColor(...CINZA);
+    doc.text('ENDEREÇO DE ENTREGA', M + padX, eY + 5.5);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...PRETO);
+    linhasEndereco.forEach((linha, i) => doc.text(linha, M + padX, eY + 11 + i * 4.6));
+
+    // mapa — largura total do documento, bem grande
+    const mapaY = eY + enderecoH;
+    doc.setLineWidth(0.3); doc.line(M, mapaY, M + CW, mapaY);
+    try { doc.addImage(mapaDataUrl, 'PNG', M, mapaY, CW, mapaH); } catch (e) {}
+
+    // pontos de referência — rodapé abaixo do mapa, só quando existem
+    if (linhasPontos.length) {
+      const pontosY = mapaY + mapaH;
+      doc.setLineWidth(0.3); doc.line(M, pontosY, M + CW, pontosY);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(6); doc.setTextColor(...CINZA);
+      doc.text('PONTOS DE REFERÊNCIA PRA LOCALIZAR', M + padX, pontosY + 5);
+      let py = pontosY + 9.5;
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(7.4); doc.setTextColor(...PRETO);
+      linhasPontos.forEach(linhas => { linhas.forEach((linha, i) => doc.text(linha, M + padX + (i > 0 ? 4 : 0), py + i * 3.6)); py += linhas.length * 3.6; });
+    }
+  }
+
   // ============ GRELHA DE META: retirado por / liberado por / data-hora / peças / QR ========
   // data/hora ganha coluna mais larga e fonte maior — é o campo com mais destaque pedido
   // depois do cabeçalho da OT, junto com quem retirou/liberou
-  const gY = bY + bH, gH = 22;
+  const gY = eY + eH, gH = 22;
   const colX = [M, M + 44, M + 88, M + 134, M + 150, M + CW];
   doc.setLineWidth(0.6); doc.rect(M, gY, CW, gH);
   doc.setLineWidth(0.3);
