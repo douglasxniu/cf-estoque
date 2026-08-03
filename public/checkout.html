@@ -384,15 +384,21 @@ function esconderSugestoes(){
   box.classList.remove('show'); box.innerHTML=''; sugestActiveIdx=-1;
 }
 
+let sugestDebounce=null;
 async function filtrarSugestoes(){
-  const termo=document.getElementById('otInput').value.trim().toLowerCase();
-  const lista=await carregarOtsAbertas();
-  // sem termo (acabou de focar) → mostra a barra com todas; com termo → cruza a string
-  // contra número e nome, em qualquer posição, não só no começo
-  const filtrados=termo
-    ? lista.filter(p=>p.ot.toLowerCase().includes(termo) || p.nome.toLowerCase().includes(termo))
-    : lista;
-  renderSugestoes(filtrados);
+  const termo=document.getElementById('otInput').value.trim();
+  // sem termo (acabou de focar) → mostra a barra com as OTs abertas do Estoque (cache local,
+  // sem round-trip); com termo → usa /api/ot/sugestoes no servidor, que já cruza Estoque +
+  // Kanban (inclui OTs que só existem lá, ex: achadas por nome "Kalorama" e não só por número)
+  if(!termo){ renderSugestoes(await carregarOtsAbertas()); return; }
+  clearTimeout(sugestDebounce);
+  sugestDebounce=setTimeout(async ()=>{
+    if(document.getElementById('otInput').value.trim()!==termo) return;
+    try{
+      const r=await fetch(`${API}/ot/sugestoes?q=${encodeURIComponent(termo)}`).then(r=>r.json());
+      renderSugestoes(r.sugestoes||[]);
+    }catch(e){ renderSugestoes([]); }
+  }, 200);
 }
 
 document.getElementById('otInput').addEventListener('input', filtrarSugestoes);
