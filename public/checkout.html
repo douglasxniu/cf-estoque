@@ -308,7 +308,7 @@ header a{text-decoration:none;display:flex;align-items:center;gap:10px}
     <input id="retiradoPor" placeholder="Retirado por...">
     <button class="btn-fechar" id="btnGerar" disabled>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>
-      Fechar guia
+      Fechar ordem
     </button>
   </div>
 </div>
@@ -848,7 +848,7 @@ document.getElementById('btnGerar').addEventListener('click', async ()=>{
     itens: itensCheckout,
     endereco: enderecoDestino || undefined
   })}).then(r=>r.json()).catch(()=>null);
-  if(!r?.ok){ toast('Erro ao gerar a guia','err'); btn.disabled=false; btn.innerHTML='Fechar guia'; return; }
+  if(!r?.ok){ toast('Erro ao gerar a ordem','err'); btn.disabled=false; btn.innerHTML='Fechar ordem'; return; }
   const dados=await fetch(`${API}/checkout/${r.id}`).then(r=>r.json());
   // histórico de guias já emitidas pra essa OT (a que acabou de ser criada já entra na
   // lista, por isso o total já inclui ela — a posição dela é sempre a última/mais recente)
@@ -871,8 +871,8 @@ document.getElementById('btnGerar').addEventListener('click', async ()=>{
     }catch(e){ mapaDataUrl=null; }
   }
   gerarNotaTransportePDF({ ...dados, nomeOt: nomeOtAtual, numeroSequencial, guiasAnteriores, mapaDataUrl });
-  toast('✓ Guia gerada — PDF baixado');
-  setTimeout(()=>{ location.href=`/guia-transporte.html?id=${r.id}`; }, 900);
+  toast('✓ Ordem gerada — PDF baixado');
+  setTimeout(()=>{ location.href=`/ordem-transporte.html?id=${r.id}`; }, 900);
 });
 
 // cursor pronto no leitor físico assim que a página abre — é o campo com correção de

@@ -50,7 +50,7 @@ function construirNotaTransportePDF({ id, ot, nomeOt, retiradoPor, criadoPor, cr
     return m ? `OT-${m[2]}` : t;
   }
 
-  const verificarUrl = `${location.origin}/guia-transporte.html?id=${id}`;
+  const verificarUrl = `${location.origin}/ordem-transporte.html?id=${id}`;
   const qrObj = qrcode(0, 'M'); qrObj.addData(verificarUrl); qrObj.make();
   const mc = qrObj.getModuleCount(), cell = 6;
   const cv = document.createElement('canvas'); cv.width = cv.height = mc * cell;

@@ -73,7 +73,7 @@ input::placeholder{color:var(--muted-2)}
   <div class="search-row">
     <input id="buscaInput" placeholder="OT, nome da peça ou nº de série..." autocomplete="off">
   </div>
-  <div class="hint">Pesquisa entre todas as guias de transporte já emitidas — por número de OT, nome da peça ou série. Digite pelo menos 2 caracteres.</div>
+  <div class="hint">Pesquisa entre todas as ordens de transporte já emitidas — por número de OT, nome da peça ou série. Digite pelo menos 2 caracteres.</div>
 </div>
 
 <div id="resultado"></div>
@@ -104,21 +104,21 @@ async function buscar(q){
   const resEl=document.getElementById('resultado');
   const r=await fetch(`${API}/checkout/buscar?q=${encodeURIComponent(q)}`).then(r=>r.json()).catch(()=>({resultados:[]}));
   const lista=r.resultados||[];
-  if(!lista.length){ resEl.innerHTML='<div class="card g"><div class="empty">Nenhuma guia de transporte encontrada.</div></div>'; return; }
+  if(!lista.length){ resEl.innerHTML='<div class="card g"><div class="empty">Nenhuma ordem de transporte encontrada.</div></div>'; return; }
   resEl.innerHTML=lista.map(g=>{
     const data=new Date(g.criadoEm.replace(' ','T')+'Z').toLocaleString('pt-PT',{dateStyle:'short',timeStyle:'short'});
     const itensMostrados=g.itensBatidos.slice(0,4);
     const restante=g.totalItens-itensMostrados.length;
-    return `<a class="card g resultado-card" href="/guia-transporte.html?id=${g.id}">
+    return `<a class="card g resultado-card" href="/ordem-transporte.html?id=${g.id}">
       <div class="res-top">
-        <span class="res-guia">GUIA Nº${String(g.id).padStart(6,'0')}</span>
+        <span class="res-guia">ORDEM Nº${String(g.id).padStart(6,'0')}</span>
         <span class="res-data">${data}</span>
       </div>
       ${g.ot?`<div class="res-ot">${esc(otParaExibicao(g.ot))}</div>`:''}
       <div class="res-itens">
         ${itensMostrados.map(i=>`<div class="res-item">${esc(i.nome)} <span>×${i.quantidade||1}</span></div>`).join('')}
       </div>
-      ${restante>0?`<div class="res-mais">+ ${restante} peça(s) nesta guia</div>`:''}
+      ${restante>0?`<div class="res-mais">+ ${restante} peça(s) nesta ordem</div>`:''}
       <div class="res-meta">Retirado por ${esc(g.retiradoPor||'—')} · ${g.totalItens} peça(s) ao todo</div>
     </a>`;
   }).join('');

@@ -49,8 +49,8 @@ const PUBLIC_ROUTES = [
   // Estoque) — não expõem nada que /api/ot/:ot e /api/etiquetas-resumo/:ot já não expusessem
   { method: "GET", path: "/api/resolver" },
   { method: "GET", path: "/api/ot/sugestoes" },
-  // só a imagem do mapa (sem a chave da API, que fica só no servidor) — a guia pública
-  // (guia-transporte.html) e o PDF precisam mostrar o mesmo pin sem exigir login
+  // só a imagem do mapa (sem a chave da API, que fica só no servidor) — a ordem pública
+  // (ordem-transporte.html) e o PDF precisam mostrar o mesmo pin sem exigir login
   { method: "GET", path: "/api/mapa-estatico" }
 ];
 // GET /api/ot/:ot e GET /api/unidades/:id precisam ser públicos: são acessados pelo QR
@@ -60,7 +60,7 @@ const PUBLIC_ROUTE_PATTERNS = [
   { method: "GET", pattern: /^\/api\/unidades\/\d+$/ },
   { method: "GET", pattern: /^\/api\/itens\/\d+\/imagem$/ },
   { method: "GET", pattern: /^\/api\/etiquetas-resumo\/.+$/ },
-  // guia de transporte impressa/mostrada pra quem retira o material — sem login
+  // ordem de transporte impressa/mostrada pra quem retira o material — sem login
   { method: "GET", pattern: /^\/api\/checkout\/\d+$/ }
 ];
 
@@ -1100,8 +1100,8 @@ export default {
       return json({ tipo: "desconhecido" });
     }
 
-    // ---------- CHECKOUT DE ENTREGA (guia de transporte) ----------
-    // Escaneia N unidades físicas prontas pra saírem e gera um registro imutável — a "guia
+    // ---------- CHECKOUT DE ENTREGA (ordem de transporte) ----------
+    // Escaneia N unidades físicas prontas pra saírem e gera um registro imutável — a "ordem
     // de transporte" pública que quem retira leva impressa ou mostra no celular. Criar exige
     // login (só quem está liberando o material); ler não (o destinatário raramente tem
     // conta no sistema).
@@ -1149,8 +1149,8 @@ export default {
 
     // ---------- ENDEREÇO DE ENTREGA (Geoapify — geocoding/autocomplete/mapa estático,
     // free tier sem cartão de crédito) ----------
-    // busca de endereço pra guia de transporte: exige login (só quem está fechando uma guia
-    // usa isso) — protege a cota gratuita da API de abuso por gente de fora.
+    // busca de endereço pra ordem de transporte: exige login (só quem está fechando uma
+    // ordem usa isso) — protege a cota gratuita da API de abuso por gente de fora.
 
     // entrega a chave pro widget oficial da Geoapify (roda no navegador, não dá pra evitar
     // que a chave fique visível ali) — atrás de login pelo menos, e restrinja a chave por
@@ -1200,7 +1200,7 @@ export default {
 
     // proxy da imagem estática do mapa (com pin) — a chave nunca vai pro navegador, o
     // front só referencia esta URL como <img src=...>; público (ver PUBLIC_ROUTES) porque
-    // a guia impressa/pública também precisa mostrar o mapa
+    // a ordem impressa/pública também precisa mostrar o mapa
     if (path === "/api/mapa-estatico" && method === "GET") {
       if (!env.GEOAPIFY_API_KEY) return new Response(null, { status: 501 });
       const lat = parseFloat(url.searchParams.get("lat"));
@@ -1242,21 +1242,18 @@ export default {
       const lng = parseFloat(url.searchParams.get("lng"));
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) return json({ error: "lat/lng inválidos." }, 400);
       try {
-        // exige pelo menos 3 pontos de verdade — se a busca inicial (raio menor, categorias
-        // mais "úteis pra reconhecer da rua") não achar o suficiente, alarga o raio e depois
-        // solta as categorias, até achar 3 ou desistir na última tentativa
-        const tentativas = [
-          { raio: 600, categorias: "commercial,catering,leisure,tourism,education,healthcare,public_transport" },
-          { raio: 1500, categorias: "commercial,catering,leisure,tourism,education,healthcare,public_transport" },
-          { raio: 3000, categorias: null }
-        ];
+        // só empresas/comércio (commercial, office) e pontos turísticos (tourism) — nada de
+        // paragem de transporte, escola, posto de saúde etc., que não ajudam a reconhecer o
+        // local visualmente. Alarga o raio até achar 3, mas nunca solta essas categorias.
+        const CATEGORIAS_REFERENCIA = "commercial,office,tourism";
+        const raios = [600, 1500, 3000];
         let candidatos = [];
-        for (const t of tentativas) {
+        for (const raio of raios) {
           const pParams = new URLSearchParams({
-            filter: `circle:${lng},${lat},${t.raio}`, bias: `proximity:${lng},${lat}`,
+            categories: CATEGORIAS_REFERENCIA,
+            filter: `circle:${lng},${lat},${raio}`, bias: `proximity:${lng},${lat}`,
             limit: "15", apiKey: env.GEOAPIFY_API_KEY
           });
-          if (t.categorias) pParams.set("categories", t.categorias);
           const r = await fetch(`https://api.geoapify.com/v2/places?${pParams}`).then(r => r.json());
           candidatos = (r.features || [])
             .map(f => f.properties)
@@ -1273,9 +1270,9 @@ export default {
 
         if (!env.AI) return json({ pontos: formatarDeterministico() });
         try {
-          const prompt = `Lista de lugares reais perto de um endereço de entrega (nome — distância em metros — direção a partir do pin):\n` +
+          const prompt = `Lista de empresas e pontos turísticos reais perto de um endereço de entrega (nome — distância em metros — direção a partir do pin):\n` +
             candidatos.map(c => `- ${c.nome} — ${c.distanciaM}m — ${c.direcao}`).join("\n") +
-            `\n\nEscolha os 3 melhores como pontos de referência visuais pra um motorista de entrega encontrar o local (priorize os mais próximos e mais fáceis de reconhecer da rua, como comércio, transporte público ou pontos turísticos). Responda só com 3 linhas, uma por ponto, no formato "Nome — distância — direção", em português de Portugal. Não invente nenhum lugar que não esteja na lista.`;
+            `\n\nEscolha os 3 melhores como pontos de referência visuais pra um motorista de entrega encontrar o local (priorize os mais próximos e mais fáceis de reconhecer da rua). Responda só com 3 linhas, uma por ponto, no formato "Nome — distância — direção", em português de Portugal. Não invente nenhum lugar que não esteja na lista.`;
           const resposta = await env.AI.run("@cf/meta/llama-3.1-8b-instruct", {
             messages: [{ role: "user", content: prompt }],
             max_tokens: 200
@@ -1511,6 +1508,12 @@ export default {
         }
       }
       return json({ ok: true, ot: link.ot });
+    }
+
+    // /guia-transporte.html foi renomeado pra /ordem-transporte.html — redirect permanente
+    // pra não quebrar QR codes já impressos em ordens emitidas antes dessa mudança
+    if (path === "/guia-transporte.html") {
+      return Response.redirect(`${url.origin}/ordem-transporte.html${url.search}`, 301);
     }
 
     // ---------- estático (frontend) ----------
