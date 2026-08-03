@@ -1157,8 +1157,20 @@ export default {
       if (!row) return json({ error: "não encontrado" }, 404);
       let destinoPontos = [];
       try { destinoPontos = row.destino_pontos_json ? JSON.parse(row.destino_pontos_json) : []; } catch (e) { destinoPontos = []; }
+      // nome da OT não é gravado no checkout (só o número) — resolve na leitura, mesma cadeia
+      // de fallback do /api/resolver (projeto → última impressão de etiqueta → Kanban), pra
+      // exibir junto do número igual em todo o resto do sistema
+      let nomeOt = null;
+      if (row.ot) {
+        const { solicitacoes: results, resumoRow } = await buscarOtTolerante(env, row.ot);
+        nomeOt = results.find(i => i.projeto_nome)?.projeto_nome || resumoRow?.nome_ot || null;
+        if (!nomeOt) {
+          const statusKanban = await buscarStatusKanban(row.ot);
+          nomeOt = statusKanban?.nomeOt || null;
+        }
+      }
       return json({
-        id: row.id, ot: row.ot, retiradoPor: row.retirado_por,
+        id: row.id, ot: row.ot, nomeOt, retiradoPor: row.retirado_por,
         itens: JSON.parse(row.itens_json), criadoPor: row.criado_por, criadoEm: row.criado_em,
         destinoEndereco: row.destino_endereco || "", destinoLat: row.destino_lat, destinoLng: row.destino_lng,
         destinoZoom: row.destino_zoom || 16, destinoPontos
