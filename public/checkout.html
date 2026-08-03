@@ -439,11 +439,18 @@ async function buscarOt(){
   otAtual = r.ot || ot;
   document.getElementById('otInput').value = otParaExibicao(otAtual);
   const itensOt = r.tipo==='ot' ? r.itens.filter(i=>i.status!=='devolvido') : [];
+  // cartões do Kanban na coluna "Pronto" = peça já produzida, esperando ser retirada/entregue
+  // — entram na lista de itens esperados junto com o que o Estoque já sabe (uma OT pode ter
+  // as duas coisas: itens formais do Estoque E cartões de produção do Kanban)
+  const cardsProntos = (r.kanban||[]).filter(c=>c.coluna==='Pronto');
   // nome do trabalho: vem solto em r.nomeOt (tipo ot-impressao) ou dentro de cada item
   // como projeto_nome (tipo ot, join com a tabela de projetos)
   nomeOtAtual = r.nomeOt || itensOt[0]?.projeto_nome || '';
   atualizarTituloOt();
-  esperados = itensOt.map(i=>({ nome:i.item_nome, quantidade:i.quantidade, unidade:i.unidade, escaneados:0 }));
+  esperados = [
+    ...itensOt.map(i=>({ nome:i.item_nome, quantidade:i.quantidade, unidade:i.unidade, escaneados:0 })),
+    ...cardsProntos.map(c=>({ nome:c.titulo, quantidade:1, unidade:'', escaneados:0 }))
+  ];
   // já casa unidades escaneadas antes de trocar de OT (raro, mas evita perder contagem)
   itensCheckout.forEach(it=>{ if(it.ot===otAtual) marcarEsperado(it.nome); });
   if(esperados.length){

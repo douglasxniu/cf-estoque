@@ -890,13 +890,24 @@ export default {
       // só sugere OTs em aberto — "aberto" aqui significa: não marcada como 'encerrado' nos
       // projetos (OT sem linha em projetos ainda conta como aberta, ex: só tem etiqueta impressa)
       const termo = `%${q}%`;
-      const [solic, proj, resumo] = await Promise.all([
+      const termoLower = q.toLowerCase();
+      const [solic, proj, resumo, kanbanSugestoes] = await Promise.all([
         env.DB.prepare("SELECT DISTINCT s.ot AS ot, p.nome AS nome FROM solicitacoes s LEFT JOIN projetos p ON s.ot = p.numero WHERE s.ot LIKE ? AND (p.status IS NULL OR p.status != 'encerrado') LIMIT 8").bind(termo).all(),
         env.DB.prepare("SELECT numero AS ot, nome FROM projetos WHERE (numero LIKE ? OR nome LIKE ?) AND status != 'encerrado' LIMIT 8").bind(termo, termo).all(),
-        env.DB.prepare("SELECT r.ot AS ot, r.nome_ot AS nome FROM etiquetas_resumo r LEFT JOIN projetos p ON r.ot = p.numero WHERE (r.ot LIKE ? OR r.nome_ot LIKE ?) AND (p.status IS NULL OR p.status != 'encerrado') LIMIT 8").bind(termo, termo).all()
+        env.DB.prepare("SELECT r.ot AS ot, r.nome_ot AS nome FROM etiquetas_resumo r LEFT JOIN projetos p ON r.ot = p.numero WHERE (r.ot LIKE ? OR r.nome_ot LIKE ?) AND (p.status IS NULL OR p.status != 'encerrado') LIMIT 8").bind(termo, termo).all(),
+        // OTs que só existem no Kanban (nunca passaram por "Nova OT" no Estoque) — sem isso,
+        // a sugestão só mostrava OT criada pelo Dashboard, mesmo o resolvedor já sabendo achar
+        // as do Kanban numa busca completa. Falha em silêncio se o Kanban estiver fora do ar.
+        fetch("https://niukanban.pages.dev/api/kanban").then(r => r.ok ? r.json() : null).then(board => {
+          if (!board?.ots) return [];
+          return board.ots
+            .filter(o => o.number && ((o.number || "").toLowerCase().includes(termoLower) || (o.name || "").toLowerCase().includes(termoLower)))
+            .map(o => ({ ot: o.number, nome: o.name || "" }))
+            .slice(0, 8);
+        }).catch(() => [])
       ]);
       const vistos = new Map();
-      for (const row of [...solic.results, ...proj.results, ...resumo.results]) {
+      for (const row of [...solic.results, ...proj.results, ...resumo.results, ...kanbanSugestoes]) {
         if (!row.ot || vistos.has(row.ot)) continue;
         vistos.set(row.ot, { ot: row.ot, nome: row.nome || "" });
       }
@@ -1032,9 +1043,14 @@ export default {
         if (!r.ok) return null;
         const board = await r.json();
         const cartoes = [];
+        let nomeOt = null;
         for (const otBoard of board.ots || []) {
           for (const card of otBoard.cards || []) {
             if (!card.ot || ultimoNumeroOT(card.ot) !== alvo) continue;
+            // pega o nome da OT do próprio container do Kanban — sem isso, uma OT que só
+            // existe lá (nunca passou pelo Estoque) volta sem nome nenhum pro Checkout/
+            // MacroView, quebrando o padrão de sempre preencher nome junto do número
+            if (!nomeOt && otBoard.name) nomeOt = otBoard.name;
             const coluna = (otBoard.columns || []).find(c => c.id === card.columnId);
             cartoes.push({
               titulo: card.title, status: card.status,
@@ -1043,7 +1059,7 @@ export default {
             });
           }
         }
-        return cartoes;
+        return { cartoes, nomeOt };
       } catch { return null; }
     }
 
@@ -1070,19 +1086,21 @@ export default {
         const { ot: otCanonica, solicitacoes: results, resumoRow } = await buscarOtTolerante(env, ot);
         // busca o Kanban pela OT já resolvida (não a que foi digitada) — importante quando o
         // usuário digitou "0383" e a canônica achada foi "OT-2026-0383"
-        const kanban = await buscarStatusKanban(otCanonica);
+        const statusKanban = await buscarStatusKanban(otCanonica);
+        const kanban = statusKanban?.cartoes || null;
+        const nomeOtKanban = statusKanban?.nomeOt || null;
         const impressao = resumoRow
           ? { nomeOt: resumoRow.nome_ot, itens: JSON.parse(resumoRow.itens_json), atualizadoEm: resumoRow.atualizado_em }
           : null;
 
         if (results.length) {
           // nome da OT: prioriza o projeto (join já traz projeto_nome em cada linha), cai pra
-          // trás pro nome gravado na última impressão de etiqueta se a OT não tem projeto
-          const nomeOt = results.find(i => i.projeto_nome)?.projeto_nome || impressao?.nomeOt || null;
+          // trás pro nome gravado na última impressão de etiqueta, depois pro nome do Kanban
+          const nomeOt = results.find(i => i.projeto_nome)?.projeto_nome || impressao?.nomeOt || nomeOtKanban || null;
           return json({ tipo: "ot", ot: otCanonica, nomeOt, itens: results, impressao, kanban });
         }
         if (resumoRow) return json({ tipo: "ot-impressao", ot: resumoRow.ot, nomeOt: resumoRow.nome_ot, itens: JSON.parse(resumoRow.itens_json), atualizadoEm: resumoRow.atualizado_em, kanban });
-        if (kanban && kanban.length) return json({ tipo: "ot-kanban", ot: otCanonica, kanban });
+        if (kanban && kanban.length) return json({ tipo: "ot-kanban", ot: otCanonica, nomeOt: nomeOtKanban, kanban });
       }
       if (uid) {
         const u = await env.DB.prepare(
