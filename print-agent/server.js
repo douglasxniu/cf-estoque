@@ -22,6 +22,10 @@ const SITE_URL = 'https://estoque.niupt.workers.dev'; // pro QR de resumo da OT
 const PORT = Number(process.argv[2]) || 4000;
 const app = express();
 app.use(express.json());
+// permite o NIU Hub (domínio diferente) consultar /api/estado a partir do navegador de
+// quem estiver na mesma rede local — sem isso o fetch cross-origin é bloqueado pelo
+// próprio navegador antes mesmo de chegar aqui
+app.use((req, res, next) => { res.set('Access-Control-Allow-Origin', '*'); next(); });
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 
 // OT/nome do projeto são um cabeçalho único pra toda a fila, preenchido uma vez só —
