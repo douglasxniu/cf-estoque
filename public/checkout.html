@@ -877,9 +877,9 @@ document.getElementById('btnGerar').addEventListener('click', async ()=>{
   let mapaDataUrl=null;
   if(dados.destinoLat!=null && dados.destinoLng!=null){
     try{
-      // proporção larga x 92mm igual à faixa do mapa no PDF (~180x92mm) e resolução alta o
-      // suficiente pra não borrar quando impresso — ver pdf-nota-transporte.js
-      const blob=await fetch(`${API}/mapa-estatico?lat=${dados.destinoLat}&lng=${dados.destinoLng}&zoom=${dados.destinoZoom||16}&w=1400&h=716`).then(r=>r.blob());
+      // mesma proporção da faixa de mapa em largura total do PDF (178x68mm) e resolução alta
+      // (~10px/mm, ~254dpi) pro texto de ruas/pontos ficar legível impresso — ver pdf-nota-transporte.js
+      const blob=await fetch(`${API}/mapa-estatico?lat=${dados.destinoLat}&lng=${dados.destinoLng}&zoom=${dados.destinoZoom||16}&w=1780&h=680`).then(r=>r.blob());
       mapaDataUrl=await new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.onerror=rej; fr.readAsDataURL(blob); });
     }catch(e){ mapaDataUrl=null; }
   }

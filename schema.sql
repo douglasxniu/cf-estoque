@@ -34,7 +34,11 @@ CREATE TABLE solicitacoes (
   setor TEXT,
   local_uso TEXT,
   status TEXT NOT NULL DEFAULT 'pendente',
-  data TEXT DEFAULT (datetime('now'))
+  data TEXT DEFAULT (datetime('now')),
+  -- conferência na devolução: nota de divergência e flag pra saber se essa linha voltou
+  -- incompleta — ver migration_devolucao_conferencia.sql
+  obs_devolucao TEXT,
+  devolvida_com_pendencia INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE unidades (

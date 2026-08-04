@@ -949,6 +949,7 @@ function renderHist(){
     const status = todosDevolvidos?'Devolvido':todosAprovados?'Aprovado':'Pendente';
     const statusClass = todosDevolvidos?'status-dev':todosAprovados?'status-aprov':'status-pend';
     const nomeOt = projetos.find(p=>p.numero===ot)?.nome;
+    const comPendencia = grupo.filter(s=>s.devolvida_com_pendencia);
     return `
     <div class="hist-card" data-ot="${esc(ot)}">
       <div class="hist-card-top">
@@ -956,6 +957,7 @@ function renderHist(){
           <b>${esc(ot)}</b>
           ${nomeOt?`<span style="font-weight:800;color:var(--text)">${esc(nomeOt)}</span>`:''}
           <span class="hist-badge ${statusClass}">${status}</span>
+          ${comPendencia.length?`<span class="hist-badge" style="background:rgba(248,113,113,.15);color:var(--danger)" title="${esc(comPendencia.map(s=>`${s.item_nome}: ${s.obs_devolucao||''}`).join(' · '))}">⚠ ${comPendencia.length} com pendência</span>`:''}
         </div>
         <span class="hist-date">${fmt(first.data)}</span>
       </div>
@@ -1011,8 +1013,7 @@ document.getElementById('tbHist').addEventListener('click', async e=>{
     await fetch(`${API}/solicitacoes/ot/${encodeURIComponent(ot)}/aprovar`,{method:'PATCH'});
     toast('Ordem de Serviço aprovada!'); carregarTudo();
   } else if(btn.dataset.a==='devolver-ot'){
-    await fetch(`${API}/solicitacoes/ot/${encodeURIComponent(ot)}/devolver`,{method:'PATCH'});
-    toast('OT devolvida ao estoque!'); carregarTudo();
+    abrirModalDevolverOt(ot);
   } else if(btn.dataset.a==='editar-ot'){
     window.open(`/nova-ot.html?editar=${encodeURIComponent(ot)}`,'_blank');
   } else if(btn.dataset.a==='opcoes-ot'){
@@ -1480,11 +1481,182 @@ async function imprimirQR(){
   </div>
 </div>
 
+<!-- Modal Devolver OT (conferência de devolução) -->
+<div class="overlay" id="devolverOtOverlay">
+  <div class="modal glass" style="max-width:560px;width:94%;max-height:88vh;overflow-y:auto">
+    <h2 style="margin-top:0;font-size:1.05rem">Conferir devolução — <span id="devolverOtTitulo"></span></h2>
+    <div class="desc" style="margin-bottom:12px">Marque o que realmente voltou. O que faltar ou estiver avariado não volta pro estoque disponível.</div>
+    <div id="devolverOtBody"></div>
+
+    <div style="margin-top:16px;border-top:1px solid var(--glass-brd);padding-top:14px">
+      <div style="font-size:.72rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.03em;margin-bottom:8px">Item que voltou mas não estava na OT</div>
+      <div style="position:relative;margin-bottom:8px">
+        <input id="devolverOtExtraBusca" placeholder="Buscar item cadastrado no estoque..." autocomplete="off">
+        <div id="devolverOtExtraResultados" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:10;background:var(--surface-2);border:1px solid var(--glass-brd);border-radius:10px;margin-top:4px;max-height:200px;overflow-y:auto;box-shadow:var(--shadow-float)"></div>
+      </div>
+      <button class="btn sec" id="devolverOtExtraAvulsoToggle" type="button" style="font-size:.72rem;padding:6px 10px;margin-bottom:10px">+ Item que não está cadastrado no estoque</button>
+      <div id="devolverOtExtraAvulsoBox" style="display:none;margin-bottom:12px;padding:10px;border:1px solid var(--glass-brd);border-radius:10px">
+        <div class="grid" style="margin-bottom:8px">
+          <div><label>Nome do item</label><input id="devolverOtAvulsoNome" placeholder="Ex: Cabo devolvido sem etiqueta"></div>
+          <div><label>Quantidade</label><input id="devolverOtAvulsoQtd" type="number" min="1" value="1"></div>
+          <div><label>Unidade</label><input id="devolverOtAvulsoUnidade" placeholder="un, m, ..." value="un"></div>
+        </div>
+        <button class="btn sec" id="devolverOtAvulsoAdicionar" type="button" style="font-size:.72rem;padding:6px 10px">Adicionar à lista</button>
+      </div>
+      <div id="devolverOtExtraCarrinho"></div>
+    </div>
+
+    <div style="margin-top:12px"><label>Observação (opcional)</label><input id="devolverOtObs" placeholder="Ex: cliente relatou perda de 1 unidade"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+      <button class="btn sec" id="devolverOtCancelar">Cancelar</button>
+      <button class="btn" id="devolverOtConfirmar">Confirmar devolução</button>
+    </div>
+  </div>
+</div>
+
 <script>
 document.getElementById('unidadesBody').addEventListener('click', e=>{
   const btn=e.target.closest('[data-a="imprimir-unidade"]'); if(!btn) return;
   imprimirUnidade(parseInt(btn.dataset.uid), btn.dataset.serial, btn.dataset.nome);
 });
+
+let devolverOtAtual = null;
+let devolverOtExtras = [];
+async function abrirModalDevolverOt(ot){
+  devolverOtAtual = ot;
+  devolverOtExtras = [];
+  document.getElementById('devolverOtTitulo').textContent = ot;
+  document.getElementById('devolverOtObs').value = '';
+  document.getElementById('devolverOtExtraBusca').value = '';
+  document.getElementById('devolverOtExtraResultados').style.display = 'none';
+  document.getElementById('devolverOtExtraAvulsoBox').style.display = 'none';
+  document.getElementById('devolverOtAvulsoNome').value = '';
+  document.getElementById('devolverOtAvulsoQtd').value = '1';
+  document.getElementById('devolverOtAvulsoUnidade').value = 'un';
+  renderDevolverOtExtras();
+  document.getElementById('devolverOtOverlay').classList.add('show');
+  document.getElementById('devolverOtBody').innerHTML = '<div class="empty">Carregando...</div>';
+  const linhas = await fetch(`${API}/solicitacoes/ot/${encodeURIComponent(ot)}/conferencia`).then(r=>r.json()).catch(()=>[]);
+  document.getElementById('devolverOtBody').innerHTML = linhas.length ? linhas.map(l=>{
+    if(l.unidades && l.unidades.length){
+      return `
+      <div class="conf-linha" data-sol="${l.id}" style="margin-bottom:14px">
+        <div style="font-weight:700;font-size:.82rem;margin-bottom:6px">${esc(l.item_nome)}</div>
+        ${l.unidades.map(u=>`
+          <div style="display:flex;align-items:center;gap:8px;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--glass-brd)">
+            <span style="font-size:.76rem">${esc(u.serial)}</span>
+            <select class="conf-unidade" data-uid="${u.id}" style="width:auto;font-size:.72rem">
+              <option value="voltou">Voltou</option>
+              <option value="faltando">Faltando</option>
+              <option value="avariada">Avariada</option>
+            </select>
+          </div>`).join('')}
+      </div>`;
+    }
+    return `
+    <div class="conf-linha" data-sol="${l.id}" style="margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:10px;justify-content:space-between">
+        <div style="font-weight:700;font-size:.82rem">${esc(l.item_nome)}</div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <label style="margin:0;font-size:.7rem;color:var(--muted)">Devolvido</label>
+          <input type="number" class="conf-qtd" min="0" max="${l.quantidade}" value="${l.quantidade}" data-max="${l.quantidade}" style="width:70px">
+          <span style="font-size:.72rem;color:var(--muted)">/ ${l.quantidade}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('') : '<div class="empty">Nada pendente pra devolver nesta OT.</div>';
+}
+
+document.getElementById('devolverOtCancelar').onclick = ()=> document.getElementById('devolverOtOverlay').classList.remove('show');
+
+document.getElementById('devolverOtExtraBusca').addEventListener('input', e=>{
+  const t=e.target.value.toLowerCase().trim();
+  const wrap=document.getElementById('devolverOtExtraResultados');
+  if(!t){ wrap.style.display='none'; return; }
+  const encontrados=itens.filter(i=>i.nome.toLowerCase().includes(t)).slice(0,8);
+  if(!encontrados.length){ wrap.style.display='none'; return; }
+  wrap.style.display='block';
+  wrap.innerHTML=encontrados.map(i=>`
+    <div data-id="${i.id}" style="padding:10px 12px;cursor:pointer;border-bottom:1px solid var(--glass-brd);font-size:.85rem">
+      <div>${esc(i.nome)}</div>
+      <div class="small">${i.quantidade} ${esc(i.unidade)} em estoque</div>
+    </div>`).join('');
+});
+document.getElementById('devolverOtExtraResultados').addEventListener('click', e=>{
+  const row=e.target.closest('[data-id]'); if(!row) return;
+  const item=itens.find(i=>i.id==row.dataset.id); if(!item) return;
+  const existente=devolverOtExtras.find(c=>c.itemId===item.id);
+  if(existente) existente.qtd++;
+  else devolverOtExtras.push({ itemId:item.id, nome:item.nome, unidade:item.unidade, qtd:1 });
+  document.getElementById('devolverOtExtraBusca').value='';
+  document.getElementById('devolverOtExtraResultados').style.display='none';
+  renderDevolverOtExtras();
+});
+document.addEventListener('click', e=>{
+  if(!e.target.closest('#devolverOtExtraBusca') && !e.target.closest('#devolverOtExtraResultados')){
+    document.getElementById('devolverOtExtraResultados').style.display='none';
+  }
+});
+function renderDevolverOtExtras(){
+  const wrap=document.getElementById('devolverOtExtraCarrinho');
+  wrap.innerHTML = devolverOtExtras.length ? devolverOtExtras.map((c,i)=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--glass-brd)">
+      <div style="flex:1;font-size:.85rem">${esc(c.nome)}${c.avulso?' <span class="small" style="color:var(--muted)">(novo no estoque)</span>':''}</div>
+      <button data-a="dec" data-i="${i}" style="width:26px;height:26px;border-radius:8px;border:1px solid var(--glass-brd);background:var(--surface-hover);color:var(--text);cursor:pointer">−</button>
+      <span style="min-width:26px;text-align:center;font-weight:700">${c.qtd}</span>
+      <button data-a="inc" data-i="${i}" style="width:26px;height:26px;border-radius:8px;border:1px solid var(--glass-brd);background:var(--surface-hover);color:var(--text);cursor:pointer">+</button>
+      <button data-a="rm" data-i="${i}" class="del">remover</button>
+    </div>`).join('') : '';
+}
+document.getElementById('devolverOtExtraCarrinho').addEventListener('click', e=>{
+  const btn=e.target.closest('button[data-a]'); if(!btn) return;
+  const i=parseInt(btn.dataset.i); const c=devolverOtExtras[i]; if(!c) return;
+  if(btn.dataset.a==='inc') c.qtd++;
+  else if(btn.dataset.a==='dec') c.qtd=Math.max(1, c.qtd-1);
+  else if(btn.dataset.a==='rm') devolverOtExtras.splice(i,1);
+  renderDevolverOtExtras();
+});
+
+document.getElementById('devolverOtExtraAvulsoToggle').addEventListener('click', ()=>{
+  const box=document.getElementById('devolverOtExtraAvulsoBox');
+  box.style.display = box.style.display==='none' ? 'block' : 'none';
+});
+document.getElementById('devolverOtAvulsoAdicionar').addEventListener('click', async ()=>{
+  const nome=document.getElementById('devolverOtAvulsoNome').value.trim();
+  const qtd=parseInt(document.getElementById('devolverOtAvulsoQtd').value,10);
+  const unidade=document.getElementById('devolverOtAvulsoUnidade').value.trim()||'un';
+  if(!nome){ await niuAlert('Informe o nome do item.'); return; }
+  if(!qtd || qtd<1){ await niuAlert('Quantidade inválida.'); return; }
+  devolverOtExtras.push({ itemId:null, nome, unidade, qtd, avulso:true });
+  document.getElementById('devolverOtAvulsoNome').value='';
+  document.getElementById('devolverOtAvulsoQtd').value='1';
+  document.getElementById('devolverOtAvulsoUnidade').value='un';
+  document.getElementById('devolverOtExtraAvulsoBox').style.display='none';
+  renderDevolverOtExtras();
+});
+
+document.getElementById('devolverOtConfirmar').onclick = async ()=>{
+  const ot = devolverOtAtual;
+  const observacao = document.getElementById('devolverOtObs').value.trim() || undefined;
+  const linhas = [...document.querySelectorAll('#devolverOtBody .conf-linha')].map(el=>{
+    const solicitacao_id = Number(el.dataset.sol);
+    const unidadesSel = el.querySelectorAll('.conf-unidade');
+    if(unidadesSel.length){
+      const unidadesProblema = [...unidadesSel].filter(s=>s.value!=='voltou').map(s=>({ unidade_id: Number(s.dataset.uid), status: s.value }));
+      return { solicitacao_id, unidadesProblema, observacao: unidadesProblema.length ? observacao : undefined };
+    }
+    const qtdEl = el.querySelector('.conf-qtd');
+    const quantidadeDevolvida = Math.max(0, Math.min(Number(qtdEl.value)||0, Number(qtdEl.dataset.max)));
+    return { solicitacao_id, quantidadeDevolvida, observacao: quantidadeDevolvida < Number(qtdEl.dataset.max) ? observacao : undefined };
+  });
+  const extras = devolverOtExtras.map(c=>({ item_id:c.itemId, nome:c.nome, unidade:c.unidade, quantidade:c.qtd }));
+  const r = await fetch(`${API}/solicitacoes/ot/${encodeURIComponent(ot)}/devolver`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({linhas, extras})});
+  const d = await r.json().catch(()=>({}));
+  document.getElementById('devolverOtOverlay').classList.remove('show');
+  const partes=[d.pendencias?`pendência em ${d.pendencias} item(ns)`:null, d.extrasRegistrados?`${d.extrasRegistrados} item(ns) extra registrado(s)`:null].filter(Boolean);
+  toast(partes.length ? `OT devolvida — ${partes.join(', ')}` : 'OT devolvida ao estoque!');
+  carregarTudo();
+};
 
 async function abrirModalUnidades(item){
   document.getElementById('unidadesTitulo').textContent = item.nome + ' — Unidades físicas';
@@ -1991,6 +2163,19 @@ document.getElementById('fNovoUsuario').addEventListener('submit', async e=>{
   carregarUsuarios();
 });
 inicializarUsuario();
+
+// deep-link — ?tab=estoque|hist|qrcodes|notif abre direto naquela aba; ?abrir=usuarios
+// abre o modal de usuários. Usado pelo NIU Hub pra linkar direto num submenu em vez de
+// sempre cair no Dashboard.
+(function deepLink(){
+  const params = new URL(location.href).searchParams;
+  const tab = params.get('tab');
+  if (tab && TITLES[tab]) navTo(tab);
+  if (params.get('abrir') === 'usuarios') {
+    document.getElementById('usuariosOverlay')?.classList.add('show');
+    carregarUsuarios();
+  }
+})();
 </script>
 <script src="/neural-bg.js"></script>
 </body>

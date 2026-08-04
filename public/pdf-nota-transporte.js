@@ -141,7 +141,9 @@ function construirNotaTransportePDF({ id, ot, nomeOt, retiradoPor, criadoPor, cr
   });
 
   const cabecalhoTabelaH = 7.5;
-  const rodapeReservado = 46;
+  // reserva mais espaço quando há endereço+mapa (ficam no rodapé, mapa grande em largura
+  // total) do que quando não há (só o aviso fiscal) — evita item colar em cima do rodapé
+  const rodapeReservado = mapaDataUrl ? 138 : 20;
   let restantes = medidos.slice();
   let primeiraPagina = true;
 
@@ -182,62 +184,61 @@ function construirNotaTransportePDF({ id, ot, nomeOt, retiradoPor, criadoPor, cr
     if (restantes.length > 0) { doc.addPage(); y = 18; primeiraPagina = false; }
   }
 
-  // ============ ENDEREÇO DE ENTREGA + MAPA (opcional) — lado a lado, mapa com metade da
-  // largura do documento (não a página toda), endereço nunca cortado ============
-  if (mapaDataUrl) {
-    y += GAP;
-    const gapCol = 8, colW = (CW - gapCol) / 2;
-    const mapaH = 52;
-    const padX = 0;
+  // ============ ENDEREÇO DE ENTREGA + MAPA (opcional) — vai pro rodapé da última página,
+  // não logo após os itens: mapa em largura total (bem maior e mais legível que a divisão
+  // em metade da página de antes), texto do endereço acima, em toda a largura também.
+  // Sem caixas de assinatura (removidas — o espaço que sobrou vira mapa maior). ============
+  const disclaimerH = 11; // aviso fiscal + linha "GUIA Nº..." fixos na base absoluta da página
+  const mapaH = 68;
+  let linhasEndereco = [], pontosMedidos = [];
+  let blocoEnderecoH = 0;
 
+  if (mapaDataUrl) {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
+    linhasEndereco = quebrar(destinoEndereco, CW);
+    blocoEnderecoH += 5.5 + linhasEndereco.length * 4.6;
+
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.2);
+    (destinoPontos || []).slice(0, 3).forEach(p => {
+      const linhas = quebrar('•  ' + p, CW);
+      pontosMedidos.push(linhas);
+      blocoEnderecoH += linhas.length * 3.7;
+    });
+    if (pontosMedidos.length) blocoEnderecoH += 4.4 + 2;
+    blocoEnderecoH += 6 + mapaH + 3; // linha separadora + mapa + respiro antes do aviso
+  }
+
+  y = Math.max(y + GAP, H - disclaimerH - blocoEnderecoH - 6);
+
+  if (mapaDataUrl) {
+    doc.setLineWidth(0.3); doc.line(M, y, M + CW, y);
+    y += 6;
     doc.setFont('helvetica', 'bold'); doc.setFontSize(6.6); doc.setTextColor(...CINZA);
     doc.text('ENDEREÇO DE ENTREGA', M, y);
-    let ey = y + 5.5;
+    y += 5.5;
     doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...PRETO);
-    const linhasEndereco = quebrar(destinoEndereco, colW - padX);
-    linhasEndereco.forEach(linha => { doc.text(linha, M, ey); ey += 4.6; });
+    linhasEndereco.forEach(linha => { doc.text(linha, M, y); y += 4.6; });
 
-    const pontos = (destinoPontos || []).slice(0, 3);
-    if (pontos.length) {
-      ey += 2;
+    if (pontosMedidos.length) {
+      y += 2;
       doc.setFont('helvetica', 'bold'); doc.setFontSize(5.8); doc.setTextColor(...CINZA);
-      doc.text('PONTOS DE REFERÊNCIA', M, ey);
-      ey += 4.4;
+      doc.text('PONTOS DE REFERÊNCIA', M, y);
+      y += 4.4;
       doc.setFont('helvetica', 'normal'); doc.setFontSize(7.2); doc.setTextColor(...PRETO);
-      pontos.forEach(p => {
-        const linhas = quebrar('•  ' + p, colW - padX);
-        linhas.forEach((linha, i) => { doc.text(linha, M + (i > 0 ? 4 : 0), ey); ey += 3.7; });
+      pontosMedidos.forEach(linhas => {
+        linhas.forEach((linha, i) => { doc.text(linha, M + (i > 0 ? 4 : 0), y); y += 3.7; });
       });
     }
 
-    const mapaX = M + colW + gapCol;
-    doc.setLineWidth(0.4); doc.rect(mapaX, y - 1, colW, mapaH);
-    try { doc.addImage(mapaDataUrl, 'PNG', mapaX, y - 1, colW, mapaH); doc.rect(mapaX, y - 1, colW, mapaH); } catch (e) {}
-
-    y = Math.max(ey, y - 1 + mapaH) + GAP;
-  } else {
-    y += GAP;
+    y += 3;
+    doc.setLineWidth(0.4); doc.rect(M, y, CW, mapaH);
+    try { doc.addImage(mapaDataUrl, 'PNG', M, y, CW, mapaH); doc.rect(M, y, CW, mapaH); } catch (e) {}
+    y += mapaH;
   }
 
-  // ============ RODAPÉ: assinaturas + aviso — fixo na base da última página ============
-  const fY = Math.max(y, H - rodapeReservado + 4);
-  const meio = M + CW / 2, gapAss = 8;
-  const assW = CW / 2 - gapAss / 2;
-
-  function caixaAssinatura(x0, rotulo, nome) {
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(5.8); doc.setTextColor(...CINZA);
-    doc.text(rotulo, x0, fY);
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...PRETO);
-    doc.text(linhaUnica(String(nome || '—'), assW), x0, fY + 5.5);
-    doc.setLineWidth(0.25); doc.line(x0, fY + 17, x0 + assW, fY + 17);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(5.4); doc.setTextColor(...CINZA);
-    doc.text('Assinatura e data', x0, fY + 20.5);
-  }
-  caixaAssinatura(M, 'ENTREGUE POR (NIU)', criadoPor);
-  caixaAssinatura(meio + gapAss / 2, 'RECEBIDO POR', retiradoPor);
-
+  // ============ RODAPÉ: aviso fiscal — fixo na base absoluta da página ============
   doc.setFont('helvetica', 'italic'); doc.setFontSize(5.4); doc.setTextColor(...CINZA);
-  doc.text('Documento interno de controlo de entrega — não substitui a guia de transporte fiscal (ATCUD), quando aplicável.', M, fY + 27, { maxWidth: CW });
+  doc.text('Documento interno de controlo de entrega — não substitui a guia de transporte fiscal (ATCUD), quando aplicável.', M, H - 10, { maxWidth: CW });
   doc.setFont('courier', 'normal'); doc.setFontSize(5.4);
   doc.text(`GUIA Nº ${numGuia}  ·  ${totalPecas} PEÇA(S)  ·  NIU EXPERIENCE AGENCY`, W / 2, H - 6, { align: 'center' });
 

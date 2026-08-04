@@ -49,6 +49,7 @@ const PUBLIC_ROUTES = [
   // Estoque) — não expõem nada que /api/ot/:ot e /api/etiquetas-resumo/:ot já não expusessem
   { method: "GET", path: "/api/resolver" },
   { method: "GET", path: "/api/ot/sugestoes" },
+  { method: "GET", path: "/api/busca" },
   // só a imagem do mapa (sem a chave da API, que fica só no servidor) — a ordem pública
   // (ordem-transporte.html) e o PDF precisam mostrar o mesmo pin sem exigir login
   { method: "GET", path: "/api/mapa-estatico" }
@@ -268,9 +269,13 @@ async function verificarQuedaEstoqueBaixo(env, itemId, quantidadeAntes, quantida
 // Fecha uma solicitação: libera de volta ao estoque só o que ainda não foi devolvido por leitura
 // individual de QR. Se a linha nunca teve unidades vinculadas por scan (item sem rastreio por
 // unidade), devolve a quantidade inteira de uma vez (comportamento legado).
-async function devolverSolicitacao(env, sol) {
+//
+// `conferencia` (opcional) é o resultado da checagem manual feita ao devolver a OT — permite
+// apontar que nem tudo voltou completo: { quantidadeDevolvida, unidadesProblema: { [unidade_id]:
+// 'faltando'|'avariada' }, observacao }. O que for marcado como problema NÃO volta pro estoque
+// disponível, e a linha fica sinalizada (devolvida_com_pendencia) em vez de fechar em silêncio.
+async function devolverSolicitacao(env, sol, conferencia = null) {
   if (sol.status === "devolvido") return;
-  await env.DB.prepare("UPDATE solicitacoes SET status='devolvido' WHERE id=?").bind(sol.id).run();
 
   const { results: ativos } = await env.DB.prepare(
     "SELECT * FROM solicitacao_unidades WHERE solicitacao_id = ? AND devolvido_em IS NULL"
@@ -279,17 +284,76 @@ async function devolverSolicitacao(env, sol) {
     "SELECT id FROM solicitacao_unidades WHERE solicitacao_id = ?"
   ).bind(sol.id).all();
 
+  // Junta todas as escritas num único env.DB.batch() em vez de um await por UPDATE — cada await
+  // sequencial é uma ida e volta de rede até o D1, e uma OT com várias unidades vinculadas ficava
+  // visivelmente lenta pra fechar (uma unidade por vez).
+  const stmts = [env.DB.prepare("UPDATE solicitacoes SET status='devolvido' WHERE id=?").bind(sol.id)];
+
   if (totalVinculos.length === 0) {
-    // nunca foi rastreada por unidade — devolve a quantidade inteira
-    await env.DB.prepare("UPDATE itens SET quantidade = quantidade + ? WHERE id=?").bind(sol.quantidade, sol.item_id).run();
+    // nunca foi rastreada por unidade — devolve a quantidade inteira, a menos que a conferência
+    // tenha apontado que só uma parte voltou
+    const qtdDevolvida = conferencia?.quantidadeDevolvida != null
+      ? Math.max(0, Math.min(conferencia.quantidadeDevolvida, sol.quantidade))
+      : sol.quantidade;
+    if (qtdDevolvida > 0) {
+      stmts.push(env.DB.prepare("UPDATE itens SET quantidade = quantidade + ? WHERE id=?").bind(qtdDevolvida, sol.item_id));
+    }
+    const faltante = sol.quantidade - qtdDevolvida;
+    if (faltante > 0) {
+      stmts.push(env.DB.prepare(
+        "UPDATE solicitacoes SET devolvida_com_pendencia = 1, obs_devolucao = ? WHERE id = ?"
+      ).bind(conferencia?.observacao || `${faltante} de ${sol.quantidade} não retornaram`, sol.id));
+    }
   } else {
-    // fecha à força os vínculos que ainda estavam ativos (unidade não foi escaneada na volta)
+    // fecha à força os vínculos que ainda estavam ativos (unidade não foi escaneada na volta);
+    // as marcadas como problema na conferência não voltam pro estoque disponível
+    const problemas = conferencia?.unidadesProblema || {};
+    let comPendencia = false;
     for (const link of ativos) {
-      await env.DB.prepare("UPDATE solicitacao_unidades SET devolvido_em = datetime('now') WHERE id = ?").bind(link.id).run();
-      await env.DB.prepare("UPDATE unidades SET status='disponivel' WHERE id = ?").bind(link.unidade_id).run();
-      await env.DB.prepare("UPDATE itens SET quantidade = quantidade + 1 WHERE id=?").bind(sol.item_id).run();
+      stmts.push(env.DB.prepare("UPDATE solicitacao_unidades SET devolvido_em = datetime('now') WHERE id = ?").bind(link.id));
+      const problema = problemas[link.unidade_id];
+      if (problema) {
+        comPendencia = true;
+        stmts.push(env.DB.prepare("UPDATE unidades SET status=? WHERE id = ?").bind(problema, link.unidade_id));
+      } else {
+        stmts.push(env.DB.prepare("UPDATE unidades SET status='disponivel' WHERE id = ?").bind(link.unidade_id));
+        stmts.push(env.DB.prepare("UPDATE itens SET quantidade = quantidade + 1 WHERE id=?").bind(sol.item_id));
+      }
+    }
+    if (comPendencia) {
+      stmts.push(env.DB.prepare(
+        "UPDATE solicitacoes SET devolvida_com_pendencia = 1, obs_devolucao = ? WHERE id = ?"
+      ).bind(conferencia?.observacao || "Uma ou mais unidades não retornaram", sol.id));
     }
   }
+
+  await env.DB.batch(stmts);
+}
+
+// Itens que voltaram junto de uma OT mas não faziam parte dela: com item_id, soma na quantidade
+// do item já cadastrado; sem item_id, cadastra um item novo no estoque com a quantidade que
+// voltou (nunca fica "solto" fora do catálogo). Roda tudo em paralelo pelo mesmo motivo do
+// batch em devolverSolicitacao — evita um round trip ao D1 por item, um de cada vez.
+async function processarExtrasDevolucao(env, ot, extras, autorNome) {
+  const validos = extras.filter(ex => Number(ex.quantidade) > 0 && (ex.item_id || (ex.nome || "").trim()));
+  await Promise.all(validos.map(ex => {
+    const quantidade = Number(ex.quantidade);
+    if (ex.item_id) {
+      return env.DB.batch([
+        env.DB.prepare("UPDATE itens SET quantidade = quantidade + ? WHERE id = ?").bind(quantidade, ex.item_id),
+        env.DB.prepare("INSERT INTO ot_eventos (ot, tipo, autor, texto) VALUES (?, 'evento', ?, ?)")
+          .bind(ot, autorNome || "Sistema", `Retorno extra registrado: ${quantidade} ${ex.nome || ""} (não fazia parte da OT)`)
+      ]);
+    }
+    const nome = (ex.nome || "").trim();
+    return env.DB.batch([
+      env.DB.prepare("INSERT INTO itens (nome, categoria, quantidade, unidade) VALUES (?, 'Outro', ?, ?)")
+        .bind(nome, quantidade, ex.unidade || "un"),
+      env.DB.prepare("INSERT INTO ot_eventos (ot, tipo, autor, texto) VALUES (?, 'evento', ?, ?)")
+        .bind(ot, autorNome || "Sistema", `Item novo cadastrado a partir de um retorno: ${quantidade} ${nome} (não fazia parte da OT nem do estoque)`)
+    ]);
+  }));
+  return validos.length;
 }
 
 // ---------- Backup automático (envia um dump JSON do banco por e-mail) ----------
@@ -760,13 +824,67 @@ export default {
       return json({ ok: true });
     }
 
+    // Checklist de conferência pra devolução da OT: pra cada linha ainda ativa, lista as
+    // unidades físicas vinculadas (se rastreada por unidade) pro operador marcar o que
+    // realmente voltou antes de confirmar a devolução.
+    const conferOtMatch = path.match(/^\/api\/solicitacoes\/ot\/([^/]+)\/conferencia$/);
+    if (conferOtMatch && method === "GET") {
+      const ot = decodeURIComponent(conferOtMatch[1]);
+      const { results: linhas } = await env.DB.prepare(
+        "SELECT * FROM solicitacoes WHERE ot = ? AND status != 'devolvido'"
+      ).bind(ot).all();
+      const comUnidades = [];
+      for (const sol of linhas) {
+        const { results: unidades } = await env.DB.prepare(
+          "SELECT u.id, u.serial FROM solicitacao_unidades su JOIN unidades u ON u.id = su.unidade_id " +
+          "WHERE su.solicitacao_id = ? AND su.devolvido_em IS NULL"
+        ).bind(sol.id).all();
+        comUnidades.push({ ...sol, unidades });
+      }
+      return json(comUnidades);
+    }
+
     const devOtMatch = path.match(/^\/api\/solicitacoes\/ot\/([^/]+)\/devolver$/);
     if (devOtMatch && method === "PATCH") {
       const ot = decodeURIComponent(devOtMatch[1]);
+      // body opcional com o resultado da conferência manual — sem body, cai no comportamento
+      // legado de fechar tudo como devolvido por completo
+      const body = await request.json().catch(() => null);
+      const porLinha = {};
+      if (body?.linhas) for (const l of body.linhas) porLinha[l.solicitacao_id] = l;
+
       const { results } = await env.DB.prepare("SELECT * FROM solicitacoes WHERE ot = ? AND status != 'devolvido'").bind(ot).all();
-      for (const sol of results) await devolverSolicitacao(env, sol);
-      await env.DB.prepare("UPDATE projetos SET status='encerrado' WHERE numero=?").bind(ot).run();
-      return json({ ok: true });
+      let pendencias = 0;
+      const conferencias = results.map(sol => {
+        const l = porLinha[sol.id];
+        const conferencia = l ? {
+          quantidadeDevolvida: l.quantidadeDevolvida,
+          observacao: l.observacao,
+          unidadesProblema: (l.unidadesProblema || []).reduce((acc, u) => { acc[u.unidade_id] = u.status; return acc; }, {})
+        } : null;
+        if (conferencia && (conferencia.unidadesProblema && Object.keys(conferencia.unidadesProblema).length > 0
+          || (conferencia.quantidadeDevolvida != null && conferencia.quantidadeDevolvida < sol.quantidade))) {
+          pendencias++;
+        }
+        return conferencia;
+      });
+      const usrDevOt = await usuarioAtual(request, env);
+
+      // Fecha todas as linhas da OT em paralelo — cada uma já resolve suas próprias escritas num
+      // único batch (ver devolverSolicitacao), então N linhas viram N idas ao D1 em paralelo em
+      // vez de N*M sequenciais, que era o gargalo na devolução de OTs com várias unidades.
+      const extras = Array.isArray(body?.extras) ? body.extras : [];
+      const [, extrasRegistrados] = await Promise.all([
+        Promise.all(results.map((sol, i) => devolverSolicitacao(env, sol, conferencias[i]))),
+        processarExtrasDevolucao(env, ot, extras, usrDevOt?.nome),
+        env.DB.prepare("UPDATE projetos SET status='encerrado' WHERE numero=?").bind(ot).run(),
+      ]);
+
+      await registrarEvento(env, ot, pendencias > 0
+        ? `OT devolvida ao estoque com pendência em ${pendencias} item(ns)`
+        : "OT devolvida ao estoque", usrDevOt?.nome);
+
+      return json({ ok: true, pendencias, extrasRegistrados });
     }
 
     const delSolMatch = path.match(/^\/api\/solicitacoes\/(\d+)$/);
@@ -912,6 +1030,43 @@ export default {
         vistos.set(row.ot, { ot: row.ot, nome: row.nome || "" });
       }
       return json({ sugestoes: [...vistos.values()].slice(0, 8) });
+    }
+
+    // ---------- BUSCA GLOBAL (Hub) ----------
+    // diferente do /api/ot/sugestoes (só OT), esta busca por NOME de item em qualquer
+    // sistema: catálogo do Estoque, título de card no Kanban (não só quando o card bate
+    // com uma OT) e pin de instalação em qualquer planta publicada no Mapa. Cada fonte
+    // falha em silêncio se estiver fora do ar — a busca nunca quebra por causa de outro
+    // sistema, só devolve menos resultado.
+    if (path === "/api/busca" && method === "GET") {
+      const q = (url.searchParams.get("q") || "").trim();
+      if (q.length < 2) return json({ resultados: [] });
+      const termo = `%${q}%`;
+      const termoLower = q.toLowerCase();
+
+      const [itensDb, kanbanCards, mapaPins] = await Promise.all([
+        env.DB.prepare("SELECT id, nome, categoria, quantidade, unidade FROM itens WHERE nome LIKE ? ORDER BY nome LIMIT 10").bind(termo).all(),
+        fetch("https://niukanban.pages.dev/api/kanban").then(r => r.ok ? r.json() : null).then(board => {
+          if (!board?.ots) return [];
+          const achados = [];
+          for (const ot of board.ots) {
+            for (const card of ot.cards || []) {
+              if (!(card.title || "").toLowerCase().includes(termoLower)) continue;
+              const coluna = (ot.columns || []).find(c => c.id === card.columnId);
+              achados.push({ titulo: card.title, ot: ot.number, nomeOt: ot.name, coluna: coluna ? coluna.name : card.columnId });
+            }
+          }
+          return achados.slice(0, 10);
+        }).catch(() => []),
+        fetch(`https://niumapas.pages.dev/api/busca-pins?q=${encodeURIComponent(q)}`).then(r => r.ok ? r.json() : null).then(d => d?.pins || []).catch(() => [])
+      ]);
+
+      const resultados = [
+        ...itensDb.results.map(it => ({ tipo: "item", titulo: it.nome, contexto: `${it.categoria || "Item"} · ${it.quantidade} ${it.unidade || ""} em estoque`.trim(), sistema: "Estoque", url: `https://estoque.niupt.workers.dev/index.html?item=${it.id}` })),
+        ...kanbanCards.map(c => ({ tipo: "kanban-card", titulo: c.titulo, contexto: `OT ${c.ot || "—"}${c.nomeOt ? " — " + c.nomeOt : ""} · ${c.coluna}`, sistema: "Kanban", url: `https://niukanban.pages.dev/?ot=${encodeURIComponent(c.ot || "")}` })),
+        ...mapaPins.map(p => ({ tipo: "mapa-pin", titulo: p.nome, contexto: `${p.zoneName ? p.zoneName + " · " : ""}${p.otNome || p.otNumero || "planta sem OT"}`, sistema: "Mapa", url: `https://niumapas.pages.dev/view.html?id=${p.mapaId}` }))
+      ];
+      return json({ resultados: resultados.slice(0, 30) });
     }
 
     const otGetMatch = path.match(/^\/api\/ot\/(.+)$/);
