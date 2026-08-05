@@ -963,7 +963,17 @@ export default {
       const destino = b.to || b.email;
       if (!destino) return json({ error: "Email de destino não informado" }, 400);
       if (!isValidEmail(destino)) return json({ error: "Email de destino inválido" }, 400);
-      const linhas = b.linhas || (b.itens ? b.itens.map(it => `<tr><td style="padding:6px 8px;border-bottom:1px solid #e5e7eb">${it.nome}</td><td style="padding:6px 8px;border-bottom:1px solid #e5e7eb">${it.qty} ${it.unidade}</td><td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;color:#6b7280">${it.local||b.local||'—'}</td></tr>`).join('') : '');
+      // itens vindos do catálogo (itemId presente) levam a foto do item, se tiver, como
+      // miniatura ao lado do nome — só existe pra itens do estoque, itens digitados livres
+      // não têm cadastro/imagem pra buscar
+      const linhas = b.linhas || (b.itens ? (await Promise.all(b.itens.map(async it => {
+        let fotoTag = "";
+        if (it.itemId) {
+          const row = await env.DB.prepare("SELECT imagem FROM itens WHERE id = ?").bind(it.itemId).first();
+          if (row?.imagem) fotoTag = `<img src="${row.imagem}" alt="" width="36" height="36" style="width:36px;height:36px;object-fit:cover;border-radius:6px;vertical-align:middle;margin-right:8px">`;
+        }
+        return `<tr><td style="padding:6px 8px;border-bottom:1px solid #e5e7eb">${fotoTag}${it.nome}</td><td style="padding:6px 8px;border-bottom:1px solid #e5e7eb">${it.qty} ${it.unidade||''}</td><td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;color:#6b7280">${it.local||b.local||'—'}</td></tr>`;
+      }))).join('') : '');
       const resendResp = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },

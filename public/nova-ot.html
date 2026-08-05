@@ -737,10 +737,12 @@ async function confirmar(apenasEmail=false){
     }
 
     if(apenasEmail&&email){
-      // enviar por email via worker
-      const linhas=carrinho.map(c=>`<tr><td style="padding:6px;border-bottom:1px solid #eee">${c.nome}</td><td style="padding:6px;border-bottom:1px solid #eee">${c.qty} ${c.unidade}</td><td style="padding:6px;border-bottom:1px solid #eee">${c.local||local||'—'}</td></tr>`).join('');
+      // enviar por email via worker — manda itemId (quando o item vem do catálogo) em vez
+      // de já montar o HTML da tabela aqui, pra o servidor poder anexar a foto do item
+      // (se tiver) direto do banco, sem o cliente precisar buscar/embutir cada imagem
+      const itensEmail=carrinho.map(c=>({nome:c.nome,qty:c.qty,unidade:c.unidade,local:c.local||local,itemId:c._estoque?c._id:null}));
       const rEmail=await fetch(`/api/ot/email`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-        to:email, ot, nome:nomeOt, solic, setor, local, obs, data, linhas,
+        to:email, ot, nome:nomeOt, solic, setor, local, obs, data, itens:itensEmail,
         url:`${location.origin}/ot.html?ot=${encodeURIComponent(ot)}`
       })});
       if(rEmail.ok){
