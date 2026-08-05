@@ -50,6 +50,7 @@ const PUBLIC_ROUTES = [
   { method: "GET", path: "/api/resolver" },
   { method: "GET", path: "/api/ot/sugestoes" },
   { method: "GET", path: "/api/busca" },
+  { method: "GET", path: "/api/hub-status" },
   // só a imagem do mapa (sem a chave da API, que fica só no servidor) — a ordem pública
   // (ordem-transporte.html) e o PDF precisam mostrar o mesmo pin sem exigir login
   { method: "GET", path: "/api/mapa-estatico" }
@@ -1030,6 +1031,32 @@ export default {
         vistos.set(row.ot, { ot: row.ot, nome: row.nome || "" });
       }
       return json({ sugestoes: [...vistos.values()].slice(0, 8) });
+    }
+
+    // ---------- STATUS DO HUB (Kanban + Mapa, agregado no servidor) ----------
+    // O NIU Hub tentava buscar Kanban/Mapa direto do navegador do usuário, mas esse fetch
+    // cross-site levava 503 (Cloudflare bloqueando tráfego de fetch entre sites diferente
+    // de navegação normal — não reproduz com curl nem com navegação direta). Rota server-
+    // to-server aqui não sofre disso, igual ao /api/resolver já faz pro Kanban.
+    if (path === "/api/hub-status" && method === "GET") {
+      const [kanban, mapa] = await Promise.all([
+        fetch("https://niukanban.pages.dev/api/kanban").then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch("https://niumapas.pages.dev/api/contagem").then(r => r.ok ? r.json() : null).catch(() => null)
+      ]);
+      let kanbanStats = null;
+      if (kanban?.ots) {
+        let espera = 0, producao = 0;
+        for (const ot of kanban.ots) {
+          for (const card of ot.cards || []) {
+            const col = (ot.columns || []).find(c => c.id === card.columnId);
+            const nome = (col?.name || "").toLowerCase();
+            if (nome.includes("produção")) producao++;
+            else if (nome && !nome.includes("pronto") && !nome.includes("instalado")) espera++;
+          }
+        }
+        kanbanStats = { espera, producao };
+      }
+      return json({ kanban: kanbanStats, mapa: mapa ? { plantas: mapa.count } : null });
     }
 
     // ---------- BUSCA GLOBAL (Hub) ----------
