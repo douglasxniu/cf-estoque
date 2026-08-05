@@ -965,12 +965,21 @@ export default {
       if (!isValidEmail(destino)) return json({ error: "Email de destino inválido" }, 400);
       // itens vindos do catálogo (itemId presente) levam a foto do item, se tiver, como
       // miniatura ao lado do nome — só existe pra itens do estoque, itens digitados livres
-      // não têm cadastro/imagem pra buscar
+      // não têm cadastro/imagem pra buscar. Data URI direto no <img src> NÃO funciona em
+      // email (Gmail e a maioria dos clientes removem imagem embutida em base64 por
+      // segurança) — precisa ir como anexo referenciado por Content-ID (cid:) no HTML.
+      const anexos = [];
       const linhas = b.linhas || (b.itens ? (await Promise.all(b.itens.map(async it => {
         let fotoTag = "";
         if (it.itemId) {
           const row = await env.DB.prepare("SELECT imagem FROM itens WHERE id = ?").bind(it.itemId).first();
-          if (row?.imagem) fotoTag = `<img src="${row.imagem}" alt="" width="36" height="36" style="width:36px;height:36px;object-fit:cover;border-radius:6px;vertical-align:middle;margin-right:8px">`;
+          const m = row?.imagem ? row.imagem.match(/^data:([^;]+);base64,(.*)$/) : null;
+          if (m) {
+            const cid = `item-foto-${it.itemId}`;
+            const ext = m[1].split("/")[1] || "jpg";
+            anexos.push({ filename: `item-${it.itemId}.${ext}`, content: m[2], content_id: cid });
+            fotoTag = `<img src="cid:${cid}" alt="" width="36" height="36" style="width:36px;height:36px;object-fit:cover;border-radius:6px;vertical-align:middle;margin-right:8px">`;
+          }
         }
         return `<tr><td style="padding:6px 8px;border-bottom:1px solid #e5e7eb">${fotoTag}${it.nome}</td><td style="padding:6px 8px;border-bottom:1px solid #e5e7eb">${it.qty} ${it.unidade||''}</td><td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;color:#6b7280">${it.local||b.local||'—'}</td></tr>`;
       }))).join('') : '');
@@ -979,6 +988,7 @@ export default {
         headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           from: env.EMAIL_REMETENTE || EMAIL_REMETENTE_PADRAO, to: destino.trim(),
+          ...(anexos.length ? { attachments: anexos } : {}),
           subject: `${b.ot}${b.nome ? " · " + b.nome : ""} · NIU Experience Agency`,
           html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px">
             <div style="background:#0c0e16;border-radius:12px;padding:20px 24px;margin-bottom:20px">
