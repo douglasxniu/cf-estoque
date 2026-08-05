@@ -992,7 +992,7 @@ export default {
           subject: `${b.ot}${b.nome ? " · " + b.nome : ""} · NIU Experience Agency`,
           html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px">
             <div style="background:#0c0e16;border-radius:12px;padding:20px 24px;margin-bottom:20px">
-              <div style="color:#fff;font-size:18px;font-weight:800">NIU <span style="color:#5b8cff">EXPERIENCE AGENCY</span></div>
+              <img src="https://estoque.niupt.workers.dev/email-logo-white.png" alt="NIU Experience Agency" height="22" style="display:block;height:22px;width:auto;margin-bottom:6px">
               <div style="color:#9aa3b2;font-size:12px">Folha de Requisição de Material</div>
             </div>
             <div style="display:inline-block;background:#5b8cff;color:#fff;font-weight:800;font-size:13px;padding:4px 12px;border-radius:6px;margin-bottom:8px">${b.ot}</div>
